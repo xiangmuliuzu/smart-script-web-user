@@ -1,0 +1,5 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; color: #1f2329; }
+:root { --el-color-primary: #1f2329; --el-color-primary-light-3: #51555b; --el-color-primary-light-5: #85888d; --el-color-primary-light-7: #b2b4b7; --el-color-primary-light-9: #f1f2f3; --el-color-primary-dark-2: #111318; }
+button, input { font: inherit; }
+a { color: inherit; }
