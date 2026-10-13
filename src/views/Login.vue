@@ -56,12 +56,12 @@ async function refreshCaptcha() {
 }
 async function submit() {
   if (loading.value || !captchaReady.value || captchaLoading.value) return
-  const valid = await formRef.value.validate().catch(() => false)
-  if (!valid) return
-  if (captchaEnabled.value && !form.code.trim()) { error.value = '请输入验证码'; return }
   loading.value = true
   error.value = ''
   try {
+    const valid = await formRef.value.validate().catch(() => false)
+    if (!valid) return
+    if (captchaEnabled.value && !form.code.trim()) { error.value = '请输入验证码'; return }
     await login({ ...form, username: form.username.trim() })
     if (remember.value) localStorage.setItem(portal.rememberKey, form.username.trim())
     else localStorage.removeItem(portal.rememberKey)
