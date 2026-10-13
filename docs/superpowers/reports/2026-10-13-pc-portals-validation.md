@@ -1,0 +1,18 @@
+# PC 用户端拆分验证（2026-10-13）
+
+## 结果
+- npm run gate：通过，10 项 node:test 测试通过，生产构建成功。管理员另外执行 lint/static typecheck，均通过。
+- 浏览器：Playwright + Chromium，模拟若依真实响应结构；三个端均通过，无未捕获 pageerror。
+- 用户端/企业端：1440×900 与 390×844 无横向溢出；普通用户 userType=01、authorCapability=false 可以登录两端。验证验证码必填、服务失败禁止提交、错密码更新验证码、匿名登录请求、Bearer 身份查询、外部回跳拒绝、刷新、5xx 保留会话且不显示未确认资料、重试、退出、只记住用户名、401 清理会话。
+- 管理员端：验证 /login → /getInfo → /getRouters 原生认证与动态参数设置页面；旧 /pc/user/home 返回 404。
+- 管理员代码范围：仅 29 个原有文件发生变更，均属于已确认清理范围；其余 163 个原有文件保持 Git 内容一致。系统、内容、版权、交易、管理员聊天与公告页面、权限 store、动态路由适配器、package/lock/Vite 配置通过 git diff --quiet 检查。
+- 原有本地工作区 smart-script-web、backend、App 的 git status 均为空；main/release 未移动。
+
+## 适用范围与限制
+本机 http://localhost:8080 拒绝连接，整体后端未运行。本轮没有执行真实账号登录或服务端令牌吊销联调，模拟接口通过不能替代这些验证。
+构建保留现有 Element Plus 整包体积警告；管理员 Vite __dirname 提示属于既有配置，本次未修改构建配置。
+两个新端依赖版本与管理员现有 lock 完全一致，不升级依赖；安装后 lock 已裁剪未使用的 axios/echarts/pinia。
+
+## 已确认业务口径
+两端共用普通用户账号，普通用户默认甲方，可申请成为创作者；不按 01/02/03 划分企业与用户端，创作者能力以服务端 authorCapability 为准。
+只交付登录、身份确认和退出，不迁移旧用户端主体页面。前端身份检查不替代后端业务授权。
