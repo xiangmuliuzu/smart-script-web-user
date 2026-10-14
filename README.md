@@ -8,7 +8,7 @@ Vue 3 + Vite + Element Plus。用户端即创作者端，视觉以 `剧云策-�
 
 作品、章节、分类、上传、AI、消息、聊天、资料、实名、改密、换绑和反馈使用现有用户接口。合作/合同/版权/印章/结算/提现当前缺少完整的用户接口，正常账号显示服务未开放；不调用管理员接口，不伪造业务成功。创作者擅长题材为只读投影，授权方式、定价、反馈截图和设备管理目前展示待接入状态。
 
-登录地址为 `/login`，成功后进入 `/works`。所有工作区页面均需通过登录和创作者能力校验，不提供匿名原型演示入口。
+登录地址为 `/user/login`，成功后进入 `/user/works`。所有工作区页面均需通过登录和创作者能力校验，不提供匿名原型演示入口。
 
 ## 开发与验证
 
@@ -20,7 +20,7 @@ npm run dev
 npm run gate
 ```
 
-开发地址 http://localhost:3001。通过 .env.local 的 VITE_API_TARGET 指定同一整体后端；默认 http://localhost:8080。
+开发地址 http://localhost:3001/user/。通过 .env.local 的 VITE_API_TARGET 指定同一整体后端；默认 http://localhost:8080。
 
 浏览器验证：先启动开发服务，再运行 `npm run test:browser`。测试脚本在浏览器拦截 API 响应，应用仍执行正常登录与接口流程。脚本优先使用项目可解析的 Playwright，也可复用本工作区 `../shared/scripts` 已安装的 Playwright；独立 checkout 需自行准备 Playwright 及 Chromium。截图与校验结果在 `docs/screenshots`，验证范围和联调边界见 `docs/superpowers/reports/2026-10-14-user-prototype-v2-validation.md`。
 
@@ -46,6 +46,10 @@ TXT/Markdown/DOCX 草稿使用原生浏览器文本读取与解压，不执行�
 
 ## 部署
 
-npm run build 输出 dist。生产默认 VITE_APP_BASE_API=/prod-api；网关需将 /prod-api/* 去除前缀后转发至整体后端，SPA 路由回退 index.html。不要把 /login SPA 地址代理到后端。
-按仓库分别配置域名或站点。回跳白名单包含 /works、/works/create、数字作品详情路径及兼容的 /session、/session-check；/session 跳转到 /works。未实现的地址不在登录回跳白名单中。
+npm run build 输出 dist，固定挂载到 `/user/`，对应服务器 http://124.221.131.38/user/。Vite 资源前缀和 Vue Router history 使用同一基础路径；例如 `/user/login`、`/user/works/create`。将 dist 内容部署到用户端目录，`/user/*` 的 SPA 路由必须回退到该目录的 index.html。
+
+生产默认 VITE_APP_BASE_API=/prod-api；网关需将站点根路径 /prod-api/* 去除前缀后转发至整体后端。接口地址不加 `/user/`，例如 `/prod-api/api/v1/auth/login`。不要把 `/user/login` SPA 地址代理到后端。
+
+三端都完成生产构建后，可运行 `npm run test:paths`。脚本把三份真实 dist 挂载到同一个本机站点，验证资源路径、子目录登录/刷新/回跳及令牌隔离；仅拦截测试 API，不改服务器。修改基础路径后需要重新部署 dist，服务器上的旧构建不会自动改变。
+管理员端位于 `/`，企业端位于 `/enterprise/`。下述回跳地址是应用内部路径，由 Router 自动添加 `/user/` 前缀，不能手工重复添加。回跳白名单包含 /works、/works/create、数字作品详情路径及兼容的 /session、/session-check；/session 跳转到 /works。未实现的地址不在登录回跳白名单中。
 前端账号域检查只用于入口防护，业务授权与创作者能力仍由后端验证。

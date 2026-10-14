@@ -7,7 +7,7 @@ let playwright
 try { playwright = createRequire(import.meta.url)('playwright') }
 catch { playwright = createRequire(new URL('../../shared/scripts/package.json', import.meta.url))('playwright') }
 const { chromium } = playwright
-const base = process.env.PREVIEW_URL || 'http://127.0.0.1:3001'
+const base = (process.env.PREVIEW_URL || 'http://127.0.0.1:3001/user').replace(/\/$/, '')
 const shots = fileURLToPath(new URL('../docs/screenshots/', import.meta.url))
 await mkdir(shots, { recursive: true })
 const browser = await chromium.launch({ headless: true })
