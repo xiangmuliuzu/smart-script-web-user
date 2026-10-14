@@ -4,7 +4,7 @@ import { login, getCaptcha, getInfo, logout, request, getToken, safeRedirect, as
 import { portal } from '../src/portal.js'
 const storage = new Map()
 globalThis.localStorage = { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, String(value)), removeItem: key => storage.delete(key) }
-const user = { userId: 7, userType: '01', nickname: '普通用户', authorCapability: false }
+const user = { userId: 7, userType: '01', nickname: '创作者', authorCapability: true }
 function reply(body, status = 200) { globalThis.fetch = async () => ({ ok: status >= 200 && status < 300, status, json: async () => body }) }
 test.beforeEach(() => storage.clear())
 test('RuoYi login sends the four fields anonymously and stores only its portal token', async () => {
@@ -24,11 +24,23 @@ test('RuoYi login sends the four fields anonymously and stores only its portal t
   assert.equal(storage.get(portal.tokenKey === 'PcUser-Token' ? 'PcEnterprise-Token' : 'PcUser-Token'), 'other-portal')
   assert.equal(storage.size, 3)
 })
-test('ordinary buyer and legacy user types use the same login; creator capability does not gate login', () => {
-  for (const userType of ['01', '02', '03']) for (const authorCapability of [true, false]) {
-    assertUser({ ...user, userType, authorCapability })
+test('all ordinary user types require enabled creator capability to enter the creator portal', () => {
+  for (const userType of ['01', '02', '03']) {
+    assertUser({ ...user, userType, authorCapability: true })
+    for (const authorCapability of [false, undefined, null, 'true', 1]) assert.throws(() => assertUser({ ...user, userType, authorCapability }), /未开通创作者能力/)
   }
   for (const bad of [null, {}, { ...user, userType: '00' }, { ...user, userType: '99' }]) assert.throws(() => assertUser(bad))
+})
+test('missing creator capability rejects login and revoked capability clears a restored user session', async () => {
+  storage.set('PcEnterprise-Token', 'keep-enterprise')
+  reply({ code: 200, token: 'must-not-store', user: { ...user, authorCapability: false } })
+  await assert.rejects(login({ username: 'buyer' }), /未开通创作者能力/)
+  assert.equal(getToken(), '')
+  storage.set(portal.tokenKey, 'previous-creator-token')
+  reply({ code: 200, user: { ...user, authorCapability: false } })
+  await assert.rejects(getInfo(), error => error.reason === 'creator-required')
+  assert.equal(getToken(), '')
+  assert.equal(storage.get('PcEnterprise-Token'), 'keep-enterprise')
 })
 test('malformed login and administrative responses never leave a portal token', async () => {
   for (const body of [{ code: 200, user }, { code: 200, token: 'wrong-domain', user: { ...user, userType: '00' } }]) {

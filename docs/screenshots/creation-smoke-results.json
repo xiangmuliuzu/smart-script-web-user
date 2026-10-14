@@ -1,0 +1,13 @@
+{
+  "checks": [
+    "single global header, three desktop columns and single scrolling toolbar",
+    "font, size, bold and alignment format real selected text",
+    "chapter switching, removal and AI append preserve previous text and formatting",
+    "default episode names stay numeric and card corner deletion preserves the active chapter",
+    "toolbar arrows, font menu and layout adapt from wide desktop to phone",
+    "restoring a formatted draft strips executable markup and keeps safe formatting",
+    "server-committed failed response retries without duplicate works or chapters",
+    "publish action confirms and submits all chapters for review"
+  ],
+  "errors": []
+}

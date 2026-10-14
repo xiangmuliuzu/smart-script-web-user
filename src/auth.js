@@ -11,7 +11,8 @@ export function safeRedirect(raw) {
   try {
     const url = new URL(raw, 'https://portal.invalid')
     if (!raw.startsWith('/') || raw.startsWith('//') || url.origin !== 'https://portal.invalid') return '/session'
-    return ['/session', '/session-check'].includes(url.pathname) ? url.pathname + url.search + url.hash : '/session'
+    const implemented = ['/session', '/session-check', '/works', '/works/create'].includes(url.pathname) || /^\/works\/[1-9]\d*$/.test(url.pathname)
+    return implemented ? url.pathname + url.search + url.hash : '/session'
   } catch { return '/session' }
 }
 export function assertUser(user) {
@@ -20,14 +21,21 @@ export function assertUser(user) {
     error.code = 40100
     throw error
   }
+  if (user.authorCapability !== true) {
+    const error = new Error('账号未开通创作者能力，暂时无法登录创作者端')
+    error.code = 40100
+    error.reason = 'creator-required'
+    throw error
+  }
   return user
 }
 export async function request(path, { method = 'GET', body, authenticated = true } = {}) {
   const token = authenticated ? getToken() : ''
   const headers = { Accept: 'application/json' }
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  const multipart = typeof FormData !== 'undefined' && body instanceof FormData
+  if (body !== undefined && !multipart) headers['Content-Type'] = 'application/json'
   if (token) headers.Authorization = 'Bearer ' + token
-  const response = await fetch(BASE_API + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(15000) })
+  const response = await fetch(BASE_API + path, { method, headers, body: body === undefined ? undefined : multipart ? body : JSON.stringify(body), signal: AbortSignal.timeout(multipart ? 60000 : 30000) })
   const result = await response.json().catch(() => null)
   if (!response.ok || ![200, 0].includes(result?.code)) {
     const error = new Error(result?.msg || result?.message || '请求失败，请稍后重试')
