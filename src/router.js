@@ -6,7 +6,7 @@ const workChildren = [
   { path: 'create', component: () => import('./views/works/Create.vue'), meta: { title: '创作上传' } },
   { path: ':id(\\d+)', component: () => import('./views/works/Detail.vue'), meta: { title: '作品详情' } }
 ]
-const router = createRouter({ history: createWebHistory(), scrollBehavior: () => ({ top: 0 }), routes: [
+const router = createRouter({ history: createWebHistory(import.meta.env.BASE_URL), scrollBehavior: () => ({ top: 0 }), routes: [
   { path: '/', redirect: '/works' },
   { path: '/login', component: () => import('./views/Login.vue') },
   { path: '/session', redirect: '/works' },

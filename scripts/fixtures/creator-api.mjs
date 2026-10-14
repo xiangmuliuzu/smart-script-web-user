@@ -2,7 +2,7 @@
 import { documentText, isFormattedDocument } from '../../src/utils/document.js'
 import { wordCount } from '../../src/utils/creator.js'
 
-export async function mockCreatorApi(context) {
+export async function mockCreatorApi(context, apiPrefix = '/dev-api') {
   const user = { userId: 7, userType: '01', nickname: '接口测试用户', authorCapability: true }
   const categories = [{ categoryId: 1, categoryName: '都市悬疑' }, { categoryId: 2, categoryName: '都市情感' }]
   const works = [
@@ -17,8 +17,8 @@ export async function mockCreatorApi(context) {
   const feedback = [], records = [], chat = []
   const calls = []
   const chapterResponse = chapter => ({ ...chapter, content: documentText(chapter.content), formattedContent: isFormattedDocument(chapter.content) ? chapter.content : null })
-  await context.route('**/dev-api/**', async route => {
-    const request = route.request(), method = request.method(), path = new URL(request.url()).pathname.replace('/dev-api', '')
+  await context.route('**' + apiPrefix + '/**', async route => {
+    const request = route.request(), method = request.method(), path = new URL(request.url()).pathname.slice(apiPrefix.length)
     calls.push({ path, method })
     const upload = path.endsWith('/upload') || path.endsWith('/avatar')
     const body = ['GET', 'HEAD'].includes(method) || upload ? null : request.postDataJSON()

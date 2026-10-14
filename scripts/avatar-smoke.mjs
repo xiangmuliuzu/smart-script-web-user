@@ -4,6 +4,7 @@ let playwright
 try { playwright = createRequire(import.meta.url)('playwright') }
 catch { playwright = createRequire(new URL('../../shared/scripts/package.json', import.meta.url))('playwright') }
 const browser = await playwright.chromium.launch({ headless: true })
+const base = (process.env.PREVIEW_URL || 'http://127.0.0.1:3001/user').replace(/\/$/, '')
 const page = await browser.newPage()
 const imageBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6dFoAAAAASUVORK5CYII=', 'base64')
 const originalPath = '/profile/upload/avatar-original.png'
@@ -42,7 +43,7 @@ async function imageLoaded(selector) {
   }, selector, { timeout: 5000 })
 }
 try {
-  await page.goto('http://127.0.0.1:3001/works')
+  await page.goto(base + '/works')
   await page.getByRole('heading', { name: '我的作品', exact: true }).waitFor()
   assert.equal(await page.locator('.avatar-btn img').count(), 1, 'Topbar must render the account avatar, not only an initial')
   await imageLoaded('.avatar-btn img')
