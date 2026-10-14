@@ -1,1 +1,1 @@
-export const portal = { label: '用户端', tokenKey: 'PcUser-Token', rememberKey: 'user-remember-username', purpose: '登录平台，开启你的故事' }
+export const portal = { label: '创作者端', tokenKey: 'PcUser-Token', rememberKey: 'user-remember-username', purpose: '登录创作者中心，开启你的故事' }

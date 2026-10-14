@@ -29,7 +29,7 @@ async function load() {
     if (current === generation) user.value = result.user
   } catch (failure) {
     if (current !== generation) return
-    if (isAuthFailure(failure)) { await router.replace('/login'); return }
+    if (isAuthFailure(failure)) { await router.replace({ path: '/login', query: failure.reason === 'creator-required' ? { reason: 'creator-required' } : {} }); return }
     error.value = failure.message || '网络暂时不可用，请重试'
   } finally { if (current === generation) pending.value = false }
 }

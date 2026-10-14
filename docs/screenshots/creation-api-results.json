@@ -1,0 +1,8 @@
+{
+  "checks": [
+    "New ordinary account returns disabled creator capability",
+    "Real API stores and restores font, size and alignment markup",
+    "Plain reading content and database word count exclude markup",
+    "Real chapter update preserves formatted document"
+  ]
+}
