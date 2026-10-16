@@ -27,7 +27,8 @@ export async function upload(file, purpose = 'script') {
   if (purpose === 'script' || purpose === 'cover') body.append('type', purpose)
   return data(path, { method: 'POST', body })
 }
-export const generate = (type, form) => data('/api/v1/content/ai/' + type, { method: 'POST', body: form })
+// AI 生成耗时可能超过默认 30s（大纲尤甚，需等待模型完整输出），单独放长到 120s。
+export const generate = (type, form) => data('/api/v1/content/ai/' + type, { method: 'POST', body: form, timeout: 120000 })
 const listWriteRecords = async () => asList(await data('/api/v1/content/ai/write-records'))
 const listOutlineRecords = async () => asList(await data('/api/v1/content/ai/outline-records'))
 // 生成记录 = 写作/润色 + 大纲记录合并，按时间倒序；write/polish 带输入输出，outline 仅请求元信息。

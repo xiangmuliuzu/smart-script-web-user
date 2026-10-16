@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { safeRedirect, request, getToken } from '../src/auth.js'
 import { portal } from '../src/portal.js'
 import * as api from '../src/api/creator.js'
-import { canEdit, validateWork, validateChapter, validateFile, wordCount, dateText, quotaTip } from '../src/utils/creator.js'
+import { canEdit, validateWork, validateChapter, validateFile, wordCount, dateText, quotaTip, outlineToText } from '../src/utils/creator.js'
 const storage = new Map([[portal.tokenKey, 'test-user-token']])
 globalThis.localStorage = { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) }
 
@@ -114,4 +114,16 @@ test('ai records merge write/polish and outline records, tagged by type and newe
   assert.equal(records[1].output, '润色后')
   assert.equal(records[2].type, 'write')
   assert.equal(records[2].quotaUsed, null)
+})
+test('outline object renders as readable labelled text, never raw JSON', () => {
+  const outline = { title: '测试纪元', logline: '一句话故事', characters: [{ name: '林澈', role: '主角' }], acts: [{ name: '第一幕', summary: '开局', beats: ['觉醒', '反转'] }] }
+  const text = outlineToText(outline)
+  assert.ok(text.includes('书名：测试纪元'))
+  assert.ok(text.includes('角色名：林澈'))
+  assert.ok(text.includes('身份：主角'))
+  assert.ok(text.includes('幕名：第一幕'))
+  assert.ok(text.includes('关键情节觉醒、反转'))
+  assert.ok(!text.includes('{'))
+  assert.equal(outlineToText('直接是文本'), '直接是文本')
+  assert.equal(outlineToText(null), '')
 })

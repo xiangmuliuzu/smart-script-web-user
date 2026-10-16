@@ -16,10 +16,10 @@
   </section>
 </template>
 <script setup>
-import { computed, reactive, ref, toRef, watch, onMounted } from 'vue'
+import { computed, reactive, ref, toRef, watch, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { usePortal } from '../../utils/portal.js'
-import { stateOf, dateText, quotaTip } from '../../utils/creator.js'
+import { stateOf, dateText, quotaTip, outlineToText } from '../../utils/creator.js'
 import { documentText } from '../../utils/document.js'
 import PortalTabs from '../../components/PortalTabs.vue'
 import LoadState from '../../components/LoadState.vue'
@@ -70,7 +70,8 @@ async function generate() {
   try {
     const body = type === 'outline' ? { inspiration: form.prompt, genre: form.genre, style: `共 ${form.episodes} 集`, workId: form.workId || undefined } : type === 'polish' ? { content: documentText(form.content), style: form.style } : { prompt: `${form.chapterTitle}\n${props.embedded && props.currentContent ? '已有正文：\n' + documentText(props.currentContent) + '\n续写要求：\n' : ''}${form.prompt}`, workId: form.workId || undefined, type: 'script' }
     const output = await api.value.generate(type, body)
-    const content = output.content || output.outline
+    const raw = output.content || output.outline
+    const content = raw && typeof raw === 'object' ? outlineToText(raw) : typeof raw === 'string' ? raw : ''
     if (typeof content !== 'string' || !content.trim()) throw new Error('本次未返回生成内容，请重试')
     results[type] = content
   } catch (failure) { error.value = failure.message; if (failure.message && failure.message.includes('次数不足')) await promptExchange(); else await handleError(failure) }
@@ -98,8 +99,20 @@ async function loadRecords() {
   catch (failure) { recordError.value = failure.message; await handleError(failure) }
   finally { recordLoading.value = false }
 }
-watch(tab, value => { error.value = ''; if (value === 'log') loadRecords() })
+watch(tab, value => { error.value = ''; loadQuota(); if (value === 'log') loadRecords() })
 watch(() => props.workId, value => { if (props.embedded) form.workId = value || '' }, { immediate: true })
 watch(user, value => { if (value?.userId) loadQuota() }, { immediate: true })
-onMounted(loadQuota)
+// 次数余额实时刷新：组件常驻时 onMounted 只执行一次，补上页面切回/窗口聚焦时的重取。
+function refreshQuotaWhenVisible() {
+  if (document.visibilityState === 'visible') loadQuota()
+}
+onMounted(() => {
+  loadQuota()
+  document.addEventListener('visibilitychange', refreshQuotaWhenVisible)
+  window.addEventListener('focus', refreshQuotaWhenVisible)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', refreshQuotaWhenVisible)
+  window.removeEventListener('focus', refreshQuotaWhenVisible)
+})
 </script>

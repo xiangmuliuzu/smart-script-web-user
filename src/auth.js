@@ -29,13 +29,13 @@ export function assertUser(user) {
   }
   return user
 }
-export async function request(path, { method = 'GET', body, authenticated = true } = {}) {
+export async function request(path, { method = 'GET', body, authenticated = true, timeout = 30000 } = {}) {
   const token = authenticated ? getToken() : ''
   const headers = { Accept: 'application/json' }
   const multipart = typeof FormData !== 'undefined' && body instanceof FormData
   if (body !== undefined && !multipart) headers['Content-Type'] = 'application/json'
   if (token) headers.Authorization = 'Bearer ' + token
-  const response = await fetch(BASE_API + path, { method, headers, body: body === undefined ? undefined : multipart ? body : JSON.stringify(body), signal: AbortSignal.timeout(multipart ? 60000 : 30000) })
+  const response = await fetch(BASE_API + path, { method, headers, body: body === undefined ? undefined : multipart ? body : JSON.stringify(body), signal: AbortSignal.timeout(timeout) })
   const result = await response.json().catch(() => null)
   if (!response.ok || ![200, 0].includes(result?.code)) {
     const error = new Error(result?.msg || result?.message || '请求失败，请稍后重试')
