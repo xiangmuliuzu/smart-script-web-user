@@ -9,6 +9,8 @@ export const workStates = {
 }
 export const stateOf = status => workStates[status] || { label: '状态待确认', tone: 'off', stamp: 'draft', action: '查看详情' }
 export const canEdit = (user, work) => user?.authorCapability === true && Object.hasOwn(workStates, work?.status) && work.status !== 'reviewing'
+// AI 次数不足时面向 PC 用户的提示文案（PC 端不可直接兑换，需引导到手机 App）。
+export const quotaTip = available => available > 0 ? '' : 'AI 次数已用完，请前往手机 App 的「福利中心」兑换 AI 次数后，再回来继续创作。'
 export const asList = data => Array.isArray(data) ? data : data?.list || data?.rows || []
 export const wordCount = text => documentText(text).replace(/\s/g, '').length
 export const words = value => Number(value || 0) >= 10000 ? (Number(value) / 10000).toFixed(1) + ' 万字' : Number(value || 0).toLocaleString('zh-CN') + ' 字'

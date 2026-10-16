@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { safeRedirect, request, getToken } from '../src/auth.js'
 import { portal } from '../src/portal.js'
 import * as api from '../src/api/creator.js'
-import { canEdit, validateWork, validateChapter, validateFile, wordCount, dateText } from '../src/utils/creator.js'
+import { canEdit, validateWork, validateChapter, validateFile, wordCount, dateText, quotaTip } from '../src/utils/creator.js'
 const storage = new Map([[portal.tokenKey, 'test-user-token']])
 globalThis.localStorage = { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) }
 
@@ -46,6 +46,19 @@ test('business API uses current-user routes, mapped fields and the existing Bear
   for (const call of calls) { assert.equal(call.headers.Authorization, 'Bearer test-user-token'); assert.ok(!call.url.includes('/admin/')) }
   assert.equal(getToken(), 'test-user-token')
 })
+test('ai quota balance reads availableQuota with Bearer token and no client-side fallback', async () => {
+  let called
+  globalThis.fetch = async (url, options) => { called = { url, headers: options.headers }; return { ok: true, status: 200, json: async () => ({ code: 200, data: { availableQuota: 3, totalEarned: 5, records: [{ recordId: 1 }] } }) } }
+  const quota = await api.getAiQuota(106)
+  assert.equal(called.url, '/dev-api/api/v1/ai/quota/balance?userId=106')
+  assert.equal(called.headers.Authorization, 'Bearer test-user-token')
+  assert.equal(quota.available, 3)
+  assert.equal(quota.records.length, 1)
+  globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ code: 200, data: { availableQuota: 0 } }) })
+  assert.equal((await api.getAiQuota(7)).available, 0)
+  globalThis.fetch = async () => ({ ok: true, status: 503, json: async () => ({ code: 503, message: 'AI 服务暂不可用' }) })
+  await assert.rejects(api.getAiQuota(7), /AI 服务暂不可用/)
+})
 test('multipart upload lets the browser set its boundary and sends no client user id', async () => {
   let sent
   globalThis.fetch = async (url, options) => { sent = { url, ...options }; return { ok: true, status: 200, json: async () => ({ code: 200, data: { url: '/uploads/a.txt' } }) } }
@@ -78,4 +91,27 @@ test('timezone-qualified timestamps display in Hong Kong while server wall times
   assert.equal(dateText('2026-10-13T23:30:00Z'), '2026-10-14 07:30')
   assert.equal(dateText('2026-10-14 09:20:00'), '2026-10-14 09:20')
   assert.equal(dateText(null), '—')
+})
+test('quota tip only appears when balance hits zero and steers PC users to the phone app', () => {
+  assert.equal(quotaTip(3), '')
+  assert.equal(quotaTip(1), '')
+  assert.ok(quotaTip(0).includes('手机 App'))
+  assert.ok(quotaTip(-1).includes('福利中心'))
+})
+test('ai records merge write/polish and outline records, tagged by type and newest first', async () => {
+  globalThis.fetch = async url => {
+    if (url.includes('/write-records')) return { ok: true, status: 200, json: async () => ({ code: 200, data: { list: [{ recordId: 1, writeType: 'polish', title: '润色测试', inputPrompt: '原句', outputContent: '润色后', status: 'success', createdAt: '2026-10-15 10:00:00' }, { recordId: 2, writeType: 'write', title: '续写测试', inputPrompt: '提示词', outputContent: '正文', createdAt: '2026-10-14 09:00:00' }] } }) }
+    if (url.includes('/outline-records')) return { ok: true, status: 200, json: async () => ({ code: 200, data: { list: [{ requestId: 9, quotaCost: 1, status: 'success', createdAt: '2026-10-16 09:00:00' }] } }) }
+    throw new Error('unexpected url ' + url)
+  }
+  const records = await api.listAiRecords()
+  assert.equal(records.length, 3)
+  assert.equal(records[0].type, 'outline')
+  assert.equal(records[0].quotaUsed, 1)
+  assert.equal(records[0].output, '')
+  assert.equal(records[1].type, 'polish')
+  assert.equal(records[1].input, '原句')
+  assert.equal(records[1].output, '润色后')
+  assert.equal(records[2].type, 'write')
+  assert.equal(records[2].quotaUsed, null)
 })

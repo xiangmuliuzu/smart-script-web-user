@@ -107,6 +107,18 @@
 .ai-panel-head h2 { font-size: 16px; font-family: var(--sans); white-space: nowrap; }
 .ai-panel-head h2 span { color: var(--ochre); margin-right: 3px; }
 .ai-quota { font-size: 10px; padding: 3px 6px; background: #eae5d8; border-radius: 12px; color: var(--ink-2); white-space: nowrap; }
+.ai-quota.ai-quota-empty { background: #fbe9e7; color: #c62828; font-weight: 600; }
+.ai-embedded .ai-records article { border: 1px solid var(--rule); border-radius: 6px; margin-bottom: 8px; overflow: hidden; }
+.ai-embedded .ai-records .ai-record-row { display: block; width: 100%; border: 0; background: white; padding: 8px 10px; text-align: left; cursor: pointer; }
+.ai-embedded .ai-records .ai-record-row b { font-size: 12px; color: var(--indigo); }
+.ai-embedded .ai-records .ai-record-row span { float: right; font-size: 10px; color: var(--ink-2); }
+.ai-embedded .ai-records .ai-record-row p { margin: 3px 0; font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ai-embedded .ai-records .ai-record-row small { font-size: 10px; color: var(--ink-3); }
+.ai-embedded .ai-records article.open .ai-record-row { background: #f5f3ee; }
+.ai-embedded .ai-records .ai-record-detail { border-top: 1px dashed var(--rule); padding: 10px; background: #faf9f5; }
+.ai-embedded .ai-records .ai-record-detail h4 { margin: 0 0 6px; font-size: 11px; color: var(--ink-2); font-weight: 600; }
+.ai-embedded .ai-records .ai-record-detail pre { margin: 0 0 10px; font-family: var(--sans); font-size: 12px; line-height: 1.8; white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow: auto; }
+.ai-embedded .ai-records .ai-record-detail .note { margin: 0; font-size: 11px; }
 .ai-embedded .dtabs { display: flex; justify-content: space-between; gap: 8px; padding: 0; border-bottom: 1px solid var(--rule); }
 .ai-embedded .dtabs button { border: 0; border-bottom: 2px solid transparent; background: none; padding: 0 0 10px; font-size: 12px; color: var(--ink-2); white-space: nowrap; }
 .ai-embedded .dtabs button[aria-selected='true'] { color: var(--indigo); border-bottom-color: var(--indigo); font-weight: 600; }

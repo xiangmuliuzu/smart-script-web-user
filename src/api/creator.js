@@ -28,7 +28,21 @@ export async function upload(file, purpose = 'script') {
   return data(path, { method: 'POST', body })
 }
 export const generate = (type, form) => data('/api/v1/content/ai/' + type, { method: 'POST', body: form })
-export const listAiRecords = async () => asList(await data('/api/v1/content/ai/write-records'))
+const listWriteRecords = async () => asList(await data('/api/v1/content/ai/write-records'))
+const listOutlineRecords = async () => asList(await data('/api/v1/content/ai/outline-records'))
+// 生成记录 = 写作/润色 + 大纲记录合并，按时间倒序；write/polish 带输入输出，outline 仅请求元信息。
+export const listAiRecords = async () => {
+  const [writes, outlines] = await Promise.all([listWriteRecords(), listOutlineRecords()])
+  const items = []
+  for (const w of writes) items.push({ recordId: w.recordId, type: w.writeType === 'polish' ? 'polish' : 'write', title: w.title || '独立创作', input: w.inputPrompt || '', output: w.outputContent || '', quotaUsed: null, status: w.status, createdAt: w.createdAt })
+  for (const o of outlines) items.push({ recordId: o.requestId, type: 'outline', title: 'AI 大纲请求', input: '', output: '', quotaUsed: o.quotaCost ?? null, status: o.status, createdAt: o.createdAt })
+  return items.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+}
+// AI 次数余额（App 端同口径：availableQuota 可用次数）。
+export const getAiQuota = async userId => {
+  const result = await data(`/api/v1/ai/quota/balance?userId=${encodeURIComponent(userId)}`)
+  return { available: Number(result.availableQuota) || 0, records: result.records || [] }
+}
 export const listMessages = async () => asList(await data('/api/v1/messages?pageSize=100')).map(item => ({ ...item, isRead: item.read, content: item.summary, createTime: item.createdAt }))
 export const getMessage = id => data(`/api/v1/messages/${encodeURIComponent(id)}`)
 export const unreadCount = async () => (await data('/api/v1/messages/unread-count')).total

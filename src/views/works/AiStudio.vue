@@ -1,5 +1,5 @@
 <template>
-  <section class="sec" :class="{ 'ai-embedded': embedded }"><div v-if="embedded" class="ai-panel-head"><h2><span>✦</span> AI 创作助手</h2><span class="ai-quota">按服务端计次</span></div><div v-else class="sub-head"><h3>AI 辅助创作</h3><span class="count">让灵感成为下一幕</span></div>
+  <section class="sec" :class="{ 'ai-embedded': embedded }"><div v-if="embedded" class="ai-panel-head"><h2><span>✦</span> AI 创作助手</h2><span class="ai-quota" :class="{ 'ai-quota-empty': quota === 0 }">{{ quotaText }}</span></div><div v-else class="sub-head"><h3>AI 辅助创作</h3><span class="count">让灵感成为下一幕</span></div>
     <PortalTabs v-model="tab" :items="tabs" :drawer="embedded" label="AI 创作工具" />
     <div v-if="tab !== 'log'" class="compose">
       <form class="compose-form" @submit.prevent="generate"><h3>{{ tab === 'outline' ? '生成大纲' : tab === 'write' ? '生成正文' : '润色片段' }}</h3>
@@ -11,25 +11,36 @@
       </form>
       <div class="compose-out"><h3>{{ tab === 'polish' ? '润色结果' : '生成结果' }}</h3><div v-if="result" class="prose ai-result">{{ result }}</div><LoadState v-else :pending="generating" :empty="!generating" empty-text="写下你的想法，故事将在这里展开。" /><div v-if="result" class="row top-gap"><button v-if="embedded" class="btn sm" :disabled="generating || insertDisabled" @click="$emit('insert', result)">插入正文</button><button v-else class="btn sm" :disabled="generating || copying" @click="adopt">{{ tab === 'outline' ? '采用' : '写入章节' }}</button><button class="btn quiet sm" :disabled="generating" @click="generate">重新生成</button><button v-if="embedded" class="btn quiet sm" :disabled="copying" @click="copyResult">复制</button><button v-else class="btn quiet sm" :disabled="generating" @click="results[tab] = ''">丢弃</button></div><p v-if="result && !form.workId && !embedded" class="cost">未选择作品时，采用会将内容复制到剪贴板。</p><p v-if="embedded && result" class="cost">插入会追加到当前分集，保留原文。</p></div>
     </div>
-    <div v-else class="top-gap"><LoadState :pending="recordLoading" :error="recordError" :retry="loadRecords" :empty="!recordLoading && !recordError && !records.length" /><div v-if="embedded && records.length && !recordError" class="ai-records"><article v-for="record in records" :key="record.recordId"><b>{{ typeLabels[record.type] || record.type || 'AI 创作' }}</b><span>{{ record.quotaUsed ?? '—' }} 次</span><p>{{ record.workTitle || record.title || '独立创作' }}</p><small>{{ dateText(record.createTime || record.createdAt) }}</small></article></div><div v-else-if="records.length && !recordError" class="tbl"><table><thead><tr><th>时间</th><th>类型</th><th>作品 / 章节</th><th class="num">消耗</th></tr></thead><tbody><tr v-for="record in records" :key="record.recordId"><td>{{ dateText(record.createTime || record.createdAt) }}</td><td>{{ typeLabels[record.type] || record.type || 'AI 创作' }}</td><td>{{ record.workTitle || record.title || '—' }}</td><td>{{ record.quotaUsed ?? '—' }} 次</td></tr></tbody></table></div></div>
+    <div v-else class="top-gap"><LoadState :pending="recordLoading" :error="recordError" :retry="loadRecords" :empty="!recordLoading && !recordError && !records.length" /><div v-if="embedded && records.length && !recordError" class="ai-records"><article v-for="record in records" :key="record.recordId" :class="{ open: expanded.has(record.recordId) }"><button class="ai-record-row" type="button" @click="toggleRecord(record.recordId)"><b>{{ typeLabels[record.type] || record.type || 'AI 创作' }}</b><span>{{ record.quotaUsed ?? '—' }} 次</span><p>{{ record.title || '独立创作' }}</p><small>{{ dateText(record.createdAt || record.createTime) }}</small></button><div v-if="expanded.has(record.recordId)" class="ai-record-detail"><div v-if="record.input"><h4>我的输入</h4><pre>{{ record.input }}</pre></div><div v-if="record.output"><h4>AI 输出</h4><pre>{{ record.output }}</pre></div><p v-else-if="record.type === 'outline'" class="note">大纲请求未留存内容，请生成后及时保存。</p></div></article></div><div v-else-if="records.length && !recordError" class="tbl"><table><thead><tr><th>时间</th><th>类型</th><th>作品 / 章节</th><th class="num">消耗</th></tr></thead><tbody><tr v-for="record in records" :key="record.recordId"><td>{{ dateText(record.createTime || record.createdAt) }}</td><td>{{ typeLabels[record.type] || record.type || 'AI 创作' }}</td><td>{{ record.workTitle || record.title || '—' }}</td><td>{{ record.quotaUsed ?? '—' }} 次</td></tr></tbody></table></div></div>
     <ChapterEditor v-if="editorVisible" v-model="editorVisible" :work-id="form.workId" :chapter-no="nextChapterNo" :initial-content="adopted" />
   </section>
 </template>
 <script setup>
-import { computed, reactive, ref, toRef, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, reactive, ref, toRef, watch, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { usePortal } from '../../utils/portal.js'
-import { stateOf, dateText } from '../../utils/creator.js'
+import { stateOf, dateText, quotaTip } from '../../utils/creator.js'
 import { documentText } from '../../utils/document.js'
 import PortalTabs from '../../components/PortalTabs.vue'
 import LoadState from '../../components/LoadState.vue'
 import ChapterEditor from '../../components/ChapterEditor.vue'
 const props = defineProps({ works: Array, embedded: Boolean, workId: [Number, String], currentContent: { type: String, default: '' }, insertDisabled: Boolean, workspaceState: Object })
 defineEmits(['insert'])
-const { api, canCreate, handleError } = usePortal()
+const { api, user, canCreate, handleError } = usePortal()
+const quota = ref(null)
+const quotaText = computed(() => quota.value === null ? '剩余次数 —' : quota.value > 0 ? `剩余 ${quota.value} 次` : '剩余 0 次，需到手机兑换')
+async function loadQuota() {
+  if (!api.value?.getAiQuota || !user.value?.userId) return
+  try { quota.value = (await api.value.getAiQuota(user.value.userId)).available }
+  catch (failure) { if (failure.message && failure.message.includes('次数不足')) { quota.value = 0 } else { await handleError(failure) } }
+}
+async function promptExchange() {
+  try { await ElMessageBox.alert(quotaTip(0), 'AI 次数不足', { confirmButtonText: '知道了', type: 'warning' }) }
+  catch { /* 用户关闭弹窗不阻塞 */ }
+}
 const tab = props.workspaceState ? toRef(props.workspaceState, 'tab') : ref('outline')
 const tabs = [{ value: 'outline', label: 'AI 大纲' }, { value: 'write', label: props.embedded ? 'AI 续写' : 'AI 写正文' }, { value: 'polish', label: 'AI 润色' }, { value: 'log', label: '生成记录' }]
-const typeLabels = { outline: 'AI 大纲', write: 'AI 写正文', polish: 'AI 润色' }
+const typeLabels = { outline: 'AI 大纲', write: props.embedded ? 'AI 续写' : 'AI 写正文', polish: 'AI 润色' }
 const form = props.workspaceState?.form || reactive({ workId: '', genre: '', episodes: 12, prompt: '', content: '', style: '增强画面感', chapterTitle: '' })
 const results = props.workspaceState?.results || reactive({ outline: '', write: '', polish: '' })
 const result = computed(() => results[tab.value] || '')
@@ -39,6 +50,12 @@ const error = ref('')
 const records = ref([])
 const recordLoading = ref(false)
 const recordError = ref('')
+const expanded = ref(new Set())
+function toggleRecord(id) {
+  const next = new Set(expanded.value)
+  next.has(id) ? next.delete(id) : next.add(id)
+  expanded.value = next
+}
 const editorVisible = ref(false)
 const adopted = ref('')
 const nextChapterNo = ref(1)
@@ -46,6 +63,7 @@ async function generate() {
   if (generating.value || !canCreate.value) return
   const type = tab.value
   error.value = ''
+  if (quota.value !== null && quota.value <= 0) { await promptExchange(); return }
   if (!(type === 'polish' ? form.content : form.prompt).trim()) { error.value = type === 'polish' ? '请输入要润色的原文' : '请输入创作要求'; return }
   if (type === 'outline' && (!Number.isInteger(Number(form.episodes)) || Number(form.episodes) < 1 || Number(form.episodes) > 200)) { error.value = '集数需为 1–200 的整数'; return }
   generating.value = true
@@ -55,8 +73,8 @@ async function generate() {
     const content = output.content || output.outline
     if (typeof content !== 'string' || !content.trim()) throw new Error('本次未返回生成内容，请重试')
     results[type] = content
-  } catch (failure) { error.value = failure.message; await handleError(failure) }
-  finally { generating.value = false }
+  } catch (failure) { error.value = failure.message; if (failure.message && failure.message.includes('次数不足')) await promptExchange(); else await handleError(failure) }
+  finally { generating.value = false; await loadQuota() }
 }
 async function adopt() {
   if (!result.value || copying.value) return
@@ -82,4 +100,6 @@ async function loadRecords() {
 }
 watch(tab, value => { error.value = ''; if (value === 'log') loadRecords() })
 watch(() => props.workId, value => { if (props.embedded) form.workId = value || '' }, { immediate: true })
+watch(user, value => { if (value?.userId) loadQuota() }, { immediate: true })
+onMounted(loadQuota)
 </script>
