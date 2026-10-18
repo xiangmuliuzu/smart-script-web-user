@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { runInNewContext } from 'node:vm'
-import { ref, reactive } from 'vue'
+import { computed, ref, reactive } from 'vue'
 
 test('a second submit during async validation cannot issue another login', async () => {
   const source = await readFile(new URL('../src/views/Login.vue', import.meta.url), 'utf8')
@@ -10,7 +10,7 @@ test('a second submit during async validation cannot issue another login', async
   let release
   const validation = new Promise(resolve => { release = resolve })
   let requests = 0
-  const context = { ref, reactive, onMounted() {},
+  const context = { computed, ref, reactive, onMounted() {},
     portal: { rememberKey: 'test-only' }, localStorage: { getItem() {}, removeItem() {} },
     useRoute: () => ({ query: {} }), useRouter: () => ({ replace: async () => {} }),
     login: async () => { requests++ }, safeRedirect: () => '/session',

@@ -8,7 +8,7 @@ Vue 3 + Vite + Element Plus。用户端即创作者端，视觉以 `剧云策-�
 
 作品、章节、分类、上传、AI、消息、聊天、资料、实名、改密、换绑和反馈使用现有用户接口。合作/合同/版权/印章/结算/提现当前缺少完整的用户接口，正常账号显示服务未开放；不调用管理员接口，不伪造业务成功。创作者擅长题材为只读投影，授权方式、定价、反馈截图和设备管理目前展示待接入状态。
 
-登录地址为 `/user/login`，成功后进入 `/user/works`。所有工作区页面均需通过登录和创作者能力校验，不提供匿名原型演示入口。
+登录地址为 `/user/login`，成功后进入 `/user/works`。所有工作区页面均需通过登录和创作者能力校验，不提供匿名原型演示入口。登录页的「忘记密码？」与「注册个人账号」在同一张登录卡片内切换（`src/components/AccountPanel.vue`，不弹窗）：忘记密码走手机号 + 短信验证码重置；注册会创建普通账号（无创作者能力），成功后不写本端令牌，而是提示用同一手机号在 App 完成创作者认证。
 
 ## 开发与验证
 
@@ -40,6 +40,10 @@ TXT/Markdown/DOCX 草稿使用原生浏览器文本读取与解压，不执行�
 | 登录 | POST /api/v1/auth/login，username/password/code/uuid |
 | 身份恢复 | GET /api/v1/auth/getInfo |
 | 退出 | POST /api/v1/auth/logout |
+| 协议版本 | GET /api/v1/auth/agreements（列表在 data.agreements） |
+| 发送短信验证码 | POST /api/v1/auth/sms/send，scene=REGISTER / RESET_PASSWORD |
+| 注册个人账号 | POST /api/v1/auth/register，含 agreementAcceptances |
+| 重置密码 | POST /api/v1/auth/password/reset，phone/code/newPassword |
 
 使用若依 AjaxResult：成功 code=200，token、user、roles、permissions 在顶层；受保护请求附 Authorization: Bearer token。只记住用户名，不存密码或 refresh token。用户端令牌独立存储，两个端互不清理彼此会话。
 验证码只有服务端明确 captchaEnabled=false 时才关闭；加载失败需重试。刷新会重新确认身份；认证失效/账号停用清理会话，普通权限错误或网络/5xx 保留令牌并允许重试。

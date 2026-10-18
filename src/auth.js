@@ -47,6 +47,50 @@ export async function request(path, { method = 'GET', body, authenticated = true
   // 若依认证返回 token/user/roles/permissions 顶层字段，不能只解包 data。
   return result
 }
+/** PC 门户在服务端登记的设备标识：注册 / 发码都要求 deviceId，Web 端固定一个即可。 */
+const PC_DEVICE_ID = 'pc-web'
+const PC_DEVICE_NAME = 'PC Web'
+
+/** 当前生效的用户协议与隐私政策。注册时按服务端返回的版本提交，避免本地硬编码导致 409。 */
+export async function getAgreements() {
+  const result = await request('/api/v1/auth/agreements', { authenticated: false })
+  // 后端 AjaxResult.success(map) 会把协议放进 data.agreements，兼容两种形态。
+  const list = Array.isArray(result.agreements) ? result.agreements : Array.isArray(result.data?.agreements) ? result.data.agreements : []
+  if (list.length < 2) throw new Error('协议版本获取失败，请稍后重试')
+  return list
+}
+
+/** 发送短信验证码，scene 取 REGISTER / RESET_PASSWORD。返回 cooldownSeconds 供倒计时使用。 */
+export async function sendSmsCode({ phone, scene }) {
+  return request('/api/v1/auth/sms/send', {
+    method: 'POST',
+    authenticated: false,
+    body: { phone, scene, deviceId: PC_DEVICE_ID }
+  })
+}
+
+/** 注册个人账号：注册即完成手机号校验，服务端会同时记录当前协议版本。 */
+export async function register({ phone, code, password }) {
+  const agreements = await getAgreements()
+  return request('/api/v1/auth/register', {
+    method: 'POST',
+    authenticated: false,
+    body: {
+      phone,
+      code,
+      password,
+      deviceId: PC_DEVICE_ID,
+      deviceName: PC_DEVICE_NAME,
+      agreementAcceptances: agreements.map(({ type, version }) => ({ type, version }))
+    }
+  })
+}
+
+/** 通过手机号 + 短信验证码重置密码；成功后该账号已有的 App 会话会被服务端吊销。 */
+export async function resetPassword({ phone, code, newPassword }) {
+  return request('/api/v1/auth/password/reset', { method: 'POST', authenticated: false, body: { phone, code, newPassword } })
+}
+
 export async function getCaptcha() {
   const result = await request('/api/v1/auth/captchaImage', { authenticated: false })
   if (result.captchaEnabled !== false && !(result.img && result.uuid)) throw new Error('验证码加载失败，请重试')
@@ -70,3 +114,4 @@ export async function logout() {
     if (getToken()) await request('/api/v1/auth/logout', { method: 'POST' })
   } finally { clearSession() }
 }
+
