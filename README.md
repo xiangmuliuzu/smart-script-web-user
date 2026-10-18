@@ -45,7 +45,7 @@ TXT/Markdown/DOCX 草稿使用原生浏览器文本读取与解压，不执行�
 | 注册个人账号 | POST /api/v1/auth/register，含 agreementAcceptances |
 | 重置密码 | POST /api/v1/auth/password/reset，phone/code/newPassword |
 
-使用若依 AjaxResult：成功 code=200，token、user、roles、permissions 在顶层；受保护请求附 Authorization: Bearer token。只记住用户名，不存密码或 refresh token。用户端令牌独立存储，两个端互不清理彼此会话。
+使用若依 AjaxResult：成功 code=200，token、user、roles、permissions 在顶层；受保护请求附 Authorization: Bearer token。登录页勾选「记住密码」时把账号与密码写入本机 `localStorage`（取消勾选即清除，兼容早期只存账号的旧值），不存 refresh token。用户端令牌独立存储，两个端互不清理彼此会话。
 验证码只有服务端明确 captchaEnabled=false 时才关闭；加载失败需重试。刷新会重新确认身份；认证失效/账号停用清理会话，普通权限错误或网络/5xx 保留令牌并允许重试。
 
 ## 部署

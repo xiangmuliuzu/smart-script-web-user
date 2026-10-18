@@ -16,7 +16,7 @@
             <el-form-item label="密码" prop="password"><el-input v-model="form.password" type="password" placeholder="请输入密码" show-password autocomplete="current-password" :prefix-icon="Lock" /></el-form-item>
             <el-form-item v-if="captchaEnabled" label="验证码"><div class="captcha-row"><el-input v-model="form.code" placeholder="请输入验证码" maxlength="8" autocomplete="off" /><button type="button" class="captcha-img" :disabled="captchaLoading" aria-label="刷新验证码" @click="refreshCaptcha"><img v-if="captchaImage" :src="captchaImage" alt="验证码" /><span v-else>点击重试</span></button></div></el-form-item>
             <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon class="error-message" />
-            <div class="form-options"><el-checkbox v-model="remember">记住账号</el-checkbox><button type="button" class="forgot-link" @click="mode = 'reset'">忘记密码？</button></div>
+            <div class="form-options"><el-checkbox v-model="remember">记住密码</el-checkbox><button type="button" class="forgot-link" @click="mode = 'reset'">忘记密码？</button></div>
             <el-button class="login-button" type="primary" native-type="submit" :loading="loading" :disabled="!captchaReady || captchaLoading">登录</el-button>
           </el-form>
           <p class="signup-row">还没有账号？<button type="button" class="forgot-link" @click="mode = 'register'">注册个人账号</button></p>
@@ -53,8 +53,22 @@ const subheading = computed(() =>
       ? '通过绑定手机号接收短信验证码，重置登录密码。'
       : '用手机号或账号登录，管理你的作品、版权与收益。'
 )
-const form = reactive({ username: localStorage.getItem(portal.rememberKey) || '', password: '', code: '', uuid: '' })
-const remember = ref(!!form.username)
+// 记住密码：勾选后把账号和密码一起写进本机 localStorage，取消勾选立即清除。
+// 兼容早期只存账号的纯文本值，读到时按「只有账号」处理。
+function readRemembered() {
+  let raw = ''
+  try { raw = localStorage.getItem(portal.rememberKey) || '' } catch { return {} }
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw)
+    return typeof parsed === 'string' ? { username: parsed } : parsed || {}
+  } catch {
+    return { username: raw }
+  }
+}
+const remembered = readRemembered()
+const form = reactive({ username: remembered.username || '', password: remembered.password || '', code: '', uuid: '' })
+const remember = ref(Boolean(remembered.username || remembered.password))
 const loading = ref(false)
 const captchaLoading = ref(false)
 const captchaEnabled = ref(true)
@@ -88,7 +102,7 @@ async function submit() {
     if (!valid) return
     if (captchaEnabled.value && !form.code.trim()) { error.value = '请输入验证码'; return }
     await login({ ...form, username: form.username.trim() })
-    if (remember.value) localStorage.setItem(portal.rememberKey, form.username.trim())
+    if (remember.value) localStorage.setItem(portal.rememberKey, JSON.stringify({ username: form.username.trim(), password: form.password }))
     else localStorage.removeItem(portal.rememberKey)
     await router.replace(safeRedirect(route.query.redirect))
   } catch (failure) {
