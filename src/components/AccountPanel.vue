@@ -26,7 +26,7 @@
       <el-form-item v-if="mode === 'register'" prop="agreed" class="agreement-item">
         <el-checkbox v-model="form.agreed">我已阅读并同意</el-checkbox>
         <span class="agreement-links">
-          <a v-for="item in agreements" :key="item.type" :href="item.url" target="_blank" rel="noopener noreferrer" class="agreement-link">《{{ item.title }}》</a>
+          <button v-for="item in agreements" :key="item.type" type="button" class="agreement-link" @click="activeAgreement = item">《{{ item.title }}》</button>
         </span>
       </el-form-item>
       <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon class="account-error" />
@@ -34,6 +34,7 @@
         {{ mode === 'register' ? '注册' : '重置密码' }}
       </el-button>
     </el-form>
+    <AgreementDialog :agreement="activeAgreement" @close="activeAgreement = null" />
     <p v-if="!success" class="account-switch">
       <button type="button" class="switch-link" @click="emit('back')">返回登录</button>
       <span class="switch-divider">·</span>
@@ -46,6 +47,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getAgreements, register, resetPassword, sendSmsCode } from '../auth.js'
+import AgreementDialog from './AgreementDialog.vue'
 
 const props = defineProps({
   // reset=忘记密码；register=注册个人账号
@@ -59,6 +61,7 @@ const emit = defineEmits(['back', 'switch', 'registered'])
 const formRef = ref(null)
 const form = reactive({ phone: '', code: '', password: '', confirm: '', agreed: false })
 const agreements = ref([])
+const activeAgreement = ref(null)
 const error = ref('')
 const sending = ref(false)
 const submitting = ref(false)
@@ -88,6 +91,7 @@ const rules = {
 }
 
 function resetState({ keepPhone = false } = {}) {
+  activeAgreement.value = null
   error.value = ''
   success.value = false
   form.code = ''
@@ -205,7 +209,9 @@ onBeforeUnmount(stopCountdown)
 .code-button:disabled { color: #9aa5ab; cursor: not-allowed; }
 .agreement-item :deep(.el-form-item__content) { flex-wrap: wrap; gap: 2px; line-height: 1.8; }
 .agreement-links { display: inline-flex; flex-wrap: wrap; }
-.agreement-link { color: var(--brand, #1f6f5c); text-decoration: none; font-size: 12px; }
+.agreement-link { border: 0; background: none; padding: 0; color: var(--brand, #1f6f5c); font: inherit; font-size: 12px; cursor: pointer; }
+.agreement-link:hover { text-decoration: underline; }
+.agreement-link:focus-visible { outline: 2px solid var(--brand, #1f6f5c); outline-offset: 2px; }
 .account-error { margin-top: 4px; }
 .account-submit { width: 100%; margin-top: 6px; }
 .account-switch { margin: 14px 0 0; font-size: 12px; color: var(--muted, #667); text-align: center; }
