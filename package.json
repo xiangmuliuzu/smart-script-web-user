@@ -19,7 +19,6 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "2.3.2",
-    "@rolldown/binding-win32-x64-msvc": "^1.2.14",
     "dompurify": "3.4.17",
     "element-plus": "2.14.5",
     "quill": "2.0.3",
@@ -29,5 +28,8 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "6.0.9",
     "vite": "8.3.1"
+  },
+  "optionalDependencies": {
+    "@rolldown/binding-win32-x64-msvc": "^1.2.14"
   }
 }
