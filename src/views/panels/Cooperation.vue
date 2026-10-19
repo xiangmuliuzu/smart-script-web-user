@@ -15,7 +15,7 @@
         <div v-for="inq in inquiries" :key="inq.inquiryId" class="inquiry-card" :class="{ expanded: expandedInquiryId === inq.inquiryId }">
           <div class="inquiry-header" @click="toggleInquiry(inq)">
             <span class="expand-icon">{{ expandedInquiryId === inq.inquiryId ? '▾' : '▸' }}</span>
-            <span class="inq-title"><b>{{ inq.workTitle || '作品#' + inq.workId }}</b><span class="status-tag" :class="'tag-' + inq.status">{{ inquiryStatusLabel(inq.status) }}</span></span>
+            <span class="inq-title"><b>《{{ inq.workTitle || '作品#' + inq.workId }}》</b><span class="status-tag" :class="'tag-' + inq.status">{{ inquiryStatusLabel(inq.status) }}</span></span>
             <span class="inq-summary">{{ counterpartyOf(inq).role }}：{{ counterpartyOf(inq).name }} · {{ moneyFromFen(inq.budget) }}</span>
           </div>
           <div v-if="expandedInquiryId === inq.inquiryId" class="inquiry-body">
@@ -44,7 +44,7 @@
             <LoadState :pending="sessionListPending" :error="sessionListError" :retry="loadTradeSessions" />
             <div v-if="!sessionListPending && !sessions.length" class="load-state"><p>暂无交易会话</p></div>
             <div v-for="s in sessions" :key="s.sessionId" class="session-item" :class="{ active: chatSessionId === s.sessionId }" @click="selectSession(s)">
-              <div class="session-top"><b>{{ s.businessName || '会话#' + s.sessionId }}</b><span v-if="s.unread" class="unread-badge">{{ s.unread }}</span></div>
+              <div class="session-top"><b>《{{ s.businessName || '会话#' + s.sessionId }}》</b><span v-if="s.unread" class="unread-badge">{{ s.unread }}</span></div>
               <p class="session-peer cost">{{ s.peerName || '用户' + s.peerId }}</p>
               <p v-if="s.lastMessage" class="session-last">{{ s.lastMessage }}</p>
             </div>
@@ -100,7 +100,7 @@
           </div>
           <div class="order-body">
             <div class="order-top">
-              <b>{{ o.workTitle || '订单#' + o.orderId }}</b>
+              <b>《{{ o.workTitle || '订单#' + o.orderId }}》</b>
               <span class="status-tag" :class="'tag-' + o.status">{{ orderStatusLabel(o.status) }}</span>
             </div>
             <p class="order-meta">订单号：{{ o.orderNo || '#' + o.orderId }} · 买方：{{ o.buyerName || o.buyerId }} · 卖方：{{ o.sellerName || o.sellerId }}</p>
@@ -338,6 +338,13 @@ async function doSendChat() {
       }
       lastSentAmountFen = amountFen
       await loadLatestQuote()
+      // 报价/议价后刷新消息列表（后端会插入 [报价]/[议价] 系统消息）
+      await loadChatMessages()
+      // 金额变化且有文本时，同时发普通消息
+      if (text) {
+        const msg = await api.value.sendChat(chatSessionId.value, text)
+        if (msg) chatMessages.value.push(msg)
+      }
     } else if (text) {
       const msg = await api.value.sendChat(chatSessionId.value, text)
       if (msg) chatMessages.value.push(msg)
