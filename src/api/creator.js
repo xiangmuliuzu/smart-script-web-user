@@ -50,6 +50,8 @@ export const unreadCount = async () => (await data('/api/v1/messages/unread-coun
 export const readMessage = id => data(`/api/v1/messages/${encodeURIComponent(id)}/read`, { method: 'PUT' })
 export const readAllMessages = () => data('/api/v1/messages/read-all', { method: 'PUT' })
 export const openChat = () => data('/api/v1/users/me/chat/sessions', { method: 'POST', body: { businessType: 'GENERAL', businessName: '平台沟通' } })
+export const getSessionDetail = id => data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}`)
+export const listTradeSessions = () => data('/api/v1/users/me/chat/sessions?sessionType=TRADE')
 export const listChat = async id => asList(await data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/messages`))
 export const sendChat = (id, content) => data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/messages`, { method: 'POST', body: { msgType: 'TEXT', content } })
 export const getProfile = () => data('/api/v1/users/me/profile')
@@ -60,3 +62,23 @@ export const changePassword = form => data('/api/v1/auth/password/change', { met
 export const phoneChange = (step, body) => data('/api/v1/users/me/phone/change/' + step, { method: 'POST', body })
 export const listFeedback = async () => asList(await data('/api/v1/feedback'))
 export const sendFeedback = form => data('/api/v1/feedback', { method: 'POST', body: { category: form.category, content: form.content, attachmentRef: form.attachmentRef } })
+
+// ──── C 交易域：询盘 / 报价 / 订单（后端金额单位：分） ────
+// 询盘
+export const listInquiries = (params) => data('/api/v1/trade/inquiry/list' + (params ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))).toString() : ''))
+export const getInquiry = id => data(`/api/v1/trade/inquiry/${encodeURIComponent(id)}`)
+export const acceptInquiry = id => data(`/api/v1/trade/inquiry/${encodeURIComponent(id)}/accept`, { method: 'PUT' })
+export const rejectInquiry = id => data(`/api/v1/trade/inquiry/${encodeURIComponent(id)}/reject`, { method: 'PUT' })
+export const createTradeChat = inquiryId => data('/api/v1/trade/inquiry/chat/sessions?' + new URLSearchParams({ inquiryId }).toString(), { method: 'POST' })
+// 报价
+export const listQuotes = inquiryId => data('/api/v1/trade/quote/list?' + new URLSearchParams({ inquiryId }).toString())
+export const getQuote = id => data(`/api/v1/trade/quote/${encodeURIComponent(id)}`)
+export const getLatestQuote = inquiryId => data('/api/v1/trade/quote/latest?' + new URLSearchParams({ inquiryId }).toString())
+export const createQuote = form => data('/api/v1/trade/quote', { method: 'POST', body: form })
+export const modifyQuote = (id, form) => data(`/api/v1/trade/quote/${encodeURIComponent(id)}`, { method: 'PUT', body: form })
+export const acceptQuote = id => data(`/api/v1/trade/quote/${encodeURIComponent(id)}/accept`, { method: 'PUT' })
+export const rejectQuote = id => data(`/api/v1/trade/quote/${encodeURIComponent(id)}/reject`, { method: 'PUT' })
+// 订单
+export const listOrders = params => data('/api/v1/trade/order/list?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))).toString())
+export const getOrder = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}`)
+export const deliverOrder = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/deliver`, { method: 'POST' })
