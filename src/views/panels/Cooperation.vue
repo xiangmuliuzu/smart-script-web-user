@@ -52,7 +52,7 @@
           <div class="session-chat-panel">
             <template v-if="chatSessionId">
               <div class="negotiation-bar">
-                <span class="neg-amount">¥{{ negAmountYuan }}</span>
+                <span class="neg-amount">{{ negAmountYuan }}</span>
                 <span class="neg-source cost">{{ negSource }}</span>
                 <button v-if="canAcceptLatest" class="btn sm" @click="doAcceptLatestQuote">接受</button>
                 <span v-else-if="latestQuote && ['pending','pending_seller'].includes(latestQuote.status)" class="cost" style="font-size:12px">等待对方确认</span>
@@ -73,7 +73,7 @@
               </div>
               <div class="quote-input-card">
                 <span class="yen-sign">¥</span>
-                <input v-model="chatAmount" type="number" min="0" step="0.01" placeholder="报价金额" class="amount-input">
+                <input v-model="chatAmount" type="number" min="0" step="1" placeholder="报价金额" class="amount-input">
               </div>
               <form class="chat-input-row" @submit.prevent="doSendChat">
                 <input v-model="chatText" maxlength="2000" placeholder="输入消息…" :disabled="chatSending">
@@ -258,6 +258,7 @@ const chatBodyEl = ref(null)
 const latestQuote = ref(null)
 let chatPollTimer = null
 let lastSentAmountFen = null
+let lastMsgId = 0
 
 const chatAmountFen = computed(() => {
   const v = parseFloat(chatAmount.value)
@@ -300,8 +301,28 @@ async function loadSessionDetail() {
 async function loadChatMessages() {
   if (!chatSessionId.value) return
   chatLoading.value = true; chatError.value = ''
-  try { chatMessages.value = await api.value.listChat(chatSessionId.value) } catch (e) { chatError.value = e.message }
+  try {
+    const msgs = await api.value.listChat(chatSessionId.value)
+    chatMessages.value = msgs
+    lastMsgId = msgs.length ? Math.max(...msgs.map(m => m.messageId || m.msgId || 0)) : 0
+  } catch (e) { chatError.value = e.message }
   finally { chatLoading.value = false }
+}
+/** 增量拉取新消息（仅追加，不替换旧消息，避免闪烁） */
+async function pollNewMessages() {
+  if (!chatSessionId.value) return
+  try {
+    const msgs = await api.value.listChat(chatSessionId.value)
+    const newMsgs = msgs.filter(m => (m.messageId || m.msgId || 0) > lastMsgId)
+    if (newMsgs.length) {
+      chatMessages.value.push(...newMsgs)
+      lastMsgId = Math.max(...msgs.map(m => m.messageId || m.msgId || 0))
+      // 仅当用户已在底部时才自动滚动，不打断用户翻看历史
+      const el = chatBodyEl.value
+      const atBottom = el ? (el.scrollHeight - el.scrollTop - el.clientHeight < 60) : true
+      if (atBottom) await nextTick(), scrollChatBottom()
+    }
+  } catch { /* 轮询失败静默忽略 */ }
 }
 async function loadLatestQuote() {
   const inqId = activeSessionInquiryId.value
@@ -314,7 +335,7 @@ function scrollChatBottom() {
 }
 function startChatPoll() {
   stopChatPoll()
-  chatPollTimer = setInterval(() => { if (chatSessionId.value && tab.value === 'session') loadChatMessages().then(scrollChatBottom) }, 30000)
+  chatPollTimer = setInterval(() => { if (chatSessionId.value && tab.value === 'session') pollNewMessages() }, 5000)
 }
 function stopChatPoll() {
   if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null }
@@ -343,11 +364,11 @@ async function doSendChat() {
       // 金额变化且有文本时，同时发普通消息
       if (text) {
         const msg = await api.value.sendChat(chatSessionId.value, text)
-        if (msg) chatMessages.value.push(msg)
+        if (msg) { chatMessages.value.push(msg); const id = msg.messageId || msg.msgId; if (id > lastMsgId) lastMsgId = id }
       }
     } else if (text) {
       const msg = await api.value.sendChat(chatSessionId.value, text)
-      if (msg) chatMessages.value.push(msg)
+      if (msg) { chatMessages.value.push(msg); const id = msg.messageId || msg.msgId; if (id > lastMsgId) lastMsgId = id }
     }
     chatText.value = ''
     await nextTick()
@@ -444,7 +465,9 @@ onUnmounted(() => { stopChatPoll() })
 .session-chat-panel { flex: 1; display: flex; flex-direction: column; padding: 0; overflow: hidden }
 .session-chat-panel .chat-messages { flex: 1; margin: 0; border: none; border-radius: 0; height: auto }
 .session-chat-panel .quote-input-card { margin: 0; border-radius: 0; border-left: 0; border-right: 0 }
-.session-chat-panel .quote-input-card .yen-sign { display: none }
+.session-chat-panel .quote-input-card .yen-sign { font-size: 16px; font-weight: 600; color: #606266 }
+.session-chat-panel .quote-input-card .amount-input::-webkit-inner-spin-button,
+.session-chat-panel .quote-input-card .amount-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0 }
 .session-chat-panel .chat-input-row { margin: 0; padding: 8px; border-top: 1px solid #ebeef5 }
 
 /* ── 原有样式 ── */
