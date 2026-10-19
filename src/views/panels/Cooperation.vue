@@ -93,23 +93,19 @@
         </div>
         <LoadState :pending="orderPending" :error="orderError" :retry="loadOrders" />
         <div v-if="!orderPending && !orderError && !orders.length" class="load-state"><p>暂无订单</p></div>
-        <div v-for="o in orders" :key="o.orderId" class="inquiry-card" :class="{ expanded: expandedOrderId === o.orderId }">
-          <div class="inquiry-header" @click="toggleOrder(o)">
-            <span class="expand-icon">{{ expandedOrderId === o.orderId ? '▾' : '▸' }}</span>
-            <span class="inq-title"><b>{{ o.workTitle || '订单#' + o.orderId }}</b><span class="status-tag" :class="'tag-' + o.status">{{ orderStatusLabel(o.status) }}</span></span>
-            <span class="inq-summary">{{ counterpartyOf(o).role }}：{{ counterpartyOf(o).name }} · {{ moneyFromFen(o.amount) }}</span>
+        <div v-for="o in orders" :key="o.orderId" class="order-card">
+          <div class="order-cover">
+            <img v-if="o.workCover" :src="o.workCover" alt="" />
+            <span v-else class="glyph">{{ (o.workTitle || '订').slice(0, 1) }}</span>
           </div>
-          <div v-if="expandedOrderId === o.orderId" class="inquiry-body">
-            <div class="detail-info">
-              <p>订单号：{{ o.orderNo || '#' + o.orderId }} · 状态：<span class="status-tag" :class="'tag-' + o.status">{{ orderStatusLabel(o.status) }}</span></p>
-              <p>买方：{{ o.buyerName || o.buyerId }} · 卖方：{{ o.sellerName || o.sellerId }}</p>
-              <p>金额：{{ moneyFromFen(o.amount) }} · 授权：{{ licenseLabel(o.licenseType) }}</p>
-              <p v-if="o.cancelReason">取消原因：{{ o.cancelReason }}</p>
-              <p class="cost">创建于 {{ dateText(o.createdAt) }}</p>
+          <div class="order-body">
+            <div class="order-top">
+              <b>{{ o.workTitle || '订单#' + o.orderId }}</b>
+              <span class="status-tag" :class="'tag-' + o.status">{{ orderStatusLabel(o.status) }}</span>
             </div>
-            <div class="action-bar">
-              <button v-if="isSellerOf(o) && o.status === 'escrow_pending'" class="btn sm" @click="doDeliverOrder(o)">确认交割</button>
-            </div>
+            <p class="order-meta">订单号：{{ o.orderNo || '#' + o.orderId }} · 买方：{{ o.buyerName || o.buyerId }} · 卖方：{{ o.sellerName || o.sellerId }}</p>
+            <p class="order-meta">金额：{{ moneyFromFen(o.amount) }} · 授权：{{ licenseLabel(o.licenseType) }}</p>
+            <p v-if="o.cancelReason" class="order-meta">取消原因：{{ o.cancelReason }}</p>
             <div class="order-progress">
               <div v-for="(step, i) in orderProgressSteps" :key="step.key" class="progress-step" :class="{ active: getProgressIndex(o) >= i, current: getProgressIndex(o) === i, terminated: getTerminal(o) && getProgressIndex(o) < i }">
                 <span class="progress-dot"></span>
@@ -117,6 +113,10 @@
               </div>
             </div>
             <div v-if="getTerminal(o)" class="terminal-bar">{{ getTerminalLabel(o) }}</div>
+            <div class="order-foot">
+              <span class="cost">创建于 {{ dateText(o.createdAt) }}</span>
+              <button v-if="isSellerOf(o) && o.status === 'escrow_pending'" class="btn sm" @click="doDeliverOrder(o)">确认交割</button>
+            </div>
           </div>
         </div>
         <div v-if="orderTotal > PAGE_SIZE" class="pagination-bar"><button class="btn sm ghost" :disabled="orderPageNum <= 1" @click="orderPageNum--; loadOrders()">上一页</button><span class="cost">第 {{ orderPageNum }} 页 / 共 {{ Math.ceil(orderTotal / PAGE_SIZE) }} 页</span><button class="btn sm ghost" :disabled="orderPageNum * PAGE_SIZE >= orderTotal" @click="orderPageNum++; loadOrders()">下一页</button></div>
@@ -369,11 +369,6 @@ const orderRole = ref('seller')
 const orderStatus = ref('')
 const orderPageNum = ref(1)
 const orderTotal = ref(0)
-const expandedOrderId = ref(null)
-
-function toggleOrder(o) {
-  expandedOrderId.value = expandedOrderId.value === o.orderId ? null : o.orderId
-}
 
 async function loadOrders() {
   orderPending.value = true; orderError.value = ''
@@ -407,7 +402,6 @@ function getTerminalLabel(o) {
 let inquirySearchTimer = null
 watch(inquiryKeyword, () => { clearTimeout(inquirySearchTimer); inquirySearchTimer = setTimeout(() => { inquiryPageNum.value = 1; loadInquiries() }, 300) })
 watch(expandedInquiryId, v => { if (!v) expandedInquiryId.value = null })
-watch(expandedOrderId, v => { if (!v) expandedOrderId.value = null })
 watch(tab, v => {
   if (v === 'inquiry') loadInquiries()
   else if (v === 'session') loadTradeSessions()
@@ -450,6 +444,20 @@ onUnmounted(() => { stopChatPoll() })
 .msg { cursor: pointer; transition: background .15s }
 .msg:hover { background: #f5f7fa }
 .msg.active { background: #ecf5ff; border-left: 3px solid #409eff }
+
+/* ── 订单平铺卡片：左封面右信息，常态展示全部内容 ── */
+.order-card { display: flex; gap: 12px; border: 1px solid #ebeef5; border-radius: 6px; padding: 12px; margin-bottom: 10px; background: #fff; transition: box-shadow .15s }
+.order-card:hover { box-shadow: 0 1px 4px rgba(0,0,0,.06) }
+.order-cover { width: 108px; height: 146px; flex-shrink: 0; align-self: flex-start; border-radius: 4px; overflow: hidden; background: linear-gradient(160deg, #E9E5DA 0%, #DAD5C7 100%); display: grid; place-items: center; border: 1px solid #ebeef5 }
+.order-cover img { width: 100%; height: 100%; object-fit: cover }
+.order-cover .glyph { font-size: 32px; color: rgba(27,26,24,.18); font-weight: 600 }
+.order-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px }
+.order-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
+.order-top b { font-size: 14px }
+.order-meta { font-size: 12.5px; color: #606266; margin: 0 }
+.order-body .order-progress { margin: 8px 0 0 }
+.order-foot { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 6px }
+.order-foot .cost { font-size: 12px; color: #909399 }
 
 .order-progress { display: flex; align-items: center; gap: 0; margin: 16px 0 8px; padding: 0 4px }
 .progress-step { display: flex; flex-direction: column; align-items: center; flex: 1; position: relative }
