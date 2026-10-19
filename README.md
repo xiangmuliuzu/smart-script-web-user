@@ -34,6 +34,8 @@ TXT/Markdown/DOCX 草稿使用原生浏览器文本读取与解压，不执行�
 
 ## 认证协议
 
+注册页的《用户协议》《隐私政策》在当前页面弹窗展示，内容位于 `src/content/agreements.js`，版本号使用协议接口返回值。阅读和关闭弹窗不会自动勾选同意。
+
 | 动作 | 接口 |
 | --- | --- |
 | 验证码 | GET /api/v1/auth/captchaImage |
