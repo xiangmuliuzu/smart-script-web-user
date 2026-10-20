@@ -167,3 +167,32 @@ button.workitem { text-align: left; padding: 0; width: 100%; font: inherit; colo
   .login-aside blockquote { margin: 26px 0; }
 }
 @media (prefers-reduced-motion: reduce) { .loading-mark { animation: none; } }
+
+/* 主页阅读字号：正文与辅助信息一起放大，保留原有层级。 */
+.creator-portal .topbar .brand b { font-size: 19px; }
+.creator-portal .topbar .brand span { font-size: 13px; }
+.creator-portal .topbar .nav button { font-size: 16px; }
+.creator-portal .topbar .nav-icon .lbl { font-size: 12.5px; }
+.creator-portal .topbar .verify-chip { font-size: 14px; }
+.creator-portal .topbar .avatar-btn em { font-size: 15px; }
+.creator-portal .workspace-layout { font-size: 16px; }
+.workspace-layout .sec-head h2 { font-size: 28px; }
+.workspace-layout .sec-head :is(.count, .more) { font-size: 14.5px; }
+.workspace-layout .workitem .work-title h3 { font-size: 20px; }
+.workspace-layout .workitem .work-synopsis { font-size: 15.5px; }
+.workspace-layout .workitem :is(.work-kind, .work-meta, .stamp) { font-size: 14px; }
+.workspace-layout .workitem .stamp { width: 56px; height: 56px; padding: 4px; }
+.workspace-layout .workitem .work-foot .btn,
+.workspace-layout :is(.btn, .field, .text-button, .cost) { font-size: 14.5px; }
+.workspace-layout .field :is(input, select),
+.workspace-layout :is(.note, .load-state) { font-size: 15px; }
+.workspace-layout .desk-workspace .aside-head h2 { font-size: 19px; }
+.workspace-layout .aside-block h3 { font-size: 15px; }
+.workspace-layout :is(.todo-item b, .aside-log li) { font-size: 14.5px; }
+.workspace-layout :is(.aside-note, .todo-item span) { font-size: 13.5px; }
+.workspace-layout .aside-log time { font-size: 13px; }
+@media (max-width: 520px) {
+  .creator-portal .topbar .brand b { font-size: 18px; }
+  .creator-portal .topbar .nav button { font-size: 14px; }
+  .workspace-layout .sec-head { flex-wrap: wrap; }
+}
