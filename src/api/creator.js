@@ -27,8 +27,19 @@ export async function upload(file, purpose = 'script') {
   body.append('file', uploaded)
   const path = purpose === 'avatar' ? '/api/v1/users/me/avatar' : purpose === 'material' ? '/api/v1/users/me/real-name/material' : '/api/v1/content/upload'
   if (purpose === 'script' || purpose === 'cover') body.append('type', purpose)
+  // 印章图/审核材料与 App 一致：走 content/upload，type=material。
+  if (purpose === 'seal') body.append('type', 'material')
   return data(path, { method: 'POST', body })
 }
+
+// ──── 版权印章（与 App 共用 /api/v1/content/copyright-seals，同用户数据同步） ────
+const sealPath = id => '/api/v1/content/copyright-seals/' + encodeURIComponent(id)
+export const listSeals = async () => asList(await data('/api/v1/content/copyright-seals'))
+export const getSeal = id => data(sealPath(id))
+export const createSeal = form => data('/api/v1/content/copyright-seals', { method: 'POST', body: { sealName: form.sealName, sealImageUrl: form.sealImageUrl, materialUrls: form.materialUrls || '' } })
+export const updateSeal = (id, form) => data(sealPath(id), { method: 'PUT', body: form })
+export const disableSeal = id => data(sealPath(id) + '/disable', { method: 'PUT' })
+export const deleteSeal = id => data(sealPath(id), { method: 'DELETE' })
 // AI 生成耗时可能超过默认 30s（大纲尤甚，需等待模型完整输出），单独放长到 120s。
 export const generate = (type, form) => data('/api/v1/content/ai/' + type, { method: 'POST', body: form, timeout: 120000 })
 const listWriteRecords = async () => asList(await data('/api/v1/content/ai/write-records'))
