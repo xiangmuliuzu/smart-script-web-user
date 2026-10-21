@@ -6,6 +6,8 @@
 .creation-header .creation-title { flex: 1 1 240px; width: 0; min-width: 130px; max-width: 440px; padding: 6px 2px; border: 0; background: transparent; font-family: var(--sans); font-size: 19px; font-weight: 600; border-radius: 0; }
 .creation-title::placeholder { color: var(--ink); opacity: 1; }
 .creation-header .creation-category { width: 116px; flex: none; padding: 6px 8px; border: 0; border-radius: 20px; background: var(--paper-3); font-size: 12px; }
+.creation-selectors { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.creation-header .creation-work-select { width: 160px; min-width: 0; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 5px; background: white; font-size: 12px; text-overflow: ellipsis; }
 .creation-save-state { margin-left: auto; font-size: 11px; white-space: nowrap; color: var(--ink-3); }
 .creation-actions { display: flex; align-items: center; gap: 8px; flex: none; }
 .creation-actions .btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 8px 12px; border-radius: 5px; white-space: nowrap; }
