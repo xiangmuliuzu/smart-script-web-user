@@ -4,6 +4,7 @@
     <div class="panel-content">
       <div class="note info">{{ notes[tab] }}</div>
       <ApplyPanel v-if="tab === 'apply'" @open-cert="openCert" />
+      <AssetsPanel v-else-if="tab === 'assets'" />
       <CertPanel v-else-if="tab === 'certs'" ref="certPanelRef" />
       <SealPanel v-else-if="tab === 'seal'" />
       <LoadState v-else empty empty-text="版权与收益服务暂未开放，可通过「消息 → 与平台沟通」咨询。" />
@@ -17,6 +18,7 @@ import PortalTabs from '../../components/PortalTabs.vue'
 import LoadState from '../../components/LoadState.vue'
 import SealPanel from './seal/SealPanel.vue'
 import ApplyPanel from './copyright/ApplyPanel.vue'
+import AssetsPanel from './copyright/AssetsPanel.vue'
 import CertPanel from './copyright/CertPanel.vue'
 
 const props = defineProps({ modelValue: Boolean, initialTab: String })
@@ -34,7 +36,7 @@ const tabs = [
 ]
 const notes = {
   apply: '版权登记由平台统一向省版权中心提交，你只需提交申请与材料，进度会同步到这里。登记完成后作品会出现在「版权资产」与「电子证书」。',
-  assets: '已登记的作品与授权历史，在这里统一管理。',
+  assets: '已发布作品的上架状态与授权历史，在这里统一管理（仅本人作品）。',
   certs: '作品登记完成后可查看电子证书。',
   seal: '印章用于版权材料与授权合同的签署。提交后由平台审核，通过后可用于后续合同流程。',
   settle: '作品成交后由平台结算。创作者所得为订单金额扣除平台服务费后的部分。',

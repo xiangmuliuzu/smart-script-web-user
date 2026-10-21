@@ -58,6 +58,17 @@ export const downloadCopyrightCert = id =>
   data(copyrightBase + '/cert/' + encodeURIComponent(id) + '/download')
 export const listCopyrightCenters = async () => asList(await data(copyrightBase + '/config/active'))
 
+// ──── 版权资产（创作者侧 /api/v1/content/copyright/assets，字段与 Admin 对齐，仅本人已发布作品） ────
+const assetsBase = copyrightBase + '/assets'
+export const listCopyrightAssets = (params = {}) =>
+  data(assetsBase + qs({ pageNum: 1, pageSize: 20, ...params }))
+export const getCopyrightAsset = workId =>
+  data(assetsBase + '/' + encodeURIComponent(workId))
+export const updateCopyrightAssetStatus = (workId, status) =>
+  data(assetsBase + '/' + encodeURIComponent(workId) + '/status', { method: 'PUT', body: { status } })
+export const listCopyrightAuthorizationHistory = (workId, params = {}) =>
+  data(assetsBase + '/' + encodeURIComponent(workId) + '/authorization-history' + qs({ pageNum: 1, pageSize: 10, ...params }))
+
 // ──── 版权印章（与 App 共用 /api/v1/content/copyright-seals，同用户数据同步） ────
 const sealPath = id => '/api/v1/content/copyright-seals/' + encodeURIComponent(id)
 export const listSeals = async () => asList(await data('/api/v1/content/copyright-seals'))

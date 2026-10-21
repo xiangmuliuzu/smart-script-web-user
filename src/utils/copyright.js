@@ -17,12 +17,28 @@ export const CERT_STATUS = {
 
 export const WORK_TYPES = [
   { value: 'script', label: '剧本' },
-  { value: 'novel', label: '小说' }
+  { value: 'novel', label: '小说' },
+  { value: 'short_drama', label: '短剧' },
+  { value: 'movie', label: '电影剧本' },
+  { value: 'tv_series', label: '电视剧剧本' }
 ]
+
+export const SHELF_STATUS = {
+  on_shelf: '已上架',
+  off_shelf: '已下架'
+}
 
 export const applyStatusLabel = status => APPLY_STATUS[status] || status || '未知'
 export const certStatusLabel = status => CERT_STATUS[status] || status || '未知'
+export const shelfStatusLabel = status => SHELF_STATUS[status] || status || '未知'
 export const workTypeLabel = type => WORK_TYPES.find(item => item.value === type)?.label || type || '—'
+
+export const shelfStatusTone = status => ({
+  on_shelf: 'ok',
+  off_shelf: 'off'
+}[status] || 'off')
+
+export const canToggleShelf = item => item?.status === 'on_shelf' || item?.status === 'off_shelf'
 
 export const applyStatusTone = status => ({
   pending: 'wait',
