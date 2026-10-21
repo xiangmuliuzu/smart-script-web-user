@@ -197,18 +197,3 @@ button.workitem { text-align: left; padding: 0; width: 100%; font: inherit; colo
   .workspace-layout .sec-head { flex-wrap: wrap; }
 }
 
-/* 详情页 AI 创作悬浮球与右侧抽屉 */
-.ai-fab {
-  position: fixed; right: 26px; bottom: 26px; z-index: 3000;
-  width: 52px; height: 52px; border: 0; border-radius: 50%;
-  background: linear-gradient(135deg, var(--indigo), #6d4bd6);
-  color: white; font-size: 20px; cursor: pointer;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, .22); display: flex; align-items: center; justify-content: center;
-}
-.ai-fab:hover { transform: scale(1.06); }
-.ai-fab-panel { padding: 20px; background: var(--paper); }
-.ai-fab-panel .sec { margin: 0; }
-@media (max-width: 520px) {
-  .ai-fab { right: 18px; bottom: 18px; width: 48px; height: 48px; }
-  .ai-fab-panel { padding: 14px; }
-}

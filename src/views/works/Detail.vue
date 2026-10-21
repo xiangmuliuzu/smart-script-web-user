@@ -15,15 +15,13 @@
       <div class="sub"><div class="sub-head"><h3>审核记录</h3></div><div class="panel attached"><LoadState :error="reviewError" :retry="loadReviews" :empty="!reviewError && !reviews.length" empty-text="暂无审核记录" /><ul v-if="!reviewError" class="timeline"><li v-for="review in reviews" :key="review.reviewId" :data-tone="review.status === 'approved' ? 'passed' : ['revision', 'rejected'].includes(review.status) ? 'revise' : ''"><time>{{ dateText(review.reviewEndTime || review.createdAt || review.createTime) }}</time><b>内容审核 · {{ reviewLabels[review.status] || '状态待确认' }}</b><p v-if="review.reviewOpinion">{{ review.reviewOpinion }}<span v-if="review.reviewerName"> —— 审核员 {{ review.reviewerName }}</span></p></li></ul></div></div>
     </aside>
   </div>
-  <ChapterEditor v-if="chapterVisible" ref="chapterEditor" v-model="chapterVisible" :work-id="work.workId" :chapter="selectedChapter" :chapter-no="selectedChapter?.chapterNo || chapters.length + 1" :opinion="selectedChapter?.status === 'revision' ? latestReview?.reviewOpinion : ''" @update:content="editingContent = $event" @saved="load" />
+  <ChapterEditor v-if="chapterVisible" v-model="chapterVisible" :work-id="work.workId" :chapter="selectedChapter" :chapter-no="selectedChapter?.chapterNo || chapters.length + 1" :opinion="selectedChapter?.status === 'revision' ? latestReview?.reviewOpinion : ''" @saved="load" />
   <WorkSettings v-if="settingsVisible" v-model="settingsVisible" :work="work" @saved="load" />
   <WorkDelete v-if="deleteVisible" v-model="deleteVisible" :work="work" @deleted="goWorks" />
   <PortalLayer v-model="versionsVisible" title="版本历史" modal><LoadState :pending="versionLoading" :error="versionError" :retry="showVersions" :empty="!versionLoading && !versionError && !versions.length" /><ul class="timeline"><li v-for="version in versions" :key="version.versionId"><time>{{ dateText(version.createTime) }}</time><b>{{ version.version || version.versionNo || '作品版本' }}</b><p>{{ version.versionDesc || version.description || '暂无版本说明' }}</p></li></ul></PortalLayer>
-  <button v-if="work" class="ai-fab" type="button" title="AI 创作助手" @click="aiVisible = true"><span>✦</span></button>
-  <PortalLayer v-model="aiVisible" title="AI 创作助手" size="min(620px, 50vw)"><div class="ai-fab-panel"><AiStudio embedded :work-id="work.workId" :current-content="editingContent" :insert-disabled="!editable" @insert="insertAi" /></div></PortalLayer>
 </template>
 <script setup>
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Setting } from '@element-plus/icons-vue'
@@ -33,7 +31,6 @@ import LoadState from '../../components/LoadState.vue'
 import ChapterEditor from '../../components/ChapterEditor.vue'
 import PortalLayer from '../../components/PortalLayer.vue'
 import WorkSettings from './Settings.vue'
-import AiStudio from './AiStudio.vue'
 import WorkDelete from './Delete.vue'
 const { api, user, canCreate, goWorks, handleError } = usePortal()
 const route = useRoute()
@@ -49,9 +46,6 @@ const submitting = ref(false)
 const deleting = ref(null)
 const selectedChapter = ref(null)
 const chapterVisible = ref(false)
-const chapterEditor = ref(null)
-const editingContent = ref('')
-const aiVisible = ref(false)
 const settingsVisible = ref(false)
 const deleteVisible = ref(false)
 const versionsVisible = ref(false)
@@ -76,13 +70,7 @@ async function load() {
 function editChapter(chapter) {
   if (!editable.value) return
   if (chapter) return router.push({ path: '/works/create', query: { workId: work.value.workId, chapterId: chapter.chapterId } })
-  selectedChapter.value = null; editingContent.value = ''; chapterVisible.value = true
-}
-async function insertAi(content) {
-  if (!content) return
-  if (chapterVisible.value) { chapterEditor.value?.appendText(content); ElMessage.success('已插入当前章节末尾') }
-  else { editChapter(null); await nextTick(); chapterEditor.value?.appendText(content); ElMessage.success('已插入新章节正文') }
-  aiVisible.value = false
+  selectedChapter.value = null; chapterVisible.value = true
 }
 async function remove(chapter) {
   if (!editable.value || deleting.value !== null) return
