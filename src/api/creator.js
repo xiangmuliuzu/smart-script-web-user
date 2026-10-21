@@ -29,8 +29,34 @@ export async function upload(file, purpose = 'script') {
   if (purpose === 'script' || purpose === 'cover') body.append('type', purpose)
   // 印章图/审核材料与 App 一致：走 content/upload，type=material。
   if (purpose === 'seal') body.append('type', 'material')
+  // 版权申请材料与 App 一致：type=copyright_material。
+  if (purpose === 'copyright') body.append('type', 'copyright_material')
   return data(path, { method: 'POST', body })
 }
+
+// ──── 版权申请 / 电子证书（与 App 共用 /api/v1/content/copyright，同用户数据同步） ────
+const copyrightBase = '/api/v1/content/copyright'
+const qs = params => {
+  const entries = Object.entries(params || {}).filter(([, v]) => v != null && v !== '')
+  return entries.length ? '?' + new URLSearchParams(entries).toString() : ''
+}
+export const listCopyrightApplications = (params = {}) =>
+  data(copyrightBase + '/application/list' + qs({ pageNum: 1, pageSize: 50, ...params }))
+export const getCopyrightApplication = id =>
+  data(copyrightBase + '/application/' + encodeURIComponent(id))
+export const submitCopyrightApplication = form =>
+  data(copyrightBase + '/application/apply', { method: 'POST', body: form })
+export const resubmitCopyrightApplication = form =>
+  data(copyrightBase + '/application/resubmit', { method: 'POST', body: form })
+export const deleteCopyrightApplication = id =>
+  data(copyrightBase + '/application/' + encodeURIComponent(id), { method: 'DELETE' })
+export const listCopyrightCerts = (params = {}) =>
+  data(copyrightBase + '/cert/list' + qs({ pageNum: 1, pageSize: 50, ...params }))
+export const getCopyrightCert = id =>
+  data(copyrightBase + '/cert/' + encodeURIComponent(id))
+export const downloadCopyrightCert = id =>
+  data(copyrightBase + '/cert/' + encodeURIComponent(id) + '/download')
+export const listCopyrightCenters = async () => asList(await data(copyrightBase + '/config/active'))
 
 // ──── 版权印章（与 App 共用 /api/v1/content/copyright-seals，同用户数据同步） ────
 const sealPath = id => '/api/v1/content/copyright-seals/' + encodeURIComponent(id)
