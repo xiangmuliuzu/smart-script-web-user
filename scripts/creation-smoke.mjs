@@ -96,8 +96,13 @@ try {
       assert.ok(await toolbar.evaluate(element => element.scrollLeft > 0))
       await page.getByRole('button', { name: '向左滚动工具栏', exact: true }).click(); await page.waitForTimeout(350)
       await page.locator('.ql-font .ql-picker-label').click()
+      // 下拉菜单在 requestAnimationFrame 中定位，先等待实际布局完成再检查边界。
+      await page.waitForFunction(viewportWidth => {
+        const bounds = document.querySelector('.ql-font .ql-picker-options')?.getBoundingClientRect()
+        return bounds && bounds.x >= 0 && bounds.right <= viewportWidth && bounds.height > 100
+      }, width)
       const menu = await page.locator('.ql-font .ql-picker-options').evaluate(element => element.getBoundingClientRect().toJSON())
-      assert.ok(menu.x >= 0 && menu.right <= width && menu.height > 100)
+      assert.ok(menu.x >= 0 && menu.right <= width && menu.height > 100, `font menu outside viewport at ${width}: ${JSON.stringify(menu)}`)
       await page.keyboard.press('Escape'); await editor.click()
       await page.screenshot({ path: shots + `creation-workspace-${width}.png`, fullPage: true })
     }

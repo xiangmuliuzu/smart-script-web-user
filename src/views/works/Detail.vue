@@ -24,7 +24,7 @@
 </template>
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Setting } from '@element-plus/icons-vue'
 import { usePortal } from '../../utils/portal.js'
@@ -37,6 +37,7 @@ import AiStudio from './AiStudio.vue'
 import WorkDelete from './Delete.vue'
 const { api, user, canCreate, goWorks, handleError } = usePortal()
 const route = useRoute()
+const router = useRouter()
 const work = ref(null)
 const chapters = ref([])
 const reviews = ref([])
@@ -72,7 +73,11 @@ async function load() {
   catch (failure) { error.value = failure.message || '作品加载失败'; await handleError(failure) }
   finally { pending.value = false }
 }
-function editChapter(chapter) { if (!editable.value) return; selectedChapter.value = chapter; editingContent.value = chapter?.content || ''; chapterVisible.value = true }
+function editChapter(chapter) {
+  if (!editable.value) return
+  if (chapter) return router.push({ path: '/works/create', query: { workId: work.value.workId, chapterId: chapter.chapterId } })
+  selectedChapter.value = null; editingContent.value = ''; chapterVisible.value = true
+}
 async function insertAi(content) {
   if (!content) return
   if (chapterVisible.value) { chapterEditor.value?.appendText(content); ElMessage.success('已插入当前章节末尾') }
