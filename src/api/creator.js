@@ -1,4 +1,4 @@
-import { request } from '../auth.js'
+import { request, getToken } from '../auth.js'
 import { asList } from '../utils/creator.js'
 
 // 沿用若依 request，认证响应保持顶层结构，业务接口在这里读取 data。
@@ -79,6 +79,105 @@ export const disableSeal = id => data(sealPath(id) + '/disable', { method: 'PUT'
 export const deleteSeal = id => data(sealPath(id), { method: 'DELETE' })
 // AI 生成耗时可能超过默认 30s（大纲尤甚，需等待模型完整输出），单独放长到 120s。
 export const generate = (type, form) => data('/api/v1/content/ai/' + type, { method: 'POST', body: form, timeout: 120000 })
+
+// ──── AI 流式生成（SSE，逐块回调 delta）────
+// 协议与后端 AppAiController 一致：data:{"delta":"..."} 逐块下发，
+// data:{"done":true,...} 结束；event:error + data:{"code","message"} 失败。
+// 流成功结束才由服务端落记录、扣次数；失败不落库不扣次。
+const STREAM_BASE = import.meta.env?.VITE_APP_BASE_API || '/dev-api'
+export async function generateStream(type, form, onDelta) {
+  const token = getToken()
+  const headers = { Accept: 'text/event-stream' }
+  if (form !== undefined) headers['Content-Type'] = 'application/json'
+  if (token) headers.Authorization = 'Bearer ' + token
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 120000)
+  try {
+    const response = await fetch(STREAM_BASE + '/api/v1/content/ai/' + type + '/stream', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(form),
+      signal: controller.signal,
+    })
+    if (!response.ok || !response.body) {
+      const result = await response.json().catch(() => null)
+      const error = new Error(result?.msg || result?.message || `生成失败（HTTP ${response.status}）`)
+      error.status = response.status
+      error.code = result?.code
+      throw error
+    }
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let delta = ''
+    let done = {}
+    let idx
+    let streamBroken = false
+    for (;;) {
+      let value, finished
+      try {
+        ;({ value, done: finished } = await reader.read())
+      } catch (e) {
+        // Tomcat 对 SSE 完成时不发送 chunked 终止块而直接关闭连接，
+        // fetch 读到 EOF 会抛 AbortError/TypeError。此时若已收到内容块，
+        // 视为流正常结束（数据在 buffer 中）；完全无内容才按失败处理。
+        if (!delta.trim()) throw e
+        streamBroken = true
+        break
+      }
+      if (finished) break
+      buffer += decoder.decode(value, { stream: true })
+      // 按 \n\n 切分事件块
+      while ((idx = buffer.indexOf('\n\n')) >= 0) {
+        const block = buffer.slice(0, idx)
+        buffer = buffer.slice(idx + 2)
+        const event = parseSseBlock(block)
+        if (event.error) throw event.error
+        if (event.delta) { delta += event.delta; onDelta(event.delta) }
+        if (event.done) done = event.done
+      }
+    }
+    // 流尾部残留块（可能多块，需循环切完）
+    while ((idx = buffer.indexOf('\n\n')) >= 0) {
+      const block = buffer.slice(0, idx)
+      buffer = buffer.slice(idx + 2)
+      const event = parseSseBlock(block)
+      if (event.error) throw event.error
+      if (event.delta) { delta += event.delta; onDelta(event.delta) }
+      if (event.done) done = event.done
+    }
+    if (buffer.trim()) {
+      const event = parseSseBlock(buffer.trim())
+      if (event.error) throw event.error
+      if (event.delta) { delta += event.delta; onDelta(event.delta) }
+      if (event.done) done = event.done
+    }
+    if (!delta.trim()) throw new Error('本次未返回生成内容，请重试')
+    return type === 'outline' ? { outline: delta, ...done } : { content: delta, ...done }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** 解析单个 SSE 事件块，返回 {delta|done|error}；空块返回 {}。 */
+function parseSseBlock(block) {
+  const dataLines = []
+  for (const line of block.split('\n')) {
+    if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
+  }
+  if (!dataLines.length) return {}
+  let payload
+  try { payload = JSON.parse(dataLines.join('\n')) } catch { return {} }
+  if (payload.error || (typeof payload.code === 'number' && payload.message)) {
+    const error = new Error(payload.message || 'AI 生成失败，请稍后重试')
+    error.code = payload.code
+    throw error
+  }
+  return {
+    delta: typeof payload.delta === 'string' ? payload.delta : undefined,
+    done: payload.done === true ? payload : undefined,
+  }
+}
 const listWriteRecords = async () => asList(await data('/api/v1/content/ai/write-records'))
 const listOutlineRecords = async () => asList(await data('/api/v1/content/ai/outline-records'))
 // 生成记录 = 写作/润色 + 大纲记录合并，按时间倒序；write/polish 带输入输出，outline 仅请求元信息。

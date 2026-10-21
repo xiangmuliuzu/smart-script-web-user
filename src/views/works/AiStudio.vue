@@ -67,13 +67,26 @@ async function generate() {
   if (!(type === 'polish' ? form.content : form.prompt).trim()) { error.value = type === 'polish' ? '请输入要润色的原文' : '请输入创作要求'; return }
   if (type === 'outline' && (!Number.isInteger(Number(form.episodes)) || Number(form.episodes) < 1 || Number(form.episodes) > 200)) { error.value = '集数需为 1–200 的整数'; return }
   generating.value = true
+  results[type] = ''
   try {
     const body = type === 'outline' ? { inspiration: form.prompt, genre: form.genre, style: `共 ${form.episodes} 集`, workId: form.workId || undefined } : type === 'polish' ? { content: documentText(form.content), style: form.style } : { prompt: `${form.chapterTitle}\n${props.embedded && props.currentContent ? '已有正文：\n' + documentText(props.currentContent) + '\n续写要求：\n' : ''}${form.prompt}`, workId: form.workId || undefined, type: 'script' }
-    const output = await api.value.generate(type, body)
-    const raw = output.content || output.outline
-    const content = raw && typeof raw === 'object' ? outlineToText(raw) : typeof raw === 'string' ? raw : ''
-    if (typeof content !== 'string' || !content.trim()) throw new Error('本次未返回生成内容，请重试')
-    results[type] = content
+    // 流式生成：delta 逐块追加，实现打字机式实时输出。
+    if (api.value.generateStream) {
+      const output = await api.value.generateStream(type, body, delta => { results[type] += delta })
+      // 大纲整体为 JSON 对象时转结构化大纲文本（对齐 App 端兜底解析）。
+      if (type === 'outline' && results[type]?.trim()) {
+        try {
+          const parsed = JSON.parse(results[type])
+          if (parsed && typeof parsed === 'object') results[type] = outlineToText(parsed)
+        } catch { /* 非 JSON 文本直接保留流式结果 */ }
+      }
+    } else {
+      const output = await api.value.generate(type, body)
+      const raw = output.content || output.outline
+      const content = raw && typeof raw === 'object' ? outlineToText(raw) : typeof raw === 'string' ? raw : ''
+      if (typeof content !== 'string' || !content.trim()) throw new Error('本次未返回生成内容，请重试')
+      results[type] = content
+    }
   } catch (failure) { error.value = failure.message; if (failure.message && failure.message.includes('次数不足')) await promptExchange(); else await handleError(failure) }
   finally { generating.value = false; await loadQuota() }
 }

@@ -144,3 +144,88 @@ test('outline object renders as readable labelled text, never raw JSON', () => {
   assert.equal(outlineToText('直接是文本'), '直接是文本')
   assert.equal(outlineToText(null), '')
 })
+test('generateStream consumes SSE deltas and returns final content with done fields', async () => {
+  const calls = []
+  const chunks = [
+    'event:message\ndata:{"delta":"夜色里，"}\n\n',
+    'event:message\ndata:{"delta":"他推开了门。"}\n\n',
+    'event:message\ndata:{"done":true,"recordId":55}\n\n',
+  ]
+  // 跨 chunk 切分：第二个块拆成两次 deliver，验证尾部多块切分正确。
+  const bodyStream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(chunks[0]))
+      controller.enqueue(new TextEncoder().encode(chunks[1].slice(0, 15)))
+      controller.enqueue(new TextEncoder().encode(chunks[1].slice(15)))
+      controller.enqueue(new TextEncoder().encode(chunks[2]))
+      controller.close()
+    },
+  })
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, headers: options.headers, body: JSON.parse(options.body) })
+    return { ok: true, status: 200, body: bodyStream }
+  }
+  const deltas = []
+  const result = await api.generateStream('write', { prompt: '续写' }, d => deltas.push(d))
+  assert.equal(calls[0].url, '/dev-api/api/v1/content/ai/write/stream')
+  assert.equal(calls[0].headers.Authorization, 'Bearer test-user-token')
+  assert.deepEqual(calls[0].body, { prompt: '续写' })
+  assert.deepEqual(deltas, ['夜色里，', '他推开了门。'])
+  assert.equal(result.content, '夜色里，他推开了门。')
+  assert.equal(result.recordId, 55)
+  assert.equal(result.done, true)
+})
+test('generateStream outline returns text delta and raises on error events without a record', async () => {
+  const okStream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('event:message\ndata:{"delta":"{\\"title\\":\\"测试\\"}"}\n\n'))
+      controller.enqueue(new TextEncoder().encode('event:message\ndata:{"done":true,"quotaUsed":1,"requestNo":"AIR20261021"}\n\n'))
+      controller.close()
+    },
+  })
+  globalThis.fetch = async () => ({ ok: true, status: 200, body: okStream })
+  const result = await api.generateStream('outline', { inspiration: '都市' }, () => {})
+  assert.ok(result.outline.includes('"title"'))
+  assert.equal(result.quotaUsed, 1)
+  assert.equal(result.requestNo, 'AIR20261021')
+
+  const errStream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('event:error\ndata:{"code":400,"message":"AI次数不足，当前可用: 0 次"}\n\n'))
+      controller.close()
+    },
+  })
+  globalThis.fetch = async () => ({ ok: true, status: 200, body: errStream })
+  await assert.rejects(api.generateStream('write', { prompt: 'x' }, () => {}), /AI次数不足/)
+})
+test('generateStream reports non-ok HTTP as an error before reading the stream', async () => {
+  globalThis.fetch = async () => ({ ok: false, status: 503, json: async () => ({ code: 503, message: 'AI 服务暂不可用' }) })
+  await assert.rejects(api.generateStream('write', { prompt: 'x' }, () => {}), /AI 服务暂不可用/)
+})
+test('generateStream treats an EOF aborted stream with received deltas as success (Tomcat SSE close)', async () => {
+  // Tomcat 对 SseEmitter 完成时不发送 chunked 终止块直接关闭连接，
+  // fetch 读到 EOF 抛 AbortError；已收到的 delta/done 仍应作为完整结果返回。
+  const bodyStream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('event:message\ndata:{"delta":"夜色里，"}\n\n'))
+      controller.enqueue(new TextEncoder().encode('event:message\ndata:{"done":true,"recordId":66}\n\n'))
+      setTimeout(() => controller.error(new Error('BodyStreamBuffer was aborted')), 0)
+    },
+  })
+  globalThis.fetch = async () => ({ ok: true, status: 200, body: bodyStream })
+  const deltas = []
+  const result = await api.generateStream('write', { prompt: '续写' }, d => deltas.push(d))
+  assert.deepEqual(deltas, ['夜色里，'])
+  assert.equal(result.content, '夜色里，')
+  assert.equal(result.recordId, 66)
+  assert.equal(result.done, true)
+})
+test('generateStream propagates an aborted stream with no content as an error', async () => {
+  const bodyStream = new ReadableStream({
+    start(controller) {
+      setTimeout(() => controller.error(new Error('BodyStreamBuffer was aborted')), 0)
+    },
+  })
+  globalThis.fetch = async () => ({ ok: true, status: 200, body: bodyStream })
+  await assert.rejects(api.generateStream('write', { prompt: 'x' }, () => {}), /BodyStreamBuffer was aborted/)
+})
