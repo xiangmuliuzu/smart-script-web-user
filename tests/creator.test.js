@@ -7,6 +7,23 @@ import { canEdit, validateWork, validateChapter, validateFile, wordCount, dateTe
 const storage = new Map([[portal.tokenKey, 'test-user-token']])
 globalThis.localStorage = { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) }
 
+test('work deletion sends only the code and shares App endpoints with authenticated requests', async t => {
+  const calls = []
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url, options })
+    return { ok: true, json: async () => ({ code: 200, data: { sent: true } }) }
+  })
+  await api.sendWorkDeletionCode(7)
+  await api.deleteWork(7, '123456')
+  assert.ok(calls[0].url.endsWith('/api/v1/content/works/7/delete-code'))
+  assert.equal(calls[0].options.method, 'POST')
+  assert.equal(calls[0].options.body, undefined)
+  assert.ok(calls[1].url.endsWith('/api/v1/content/works/7'))
+  assert.equal(calls[1].options.method, 'DELETE')
+  assert.deepEqual(JSON.parse(calls[1].options.body), { code: '123456' })
+  assert.equal(calls[1].options.headers.Authorization, 'Bearer test-user-token')
+})
+
 test('creator capability and review lock apply independently of user type', () => {
   for (const userType of ['01', '02', '03']) {
     assert.equal(canEdit({ userType, authorCapability: true }, { status: 'draft' }), true)
