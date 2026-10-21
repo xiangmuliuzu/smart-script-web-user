@@ -1,5 +1,5 @@
 <template>
-  <div class="detail-top"><button class="back" @click="goWorks">← 返回我的作品</button><button v-if="work" class="btn settings-btn" :disabled="!editable" @click="settingsVisible = true"><el-icon><Setting /></el-icon>作品设置</button></div>
+  <div class="detail-top"><button class="back" @click="goWorks">← 返回我的作品</button><div v-if="work" class="row"><button class="btn quiet" :disabled="!canCreate" @click="deleteVisible = true">删除作品</button><button class="btn settings-btn" :disabled="!editable" @click="settingsVisible = true"><el-icon><Setting /></el-icon>作品设置</button></div></div>
   <LoadState :pending="pending" :error="error" :retry="load" />
   <div v-if="!pending && !error && work" class="work-detail-grid">
     <section class="work-detail-main">
@@ -17,6 +17,7 @@
   </div>
   <ChapterEditor v-if="chapterVisible" ref="chapterEditor" v-model="chapterVisible" :work-id="work.workId" :chapter="selectedChapter" :chapter-no="selectedChapter?.chapterNo || chapters.length + 1" :opinion="selectedChapter?.status === 'revision' ? latestReview?.reviewOpinion : ''" @update:content="editingContent = $event" @saved="load" />
   <WorkSettings v-if="settingsVisible" v-model="settingsVisible" :work="work" @saved="load" />
+  <WorkDelete v-if="deleteVisible" v-model="deleteVisible" :work="work" @deleted="goWorks" />
   <PortalLayer v-model="versionsVisible" title="版本历史" modal><LoadState :pending="versionLoading" :error="versionError" :retry="showVersions" :empty="!versionLoading && !versionError && !versions.length" /><ul class="timeline"><li v-for="version in versions" :key="version.versionId"><time>{{ dateText(version.createTime) }}</time><b>{{ version.version || version.versionNo || '作品版本' }}</b><p>{{ version.versionDesc || version.description || '暂无版本说明' }}</p></li></ul></PortalLayer>
   <button v-if="work" class="ai-fab" type="button" title="AI 创作助手" @click="aiVisible = true"><span>✦</span></button>
   <PortalLayer v-model="aiVisible" title="AI 创作助手" size="min(620px, 50vw)"><div class="ai-fab-panel"><AiStudio embedded :work-id="work.workId" :current-content="editingContent" :insert-disabled="!editable" @insert="insertAi" /></div></PortalLayer>
@@ -33,6 +34,7 @@ import ChapterEditor from '../../components/ChapterEditor.vue'
 import PortalLayer from '../../components/PortalLayer.vue'
 import WorkSettings from './Settings.vue'
 import AiStudio from './AiStudio.vue'
+import WorkDelete from './Delete.vue'
 const { api, user, canCreate, goWorks, handleError } = usePortal()
 const route = useRoute()
 const work = ref(null)
@@ -50,6 +52,7 @@ const chapterEditor = ref(null)
 const editingContent = ref('')
 const aiVisible = ref(false)
 const settingsVisible = ref(false)
+const deleteVisible = ref(false)
 const versionsVisible = ref(false)
 const versionLoading = ref(false)
 const versionError = ref('')

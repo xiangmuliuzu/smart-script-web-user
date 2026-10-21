@@ -14,6 +14,7 @@
     "test:browser": "node scripts/browser-smoke.mjs",
     "test:avatar": "node scripts/avatar-smoke.mjs",
     "test:creation": "node scripts/creation-smoke.mjs",
+    "test:work-deletion": "node scripts/work-deletion-smoke.mjs",
     "test:paths": "node scripts/server-paths-smoke.mjs",
     "gate": "npm run test && npm run build"
   },

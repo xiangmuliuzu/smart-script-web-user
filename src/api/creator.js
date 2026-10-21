@@ -15,6 +15,8 @@ export const listVersions = async id => asList(await data(`/api/v1/content/works
 export const listCategories = async () => asList(await data('/api/v1/content/categories'))
 export const createWork = form => data('/api/v1/content/works', { method: 'POST', body: { title: form.title.trim(), categoryId: Number(form.genreId), description: form.summary, scriptUrl: form.scriptUrl, scriptName: form.scriptName, scriptSize: form.scriptSize } })
 export const updateWork = (id, form) => data(workPath(id), { method: 'PUT', body: { title: form.title.trim(), genreId: Number(form.genreId), summary: form.summary, cover: form.cover } })
+export const sendWorkDeletionCode = id => data(`/api/v1/content/works/${encodeURIComponent(id)}/delete-code`, { method: 'POST' })
+export const deleteWork = (id, code) => data(`/api/v1/content/works/${encodeURIComponent(id)}`, { method: 'DELETE', body: { code } })
 export const submitWork = id => data(workPath(id) + '/submit', { method: 'POST' })
 export const saveChapter = (id, chapter) => data(workPath(id) + '/chapters' + (chapter.chapterId ? '/' + encodeURIComponent(chapter.chapterId) : ''), { method: chapter.chapterId ? 'PUT' : 'POST', body: { chapterTitle: chapter.chapterTitle.trim(), content: chapter.content } })
 export const deleteChapter = (id, chapterId) => data(workPath(id) + '/chapters/' + encodeURIComponent(chapterId), { method: 'DELETE' })
