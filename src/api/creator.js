@@ -7,7 +7,7 @@ const workPath = id => '/api/v1/users/me/works/' + encodeURIComponent(id)
 export const listWorks = async () => asList(await data('/api/v1/users/me/works'))
 export const getWork = async id => {
   const detail = await data(workPath(id))
-  if (detail?.chapters) detail.chapters = detail.chapters.map(chapter => ({ ...chapter, content: chapter.formattedContent || chapter.content || '' }))
+  if (detail?.chapters) detail.chapters = detail.chapters.map(chapter => ({ ...chapter, isFree: String(chapter.isFree ?? '0'), content: chapter.formattedContent || chapter.content || '' }))
   return detail
 }
 export const listReviews = async id => asList(await data(workPath(id) + '/review-records'))
@@ -18,7 +18,7 @@ export const updateWork = (id, form) => data(workPath(id), { method: 'PUT', body
 export const sendWorkDeletionCode = id => data(`/api/v1/content/works/${encodeURIComponent(id)}/delete-code`, { method: 'POST' })
 export const deleteWork = (id, code) => data(`/api/v1/content/works/${encodeURIComponent(id)}`, { method: 'DELETE', body: { code } })
 export const submitWork = id => data(workPath(id) + '/submit', { method: 'POST' })
-export const saveChapter = (id, chapter) => data(workPath(id) + '/chapters' + (chapter.chapterId ? '/' + encodeURIComponent(chapter.chapterId) : ''), { method: chapter.chapterId ? 'PUT' : 'POST', body: { chapterTitle: chapter.chapterTitle.trim(), content: chapter.content } })
+export const saveChapter = (id, chapter) => data(workPath(id) + '/chapters' + (chapter.chapterId ? '/' + encodeURIComponent(chapter.chapterId) : ''), { method: chapter.chapterId ? 'PUT' : 'POST', body: { chapterTitle: chapter.chapterTitle.trim(), content: chapter.content, isFree: chapter.isFree } })
 export const deleteChapter = (id, chapterId) => data(workPath(id) + '/chapters/' + encodeURIComponent(chapterId), { method: 'DELETE' })
 export async function upload(file, purpose = 'script') {
   const body = new FormData()

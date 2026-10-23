@@ -24,6 +24,7 @@
       <aside class="creation-directory" aria-label="分集与资料"><DirectoryContents /></aside>
       <div class="creation-editor">
         <div class="editor-location"><span>{{ section === 'summary' ? '作品资料 / 故事简介' : section === 'characters' ? '作品资料 / 人物便签' : '正文分集 / 第 ' + (activeChapter + 1) + ' 集' }}</span><span>{{ wordCount(currentText).toLocaleString() }} 字</span></div>
+        <div v-if="section === 'chapter'" class="chapter-trial-setting"><el-switch v-model="currentChapter.isFree" active-value="1" inactive-value="0" aria-label="设为试读章节（免费阅读）" :disabled="busy || !editable" /><span>设为试读章节（免费阅读）</span><small>随章节保存，公开后读者可免费阅读</small></div>
         <ScriptEditor v-if="section === 'chapter'" ref="scriptEditor" :key="currentChapter.draftId" v-model="currentChapter.content" v-model:title="currentChapter.chapterTitle" :disabled="busy || !editable" />
         <div v-else class="script-paper notes-paper"><h2>{{ section === 'summary' ? '故事简介' : '人物便签' }}</h2><p class="notes-description">{{ section === 'summary' ? '用一段话讲清人物、冲突与故事走向，保存时同步至作品简介。' : '记录人物关系、动机与成长线。人物便签仅保存在当前浏览器，可导出备份。' }}</p><textarea v-if="section === 'summary'" v-model="form.summary" aria-label="故事简介" :disabled="busy || !editable" placeholder="这个故事从谁开始，又将走向哪里？" /><textarea v-else v-model="characters" aria-label="人物便签" :disabled="busy || !editable" placeholder="姓名 / 身份 / 性格 / 人物关系…" /><button v-if="section === 'characters'" class="btn ghost sm" :disabled="!characters.trim()" @click="exportNotes()">导出人物便签</button><details v-if="section === 'characters' && noteBackups.length" class="notes-backups"><summary>已保存作品的便签存档</summary><button v-for="note in noteBackups" :key="note.title" @click="exportNotes(note.characters, note.title)">下载 · {{ note.title }}</button></details></div>
         <footer class="editor-footer"><span>{{ section === 'chapter' ? '格式随正文保存 · Ctrl+Z 撤销 · Ctrl+B 加粗' : '让故事的骨架更清晰' }}</span><span>共 {{ chapters.length }} 集 · {{ totalWords.toLocaleString() }} 字</span></footer>
@@ -54,7 +55,8 @@ const { api, user, canCreate, goWork, goWorks, handleError } = usePortal()
 const route = useRoute()
 const router = useRouter()
 const form = reactive({ title: '', genreId: '', summary: '', scriptUrl: '', scriptName: '', scriptSize: 0 })
-const newChapter = number => ({ draftId: crypto.randomUUID(), chapterTitle: `第 ${number} 集`, content: '' })
+const newChapter = number => ({ draftId: crypto.randomUUID(), chapterTitle: `第 ${number} 集`, content: '', isFree: '0' })
+const sameChapter = (a, b) => a && b && a.chapterTitle === b.chapterTitle && a.content === b.content && a.isFree === b.isFree
 const chapters = ref([newChapter(1)])
 const characters = ref('')
 const noteBackups = ref([])
@@ -101,7 +103,7 @@ let disposed = false
 let normalizingRoute = false
 const snapshot = () => JSON.stringify({ form, chapters: chapters.value, characters: characters.value, createdId: createdId.value })
 const workFields = (value = form) => JSON.stringify({ title: value.title, genreId: Number(value.genreId), summary: value.summary || '' })
-const hasContent = () => Boolean(form.title || form.summary || characters.value || totalWords.value || createdId.value || chapters.value.length > 1)
+const hasContent = () => Boolean(form.title || form.summary || characters.value || totalWords.value || createdId.value || chapters.value.length > 1 || chapters.value.some(chapter => chapter.isFree === '1'))
 function cacheDraft() {
   clearTimeout(timer)
   if (!ready || completed || !editable.value) return
@@ -125,7 +127,7 @@ const DirectoryContents = defineComponent({ setup() { return () => h('div', { cl
   ]),
   h('div', { class: 'directory-heading' }, [h('h2', '正文分集'), h('button', { title: '新建分集', 'aria-label': '新建分集', disabled: busy.value || !editable.value, onClick: addChapter }, [h(Plus, { class: 'directory-icon' }), '新建'])]),
   h('nav', { class: 'episode-list', 'aria-label': '正文分集' }, chapters.value.map((chapter, index) => h('div', { key: chapter.draftId, class: ['episode-card', { selected: section.value === 'chapter' && activeChapter.value === index }] }, [
-    h('button', { class: 'episode-select', 'aria-current': section.value === 'chapter' && activeChapter.value === index ? 'page' : undefined, onClick: () => { activeChapter.value = index; selectSection('chapter') } }, [h('span', { class: 'episode-index' }, String(index + 1).padStart(2, '0')), h('span', { class: 'episode-name' }, chapter.chapterTitle || '未命名分集'), h('small', `${wordCount(chapter.content)} 字`)]),
+    h('button', { class: 'episode-select', 'aria-current': section.value === 'chapter' && activeChapter.value === index ? 'page' : undefined, onClick: () => { activeChapter.value = index; selectSection('chapter') } }, [h('span', { class: 'episode-index' }, String(index + 1).padStart(2, '0')), h('span', { class: 'episode-name' }, chapter.chapterTitle || '未命名分集'), h('small', `${wordCount(chapter.content)} 字${chapter.isFree === '1' ? ' · 试读' : ''}`)]),
     h('button', { class: 'episode-delete', title: '删除分集', 'aria-label': `删除分集：${chapter.chapterTitle || '未命名分集'}`, disabled: busy.value || !editable.value || chapters.value.length <= 1, onClick: () => removeChapter(index) }, '删除')
   ]))),
   h('div', { class: 'create-upload directory-upload' }, [h('button', { class: 'directory-drop', disabled: busy.value || !editable.value, onClick: () => fileInput.value.click(), onDragover: event => event.preventDefault(), onDrop: event => { event.preventDefault(); importFile(event.dataTransfer.files[0]) } }, [h(Upload, { class: 'upload-icon' }), h('b', importing.value ? '正在读取剧本…' : '导入本地剧本'), h('span', '点击选择，或拖拽文件到这里'), h('small', '.docx / .txt / .md · 最大 10 MB')]), form.scriptName ? h('p', { class: 'import-file-name' }, form.scriptName) : null, form.scriptName ? h('p', { class: 'cost' }, `已读取 ${totalWords.value.toLocaleString()} 字 · 导入到当前分集`) : null])
@@ -194,8 +196,8 @@ async function save(submit) {
     for (let index = 0; index < chapters.value.length; index++) {
       const chapter = chapters.value[index]
       const original = originalChapters.get(Number(chapter.chapterId))
-      if (!submit && original && original.chapterTitle === chapter.chapterTitle && original.content === chapter.content) continue
-      if (!documentText(chapter.content).trim() && !chapter.chapterId && chapters.value.length === 1 && !submit) continue
+      if (!submit && sameChapter(original, chapter)) continue
+      if (!documentText(chapter.content).trim() && !chapter.chapterId && chapters.value.length === 1 && !submit && chapter.isFree !== '1') continue
       const problem = validateChapter(chapter)
       if (problem) { error.value = `第 ${index + 1} 集：${problem}`; activeChapter.value = index; section.value = 'chapter'; break }
     }
@@ -232,21 +234,21 @@ async function save(submit) {
       }
       for (const chapter of chapters.value) {
         const original = originalChapters.get(Number(chapter.chapterId))
-        if (!original || (original.chapterTitle === chapter.chapterTitle && original.content === chapter.content)) continue
+        if (!original || sameChapter(original, chapter)) continue
         const remote = detail.chapters?.find(item => Number(item.chapterId) === Number(chapter.chapterId))
-        if (!remote || ((remote.chapterTitle !== original.chapterTitle || remote.content !== original.content) && (remote.chapterTitle !== chapter.chapterTitle || remote.content !== chapter.content))) throw new Error('章节已在其他页面修改或删除，请刷新确认后再保存')
+        if (!remote || (!sameChapter(remote, original) && !sameChapter(remote, chapter))) throw new Error('章节已在其他页面修改或删除，请刷新确认后再保存')
       }
     }
     for (const chapter of chapters.value) {
       if (!documentText(chapter.content).trim() && !chapter.chapterId) continue
       const original = originalChapters.get(Number(chapter.chapterId))
-      if (original && original.chapterTitle === chapter.chapterTitle && original.content === chapter.content) continue
+      if (sameChapter(original, chapter)) continue
       const result = await api.value.saveChapter(createdId.value, chapter)
       if (!chapter.chapterId) {
         if (!result?.chapterId) throw new Error('分集保存响应缺少编号，请到作品详情确认保存状态')
         chapter.chapterId = result.chapterId; cacheDraft()
       }
-      originalChapters.set(Number(chapter.chapterId), { chapterTitle: chapter.chapterTitle, content: chapter.content })
+      originalChapters.set(Number(chapter.chapterId), { chapterTitle: chapter.chapterTitle, content: chapter.content, isFree: chapter.isFree })
     }
     if (submit) await api.value.submitWork(createdId.value)
     if (characters.value) {
@@ -285,7 +287,7 @@ function restoreDraft(draft) {
     if (key === 'genreId' && ['string', 'number'].includes(typeof draft.form[key])) form[key] = String(draft.form[key])
     else if (typeof draft.form[key] === typeof form[key]) form[key] = draft.form[key]
   }
-  chapters.value = draft.chapters.map((chapter, index) => ({ ...chapter, chapterTitle: !createdId.value && index === 0 && chapter.chapterTitle === '第一集' ? '第 1 集' : chapter.chapterTitle, draftId: crypto.randomUUID() }))
+  chapters.value = draft.chapters.map((chapter, index) => ({ ...chapter, isFree: String(chapter.isFree ?? originalChapters.get(Number(chapter.chapterId))?.isFree ?? '0'), chapterTitle: !createdId.value && index === 0 && chapter.chapterTitle === '第一集' ? '第 1 集' : chapter.chapterTitle, draftId: crypto.randomUUID() }))
   characters.value = typeof draft.characters === 'string' ? draft.characters : ''
   draftStatus.value = '已恢复本机草稿'
 }
@@ -306,9 +308,9 @@ async function loadWorkspace() {
       const detail = await api.value.getWork(id)
       loadedWork.value = detail.work
       Object.assign(form, { title: detail.work.title || '', genreId: String(detail.work.genreId || ''), summary: detail.work.summary || '' })
-      const remote = (detail.chapters || []).map(chapter => ({ chapterId: Number(chapter.chapterId), chapterNo: chapter.chapterNo, chapterTitle: chapter.chapterTitle || '', content: chapter.content || '', draftId: crypto.randomUUID() }))
+      const remote = (detail.chapters || []).map(chapter => ({ chapterId: Number(chapter.chapterId), chapterNo: chapter.chapterNo, chapterTitle: chapter.chapterTitle || '', content: chapter.content || '', isFree: chapter.isFree, draftId: crypto.randomUUID() }))
       chapters.value = remote.length ? remote : [newChapter(1)]
-      originalChapters = new Map(remote.map(chapter => [chapter.chapterId, { chapterTitle: chapter.chapterTitle, content: chapter.content }]))
+      originalChapters = new Map(remote.map(chapter => [chapter.chapterId, { chapterTitle: chapter.chapterTitle, content: chapter.content, isFree: chapter.isFree }]))
       try { characters.value = JSON.parse(storage.getItem(draftBase + ':notes:' + id) || 'null')?.characters || '' } catch { /* 损坏的便签不影响正文。 */ }
     }
     savedSnapshot = snapshot(); originalWorkFields = workFields(); draftStatus.value = id ? '作品已加载' : '草稿尚未保存'

@@ -33,6 +33,23 @@ test('creator capability and review lock apply independently of user type', () =
   assert.equal(canEdit({ authorCapability: 'true' }, { status: 'draft' }), false)
   assert.equal(canEdit({ authorCapability: true }, { status: 'unknown' }), false)
 })
+
+test('chapter trial flags round-trip through authenticated saves without changing chapter status', async t => {
+  const calls = []
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url, options })
+    return { ok: true, json: async () => ({ code: 200, data: { chapters: [{ chapterId: 8, isFree: 1, content: '原文' }, { chapterId: 9, content: '未设置' }] } }) }
+  })
+  const detail = await api.getWork(17)
+  assert.equal(detail.chapters[0].isFree, '1')
+  assert.equal(detail.chapters[1].isFree, '0')
+  await api.saveChapter(17, { chapterTitle: ' 新试读章 ', content: '正文', isFree: '1' })
+  await api.saveChapter(17, { chapterId: 8, chapterTitle: '取消试读', content: '原文', isFree: '0' })
+  assert.deepEqual(JSON.parse(calls[1].options.body), { chapterTitle: '新试读章', content: '正文', isFree: '1' })
+  assert.deepEqual(JSON.parse(calls[2].options.body), { chapterTitle: '取消试读', content: '原文', isFree: '0' })
+  assert.equal(calls[2].options.method, 'PUT')
+  assert.equal(calls[2].options.headers.Authorization, 'Bearer test-user-token')
+})
 test('redirect permits implemented work routes and rejects path tricks', () => {
   for (const path of ['/works', '/works/create', '/works/12?tab=chapter#review']) assert.equal(safeRedirect(path), path)
   for (const path of ['//evil.test/works', '/works/../login', '/works/abc', '/works/0', '/works/%2f%2fevil.test', '/preview', '/works\\12']) assert.equal(safeRedirect(path), '/session')
