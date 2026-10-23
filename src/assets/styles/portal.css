@@ -23,7 +23,7 @@ button.workitem { text-align: left; padding: 0; width: 100%; font: inherit; colo
 .workitem > .work-copy { display: flex; }
 .workitem .stamp { width: 46px; white-space: normal; line-height: 1.4; padding: 6px 9px; }
 .work-cover img, .wh-cover img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
-.wh-cover { position: relative; }
+.wh-cover { position: relative; aspect-ratio: 210 / 297; overflow: hidden; }
 .workitem .work-title h3 { overflow-wrap: anywhere; }
 .workitem.new-work .work-title { display: flex; }
 .workitem .work-synopsis { display: -webkit-box; }
@@ -90,7 +90,7 @@ button.workitem { text-align: left; padding: 0; width: 100%; font: inherit; colo
 .section-actions { margin: 16px 0; }
 .seq-col { width: 70px; }
 .ops .btn + .btn { margin-left: 6px; }
-.settings-cover { display: block; width: 90px; aspect-ratio: 3 / 4; object-fit: cover; margin-bottom: 14px; }
+.settings-cover { display: block; width: 90px; aspect-ratio: 210 / 297; object-fit: cover; margin-bottom: 14px; }
 .ai-result { white-space: pre-wrap; overflow-wrap: anywhere; }
 .chat-panel { display: flex; flex-direction: column; height: calc(100dvh - 177px); }
 .chat-panel .chat-head { flex: none; }

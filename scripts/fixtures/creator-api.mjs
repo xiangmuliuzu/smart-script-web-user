@@ -51,6 +51,9 @@ export async function mockCreatorApi(context, apiPrefix = '/dev-api') {
       } else result = { code: 404, message: '未配置测试接口：' + path }
       if (work) { work.episodeCount = list.length; work.wordCount = list.reduce((sum, chapter) => sum + chapter.wordCount, 0) }
     } else if (path.endsWith('/versions')) result.data = []
+    else if (path.includes('/content/ai/') && path.endsWith('/stream')) {
+      return route.fulfill({ contentType: 'text/event-stream', body: 'data: ' + JSON.stringify({ delta: '第一集 · 深夜频率\n雨夜的咖啡馆，一次迟来的重逢。' }) + '\n\ndata: {"done":true,"quotaUsed":1}\n\n' })
+    }
     else if (path.includes('/content/ai/')) {
       const type = path.split('/').at(-1)
       if (type === 'write-records') result.data = records
