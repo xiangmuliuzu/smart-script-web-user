@@ -49,11 +49,6 @@ export function materialItems(value) {
   }).filter(Boolean)
 }
 
-/** 材料 URL：后端存逗号分隔字符串，兼容数组。 */
-export function materialUrlList(value) {
-  return materialItems(value).map(item => item.url)
-}
-
 export function joinMaterialUrls(items) {
   return (items || []).map(item => {
     if (item && typeof item === 'object') return String(item.url || '').trim()
