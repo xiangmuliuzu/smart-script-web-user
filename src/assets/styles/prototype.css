@@ -374,7 +374,7 @@
             .home-main{ min-width:0; }
 
             /* ===== 作品卡片墙：封面在左、简介在右 ===== */
-            .worklist{ display:grid; grid-template-columns:repeat(auto-fill,minmax(max(340px,calc((100% - 36px)/3)),1fr)); gap:18px; align-items:stretch; }
+            .worklist{ display:grid; grid-template-columns:repeat(auto-fill,minmax(max(340px,calc((100% - 36px)/3)),1fr)); grid-auto-rows:1fr; gap:18px; align-items:stretch; }
             .workitem{ grid-template-columns:108px minmax(0,1fr); grid-template-rows:auto; min-height:0; }
             .workitem .work-cover{ min-height:146px; border-right:1px solid var(--rule); border-bottom:0; }
             .workitem .work-copy{ padding:16px 18px; }
