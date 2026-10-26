@@ -108,50 +108,35 @@ export async function generateStream(type, form, onDelta) {
     }
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
-    let buffer = ''
-    let delta = ''
-    let done = {}
-    let idx
-    let streamBroken = false
-    for (;;) {
-      let value, finished
-      try {
-        ;({ value, done: finished } = await reader.read())
-      } catch (e) {
-        // Tomcat 对 SSE 完成时不发送 chunked 终止块而直接关闭连接，
-        // fetch 读到 EOF 会抛 AbortError/TypeError。此时若已收到内容块，
-        // 视为流正常结束（数据在 buffer 中）；完全无内容才按失败处理。
-        if (!delta.trim()) throw e
-        streamBroken = true
-        break
-      }
-      if (finished) break
-      buffer += decoder.decode(value, { stream: true })
-      // 按 \n\n 切分事件块
-      while ((idx = buffer.indexOf('\n\n')) >= 0) {
-        const block = buffer.slice(0, idx)
-        buffer = buffer.slice(idx + 2)
-        const event = parseSseBlock(block)
-        if (event.error) throw event.error
-        if (event.delta) { delta += event.delta; onDelta(event.delta) }
-        if (event.done) done = event.done
-      }
-    }
-    // 流尾部残留块（可能多块，需循环切完）
-    while ((idx = buffer.indexOf('\n\n')) >= 0) {
-      const block = buffer.slice(0, idx)
-      buffer = buffer.slice(idx + 2)
+    let buffer = '', delta = '', done = null
+    const consume = block => {
       const event = parseSseBlock(block)
-      if (event.error) throw event.error
       if (event.delta) { delta += event.delta; onDelta(event.delta) }
       if (event.done) done = event.done
     }
-    if (buffer.trim()) {
-      const event = parseSseBlock(buffer.trim())
-      if (event.error) throw event.error
-      if (event.delta) { delta += event.delta; onDelta(event.delta) }
-      if (event.done) done = event.done
+    try {
+      while (!done) {
+        const { value, done: finished } = await reader.read()
+        buffer += finished ? decoder.decode() : decoder.decode(value, { stream: true })
+        let boundary
+        while ((boundary = /\r?\n\r?\n/.exec(buffer))) {
+          consume(buffer.slice(0, boundary.index))
+          buffer = buffer.slice(boundary.index + boundary[0].length)
+          if (done) break
+        }
+        if (finished) {
+          if (!done && buffer.trim()) consume(buffer)
+          break
+        }
+      }
+    } catch (failure) {
+      if (!delta.trim() || failure.code != null || failure.status != null) throw failure
+      throw new Error('生成中断，已保留收到的内容，请重试', { cause: failure })
+    } finally {
+      await reader.cancel().catch(() => {})
+      reader.releaseLock()
     }
+    if (!done) throw new Error('生成中断，已保留收到的内容，请重试')
     if (!delta.trim()) throw new Error('本次未返回生成内容，请重试')
     return type === 'outline' ? { outline: delta, ...done } : { content: delta, ...done }
   } finally {
@@ -162,14 +147,14 @@ export async function generateStream(type, form, onDelta) {
 /** 解析单个 SSE 事件块，返回 {delta|done|error}；空块返回 {}。 */
 function parseSseBlock(block) {
   const dataLines = []
-  for (const line of block.split('\n')) {
+  for (const line of block.split(/\r?\n/)) {
     if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
   }
   if (!dataLines.length) return {}
   let payload
   try { payload = JSON.parse(dataLines.join('\n')) } catch { return {} }
   if (payload.error || (typeof payload.code === 'number' && payload.message)) {
-    const error = new Error(payload.message || 'AI 生成失败，请稍后重试')
+    const error = new Error(payload.message || (typeof payload.error === 'string' ? payload.error : 'AI 生成失败，请稍后重试'))
     error.code = payload.code
     throw error
   }
