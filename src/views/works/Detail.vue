@@ -15,7 +15,6 @@
       <div class="sub"><div class="sub-head"><h3>审核记录</h3></div><div class="panel attached"><LoadState :error="reviewError" :retry="loadReviews" :empty="!reviewError && !reviews.length" empty-text="暂无审核记录" /><ul v-if="!reviewError" class="timeline"><li v-for="review in reviews" :key="review.reviewId" :data-tone="review.status === 'approved' ? 'passed' : ['revision', 'rejected'].includes(review.status) ? 'revise' : ''"><time>{{ dateText(review.reviewEndTime || review.createdAt || review.createTime) }}</time><b>内容审核 · {{ reviewLabels[review.status] || '状态待确认' }}</b><p v-if="review.reviewOpinion">{{ review.reviewOpinion }}<span v-if="review.reviewerName"> —— 审核员 {{ review.reviewerName }}</span></p></li></ul></div></div>
     </aside>
   </div>
-  <ChapterEditor v-if="chapterVisible" v-model="chapterVisible" :work-id="work.workId" :chapter="selectedChapter" :chapter-no="selectedChapter?.chapterNo || chapters.length + 1" :opinion="selectedChapter?.status === 'revision' ? latestReview?.reviewOpinion : ''" @saved="load" />
   <WorkSettings v-if="settingsVisible" v-model="settingsVisible" :work="work" @saved="load" />
   <WorkDelete v-if="deleteVisible" v-model="deleteVisible" :work="work" @deleted="goWorks" />
   <PortalLayer v-model="versionsVisible" title="版本历史" modal><LoadState :pending="versionLoading" :error="versionError" :retry="showVersions" :empty="!versionLoading && !versionError && !versions.length" /><ul class="timeline"><li v-for="version in versions" :key="version.versionId"><time>{{ dateText(version.createTime) }}</time><b>{{ version.version || version.versionNo || '作品版本' }}</b><p>{{ version.versionDesc || version.description || '暂无版本说明' }}</p></li></ul></PortalLayer>
@@ -28,7 +27,6 @@ import { Setting } from '@element-plus/icons-vue'
 import { usePortal } from '../../utils/portal.js'
 import { canEdit, stateOf, words, dateText } from '../../utils/creator.js'
 import LoadState from '../../components/LoadState.vue'
-import ChapterEditor from '../../components/ChapterEditor.vue'
 import PortalLayer from '../../components/PortalLayer.vue'
 import WorkSettings from './Settings.vue'
 import WorkDelete from './Delete.vue'
@@ -44,8 +42,6 @@ const error = ref('')
 const reviewError = ref('')
 const submitting = ref(false)
 const deleting = ref(null)
-const selectedChapter = ref(null)
-const chapterVisible = ref(false)
 const settingsVisible = ref(false)
 const deleteVisible = ref(false)
 const versionsVisible = ref(false)
@@ -69,8 +65,7 @@ async function load() {
 }
 function editChapter(chapter) {
   if (!editable.value) return
-  if (chapter) return router.push({ path: '/works/create', query: { workId: work.value.workId, chapterId: chapter.chapterId } })
-  selectedChapter.value = null; chapterVisible.value = true
+  return router.push({ path: '/works/create', query: { workId: work.value.workId, chapterId: chapter?.chapterId ?? 'new' } })
 }
 async function remove(chapter) {
   if (!editable.value || deleting.value !== null) return
