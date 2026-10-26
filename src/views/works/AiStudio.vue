@@ -9,7 +9,7 @@
         <template v-else><button v-if="embedded" class="text-button ai-read-current" type="button" :disabled="generating || !currentContent.trim()" @click="form.content = documentText(currentContent)">读取当前分集正文</button><label class="field">要润色的原文<textarea v-model="form.content" placeholder="粘贴需要润色的片段" /></label><label class="field">润色方向<select v-model="form.style"><option>增强画面感</option><option>精简啰嗦</option><option>加强情绪</option></select></label></template>
         <p v-if="error" class="note bad" role="alert">{{ error }}</p><button class="btn" :disabled="generating || !canCreate">{{ generating ? '正在生成…' : tab === 'outline' ? '生成大纲' : tab === 'write' ? '生成正文' : '开始润色' }}</button><p class="cost">生成结果和扣次信息以服务端返回为准</p>
       </form>
-      <div class="compose-out"><h3>{{ tab === 'polish' ? '润色结果' : '生成结果' }}</h3><div v-if="result" class="prose ai-result">{{ result }}</div><LoadState v-else :pending="generating" :empty="!generating" empty-text="写下你的想法，故事将在这里展开。" /><div v-if="result" class="row top-gap"><button v-if="embedded" class="btn sm" :disabled="generating || insertDisabled" @click="$emit('insert', result)">插入正文</button><button v-else class="btn sm" :disabled="generating || copying" @click="adopt">{{ tab === 'outline' ? '采用' : '写入章节' }}</button><button class="btn quiet sm" :disabled="generating" @click="generate">重新生成</button><button v-if="embedded" class="btn quiet sm" :disabled="copying" @click="copyResult">复制</button><button v-else class="btn quiet sm" :disabled="generating" @click="results[tab] = ''">丢弃</button></div><p v-if="result && !form.workId && !embedded" class="cost">未选择作品时，采用会将内容复制到剪贴板。</p><p v-if="embedded && result" class="cost">插入会追加到当前分集，保留原文。</p></div>
+      <div class="compose-out"><h3>{{ tab === 'polish' ? '润色结果' : '生成结果' }}</h3><div class="ai-scroll"><div v-if="result" class="prose ai-result">{{ displayResult }}</div><LoadState v-else :pending="generating" :empty="!generating" empty-text="写下你的想法，故事将在这里展开。" /><div v-if="result" class="row top-gap"><button v-if="embedded" class="btn sm" :disabled="generating || insertDisabled" @click="$emit('insert', displayResult)">插入正文</button><button v-else class="btn sm" :disabled="generating || copying" @click="adopt">{{ tab === 'outline' ? '采用' : '写入章节' }}</button><button class="btn quiet sm" :disabled="generating" @click="generate">重新生成</button><button v-if="embedded" class="btn quiet sm" :disabled="copying" @click="copyResult">复制</button><button v-else class="btn quiet sm" :disabled="generating" @click="results[tab] = ''">丢弃</button></div><p v-if="result && !form.workId && !embedded" class="cost">未选择作品时，采用会将内容复制到剪贴板。</p><p v-if="embedded && result" class="cost">插入会追加到当前分集，保留原文。</p></div></div>
     </div>
     <div v-else class="top-gap"><LoadState :pending="recordLoading" :error="recordError" :retry="loadRecords" :empty="!recordLoading && !recordError && !records.length" /><div v-if="embedded && records.length && !recordError" class="ai-records"><article v-for="record in records" :key="record.recordId" :class="{ open: expanded.has(record.recordId) }"><button class="ai-record-row" type="button" @click="toggleRecord(record.recordId)"><b>{{ typeLabels[record.type] || record.type || 'AI 创作' }}</b><span>{{ record.quotaUsed ?? '—' }} 次</span><p>{{ record.title || '独立创作' }}</p><small>{{ dateText(record.createdAt || record.createTime) }}</small></button><div v-if="expanded.has(record.recordId)" class="ai-record-detail"><div v-if="record.input"><h4>我的输入</h4><pre>{{ record.input }}</pre></div><div v-if="record.output"><h4>AI 输出</h4><pre>{{ record.output }}</pre></div><p v-else-if="record.type === 'outline'" class="note">大纲请求未留存内容，请生成后及时保存。</p></div></article></div><div v-else-if="records.length && !recordError" class="tbl"><table><thead><tr><th>时间</th><th>类型</th><th>作品 / 章节</th><th class="num">消耗</th></tr></thead><tbody><tr v-for="record in records" :key="record.recordId"><td>{{ dateText(record.createTime || record.createdAt) }}</td><td>{{ typeLabels[record.type] || record.type || 'AI 创作' }}</td><td>{{ record.workTitle || record.title || '—' }}</td><td>{{ record.quotaUsed ?? '—' }} 次</td></tr></tbody></table></div></div>
     <ChapterEditor v-if="editorVisible" v-model="editorVisible" :work-id="form.workId" :chapter-no="nextChapterNo" :initial-content="adopted" />
@@ -44,6 +44,23 @@ const typeLabels = { outline: 'AI 大纲', write: props.embedded ? 'AI 续写' :
 const form = props.workspaceState?.form || reactive({ workId: '', genre: '', episodes: 12, prompt: '', content: '', style: '增强画面感', chapterTitle: '' })
 const results = props.workspaceState?.results || reactive({ outline: '', write: '', polish: '' })
 const result = computed(() => results[tab.value] || '')
+// 展示用结果：AI 大纲为 JSON 流时，可完整解析则转「字段：值」可读文本；未完整（流式进行中）显示占位，避免暴露 JSON/代码结构。
+const displayResult = computed(() => {
+  const raw = results[tab.value]
+  if (!raw || !raw.trim()) return raw
+  if (tab.value === 'outline') {
+    const t = raw.trim()
+    if (t.startsWith('{') || t.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(t)
+        if (parsed && typeof parsed === 'object') return outlineToText(parsed)
+      } catch { /* JSON 尚未拼完整 */ }
+      // JSON 形态但未解析成功：流式中显示占位；中断/异常结束时也不暴露原始 JSON 结构。
+      return generating.value ? '大纲生成中，请稍候…' : '大纲生成未完成，请点击重新生成。'
+    }
+  }
+  return raw
+})
 const generating = ref(false)
 const copying = ref(false)
 const error = ref('')
@@ -94,15 +111,15 @@ async function adopt() {
   if (!result.value || copying.value) return
   copying.value = true
   try {
-    if (!form.workId) { await navigator.clipboard.writeText(result.value); ElMessage.success('已复制生成内容') }
-    else { const detail = await api.value.getWork(form.workId); if (detail.work.status === 'reviewing') throw new Error('作品正在审核中，暂不可编辑'); nextChapterNo.value = (detail.chapters || []).length + 1; adopted.value = result.value; editorVisible.value = true }
+    if (!form.workId) { await navigator.clipboard.writeText(displayResult.value); ElMessage.success('已复制生成内容') }
+    else { const detail = await api.value.getWork(form.workId); if (detail.work.status === 'reviewing') throw new Error('作品正在审核中，暂不可编辑'); nextChapterNo.value = (detail.chapters || []).length + 1; adopted.value = displayResult.value; editorVisible.value = true }
   } catch (failure) { await handleError(failure) }
   finally { copying.value = false }
 }
 async function copyResult() {
   if (!result.value || copying.value) return
   copying.value = true
-  try { await navigator.clipboard.writeText(result.value); ElMessage.success('已复制生成内容') }
+  try { await navigator.clipboard.writeText(displayResult.value); ElMessage.success('已复制生成内容') }
   catch (failure) { await handleError(failure) }
   finally { copying.value = false }
 }

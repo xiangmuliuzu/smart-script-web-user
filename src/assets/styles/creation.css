@@ -126,7 +126,7 @@
 .ai-embedded .dtabs { display: flex; justify-content: space-between; gap: 8px; padding: 0; border-bottom: 1px solid var(--rule); }
 .ai-embedded .dtabs button { border: 0; border-bottom: 2px solid transparent; background: none; padding: 0 0 10px; font-size: 12px; color: var(--ink-2); white-space: nowrap; }
 .ai-embedded .dtabs button[aria-selected='true'] { color: var(--indigo); border-bottom-color: var(--indigo); font-weight: 600; }
-.ai-embedded .compose { display: flex; flex-direction: column; gap: 18px; padding-top: 18px; }
+.ai-embedded .compose { display: flex; flex-direction: column; gap: 18px; padding-top: 18px; flex: 1; min-height: 0; }
 .ai-embedded .compose-form { border: 0; background: transparent; padding: 0; width: 100%; }
 .ai-embedded .compose-form > h3 { display: none; }
 .ai-embedded .field { font-size: 12px; margin-bottom: 12px; }
@@ -136,9 +136,10 @@
 .ai-embedded .field textarea { min-height: 112px; resize: vertical; }
 .ai-embedded .compose-form > .btn { width: 100%; border-radius: 5px; padding: 9px 12px; }
 .ai-embedded .cost { font-size: 10px; margin: 9px 0 0; }
-.ai-embedded .compose-out { width: 100%; min-height: 200px; padding: 15px; border-radius: 6px; }
-.ai-embedded .compose-out h3 { font-family: var(--sans); font-size: 12px; font-weight: 500; }
-.ai-embedded .compose-out .prose { font-family: var(--sans); font-size: 13px; line-height: 1.9; max-height: clamp(140px, calc(100dvh - 700px), 260px); overflow: auto; scrollbar-width: thin; }
+.ai-embedded .compose-out { width: 100%; min-height: 220px; padding: 15px; border-radius: 6px; display: flex; flex-direction: column; }
+.ai-embedded .compose-out h3 { font-family: var(--sans); font-size: 12px; font-weight: 500; flex-shrink: 0; }
+.ai-embedded .compose-out .ai-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.ai-embedded .compose-out .prose { font-family: var(--sans); font-size: 13px; line-height: 1.9; max-height: none; overflow: visible; }
 .notes-backups { margin-top: 18px; font-size: 12px; color: var(--ink-3); }
 .notes-backups button { display: block; background: none; border: 0; padding: 6px 0; color: var(--indigo); text-align: left; }
 .ai-embedded .compose-out .row { gap: 6px; flex-wrap: wrap; }
