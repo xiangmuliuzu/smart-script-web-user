@@ -321,7 +321,13 @@ async function loadWorkspace() {
       // 迁移旧版单一草稿槽，成功写入作品草稿后才清理旧槽。
       storage.setItem(draftKey, draft ? JSON.stringify(draft) : snapshot()); storage.removeItem(draftBase)
     }
-    if (route.query.chapterId) {
+    if (route.query.chapterId === 'new') {
+      if (editable.value) {
+        const index = chapters.value.findIndex(chapter => !chapter.chapterId)
+        if (index < 0) chapters.value.push(newChapter(chapters.value.length + 1))
+        activeChapter.value = index < 0 ? chapters.value.length - 1 : index
+      }
+    } else if (route.query.chapterId) {
       const index = chapters.value.findIndex(chapter => String(chapter.chapterId) === route.query.chapterId)
       if (index < 0) throw new Error('该章节不存在，请从作品详情重新选择章节')
       activeChapter.value = index
