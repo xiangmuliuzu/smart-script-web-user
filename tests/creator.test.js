@@ -246,3 +246,28 @@ test('generateStream propagates an aborted stream with no content as an error', 
   globalThis.fetch = async () => ({ ok: true, status: 200, body: bodyStream })
   await assert.rejects(api.generateStream('write', { prompt: 'x' }, () => {}), /BodyStreamBuffer was aborted/)
 })
+
+test('generateStream displays CRLF deltas before completion and completes without waiting for EOF', async t => {
+  let source, received
+  const first = new Promise(resolve => { received = resolve })
+  globalThis.fetch = async () => ({ ok: true, status: 200, body: new ReadableStream({ start(controller) { source = controller } }) })
+  const deltas = []
+  const output = api.generateStream('outline', { inspiration: '灵感' }, text => { deltas.push(text); received() })
+  t.after(async () => { try { source?.close() } catch {} await output.catch(() => {}) })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  source.enqueue(new TextEncoder().encode('data:{"delta":"书名：雨夜"}\r\n\r\n'))
+  await Promise.race([first, new Promise((_, reject) => setTimeout(() => reject(new Error('delta was buffered')), 300))])
+  assert.deepEqual(deltas, ['书名：雨夜'])
+  source.enqueue(new TextEncoder().encode('data:{"done":true,"quotaUsed":1}\n\n'))
+  assert.equal((await output).outline, '书名：雨夜')
+})
+
+test('generateStream rejects a truncated response without losing delivered text', async () => {
+  globalThis.fetch = async () => ({ ok: true, status: 200, body: new ReadableStream({ start(controller) {
+    controller.enqueue(new TextEncoder().encode('data:{"delta":"已经生成的内容"}\n\n'))
+    controller.close()
+  } }) })
+  const deltas = []
+  await assert.rejects(api.generateStream('write', { prompt: '故事' }, text => deltas.push(text)), /中断/)
+  assert.deepEqual(deltas, ['已经生成的内容'])
+})
