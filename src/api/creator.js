@@ -221,8 +221,23 @@ export const createTradeChat = inquiryId => data('/api/v1/trade/inquiry/chat/ses
 // 报价
 export const getLatestQuote = inquiryId => data('/api/v1/trade/quote/latest?' + new URLSearchParams({ inquiryId }).toString())
 export const createQuote = form => data('/api/v1/trade/quote', { method: 'POST', body: form })
+export const counterOffer = form => data('/api/v1/trade/quote/counter-offer', { method: 'POST', body: form })
 export const modifyQuote = (id, form) => data(`/api/v1/trade/quote/${encodeURIComponent(id)}`, { method: 'PUT', body: form })
 export const acceptQuote = id => data(`/api/v1/trade/quote/${encodeURIComponent(id)}/accept`, { method: 'PUT' })
 // 订单
 export const listOrders = params => data('/api/v1/trade/order/list?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))).toString())
 export const deliverOrder = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/deliver`, { method: 'POST' })
+export const payOrder = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/pay`, { method: 'POST' })
+export const completeOrder = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/complete`, { method: 'POST' })
+
+// ──── C 交易域：合同（签署前置实名认证由后端校验） ────
+export const listContracts = params => data('/api/v1/trade/contracts/list?' + new URLSearchParams(Object.fromEntries(Object.entries(params || {}).filter(([, v]) => v != null && v !== ''))).toString())
+export const getContractByOrder = orderId => data(`/api/v1/trade/contracts/${encodeURIComponent(orderId)}`)
+export const signContract = (contractId, formData) => data(`/api/v1/trade/contracts/${encodeURIComponent(contractId)}/sign`, { method: 'POST', body: formData })
+
+// ──── 交易会话定型文（与 APP 同源：/users/me/chat/trade-templates） ────
+export const listTradeTemplates = async () => asList(await data('/api/v1/users/me/chat/trade-templates'))
+
+// ──── 印章：签约时可选已审核通过的印章 ────
+export const listMySeals = async () => asList(await data('/api/v1/content/copyright-seals'))
+

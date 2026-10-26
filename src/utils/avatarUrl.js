@@ -9,7 +9,7 @@ export function avatarUrl(raw, apiBase = import.meta.env?.VITE_APP_BASE_API || '
   } else if (!value.startsWith('/') || value.startsWith('//')) {
     return ''
   }
-  const start = resource.search(/\/profile\/(?:upload|avatar)\//)
+  const start = resource.search(/\/profile\/(?:upload|avatar|contract)\//)
   if (start < 0) return value
   resource = resource.slice(start)
   if (resource.includes('\\') || resource.split('/').some(part => part === '.' || part === '..')) return ''
@@ -77,4 +77,18 @@ export function decodeTextBuffer(buffer) {
     } catch { /* 浏览器不支持该编码时跳过 */ }
   }
   return utf8
+}
+
+/**
+ * 合同正文（HTML）内的静态资源改写：签名/印章图与签约 PDF 存的是 /profile 相对路径，
+ * iframe srcdoc 以父页面为基址，不补 API 前缀必定 404；逐个 URL 属性走 avatarUrl 归一。
+ */
+export function contractHtml(html) {
+  const value = typeof html === 'string' ? html : ''
+  if (!value) return ''
+  return value.replace(/(src|href|xlink:href)(\s*=\s*)(["'])([^"']+)\3/gi, (whole, attr, eq, quote, raw) => {
+    if (!raw.includes('/profile/')) return whole
+    const fixed = avatarUrl(raw)
+    return fixed ? `${attr}${eq}${quote}${fixed}${quote}` : whole
+  })
 }

@@ -1,6 +1,5 @@
 <template>
   <PortalLayer v-model="visible" title="我的合作" wide>
-    <div class="drawer-tools"><button class="btn quiet sm" @click="contractsVisible = true">我的合同</button></div>
     <PortalTabs v-model="tab" :items="tabs" drawer label="合作类型" />
     <div class="panel-content">
       <!-- ═══ 询盘 Tab ═══ -->
@@ -12,25 +11,27 @@
         </div>
         <LoadState :pending="inquiryPending" :error="inquiryError" :retry="loadInquiries" />
         <div v-if="!inquiryPending && !inquiryError && !inquiries.length" class="load-state"><p>暂无询盘记录</p></div>
-        <div v-for="inq in inquiries" :key="inq.inquiryId" class="inquiry-card" :class="{ expanded: expandedInquiryId === inq.inquiryId }">
-          <div class="inquiry-header" @click="toggleInquiry(inq)">
-            <span class="expand-icon">{{ expandedInquiryId === inq.inquiryId ? '▾' : '▸' }}</span>
-            <span class="inq-title"><b>《{{ inq.workTitle || '作品#' + inq.workId }}》</b><span class="status-tag" :class="'tag-' + inq.status">{{ inquiryStatusLabel(inq.status) }}</span></span>
-            <span class="inq-summary">{{ counterpartyOf(inq).role }}：{{ counterpartyOf(inq).name }} · {{ moneyFromFen(inq.budget) }}</span>
+        <div v-for="inq in inquiries" :key="inq.inquiryId" class="order-card">
+          <div class="order-cover">
+            <img v-if="inq.workCover" :src="coverUrl(inq.workCover)" alt="" />
+            <span v-else class="glyph">{{ (inq.workTitle || '询').slice(0, 1) }}</span>
           </div>
-          <div v-if="expandedInquiryId === inq.inquiryId" class="inquiry-body">
-            <div class="detail-info">
-              <p>询盘号：{{ inq.inquiryNo || '#' + inq.inquiryId }} · 状态：<span class="status-tag" :class="'tag-' + inq.status">{{ inquiryStatusLabel(inq.status) }}</span></p>
-              <p>买方：{{ inq.buyerName || inq.buyerId }} · 卖方：{{ inq.sellerName || inq.sellerId }}</p>
-              <p>预算：{{ moneyFromFen(inq.budget) }} · 授权：{{ licenseLabel(inq.licenseType) }}</p>
-              <p v-if="inq.intendedUse">用途：{{ inq.intendedUse }}</p>
-              <p v-if="inq.message">留言：{{ inq.message }}</p>
-              <p class="cost">创建于 {{ dateText(inq.createdAt) }}</p>
+          <div class="order-body">
+            <div class="order-top">
+              <b>《{{ inq.workTitle || '作品#' + inq.workId }}》</b>
+              <span class="status-tag" :class="'tag-' + inq.status">{{ inquiryStatusLabel(inq.status) }}</span>
             </div>
-            <div class="action-bar">
-              <button v-if="isSellerOf(inq) && inq.status === 'pending'" class="btn sm" @click="doAcceptInquiry(inq)">接受</button>
-              <button v-if="isSellerOf(inq) && inq.status === 'pending'" class="btn sm ghost" @click="doRejectInquiry(inq)">拒绝</button>
-              <button v-if="['quoted','deal'].includes(inq.status)" class="btn sm quiet" @click="openSessionForInquiry(inq)">{{ inq._hasSession ? '进入交易会话' : '创建交易会话' }}</button>
+            <p class="order-meta">询盘号：{{ inq.inquiryNo || '#' + inq.inquiryId }} · {{ counterpartyOf(inq).role }}：{{ counterpartyOf(inq).name }}</p>
+            <p class="order-meta">预算：{{ moneyFromFen(inq.budget) }} · 授权：{{ licenseLabel(inq.licenseType) }}</p>
+            <p v-if="inq.intendedUse" class="order-meta">用途：{{ inq.intendedUse }}</p>
+            <p v-if="inq.message" class="order-meta">留言：{{ inq.message }}</p>
+            <div class="order-foot">
+              <span class="cost">创建于 {{ dateText(inq.createdAt) }}</span>
+              <div class="foot-actions">
+                <button v-if="isSellerOf(inq) && inq.status === 'pending'" class="btn sm" @click="doAcceptInquiry(inq)">接受</button>
+                <button v-if="isSellerOf(inq) && inq.status === 'pending'" class="btn sm ghost" @click="doRejectInquiry(inq)">拒绝</button>
+                <button v-if="['quoted','deal'].includes(inq.status)" class="btn sm quiet" @click="openSessionForInquiry(inq)">{{ inq._hasSession ? '进入交易会话' : '创建交易会话' }}</button>
+              </div>
             </div>
           </div>
         </div>
@@ -71,18 +72,22 @@
                   </div>
                 </template>
               </div>
-              <div class="quote-input-card">
-                <span class="yen-sign">¥</span>
-                <input v-model="chatAmount" type="number" min="0" step="1" placeholder="报价金额" class="amount-input">
+              <TradeTemplatePanel v-model:visible="templateVisible" :session-id="chatSessionId" :inquiry-id="activeSessionInquiryId" :is-buyer="isCurrentBuyer" :license-type="currentLicenseType" @sent="onTemplateSent" />
+              <div class="chat-input-row">
+                <div class="fake-input" :class="{ active: templateVisible }" role="button" tabindex="0" @click="templateVisible = !templateVisible" @keyup.enter="templateVisible = !templateVisible">
+                  <span class="fake-placeholder">{{ templateVisible ? '收起定型文' : '点击选择定型文消息…' }}</span>
+                  <span class="fake-caret" aria-hidden="true"></span>
+                </div>
               </div>
-              <form class="chat-input-row" @submit.prevent="doSendChat">
-                <input v-model="chatText" maxlength="2000" placeholder="输入消息…" :disabled="chatSending">
-                <button class="btn" type="submit" :disabled="chatSending || (!chatText.trim() && !chatAmountChanged)">{{ chatSending ? '发送中…' : '发送' }}</button>
-              </form>
             </template>
             <div v-else class="load-state"><p>选择一个会话开始沟通</p></div>
           </div>
         </div>
+      </template>
+
+      <!-- ═══ 合同 Tab ═══ -->
+      <template v-else-if="tab === 'contract'">
+        <ContractPanel ref="contractPanelRef" :user-id="userId" />
       </template>
 
       <!-- ═══ 订单 Tab ═══ -->
@@ -95,7 +100,7 @@
         <div v-if="!orderPending && !orderError && !orders.length" class="load-state"><p>暂无订单</p></div>
         <div v-for="o in orders" :key="o.orderId" class="order-card">
           <div class="order-cover">
-            <img v-if="o.workCover" :src="o.workCover" alt="" />
+            <img v-if="o.workCover" :src="coverUrl(o.workCover)" alt="" />
             <span v-else class="glyph">{{ (o.workTitle || '订').slice(0, 1) }}</span>
           </div>
           <div class="order-body">
@@ -115,14 +120,29 @@
             <div v-if="getTerminal(o)" class="terminal-bar">{{ getTerminalLabel(o) }}</div>
             <div class="order-foot">
               <span class="cost">创建于 {{ dateText(o.createdAt) }}</span>
-              <button v-if="isSellerOf(o) && o.status === 'escrow_pending'" class="btn sm" @click="doDeliverOrder(o)">确认交割</button>
+              <div class="foot-actions">
+                <button v-if="!isTerminalOrder(o)" class="btn sm quiet" @click="openOrderContract(o)">查看合同</button>
+                <button v-if="isBuyerOfOrder(o) && o.status === 'confirmed'" class="btn sm" @click="doPayOrder(o)">付款</button>
+                <button v-if="isBuyerOfOrder(o) && o.status === 'delivering'" class="btn sm" @click="doCompleteOrder(o)">确认收货</button>
+                <button v-if="isSellerOf(o) && o.status === 'escrow_pending'" class="btn sm" @click="doDeliverOrder(o)">确认交割</button>
+              </div>
             </div>
           </div>
         </div>
         <div v-if="orderTotal > PAGE_SIZE" class="pagination-bar"><button class="btn sm ghost" :disabled="orderPageNum <= 1" @click="orderPageNum--; loadOrders()">上一页</button><span class="cost">第 {{ orderPageNum }} 页 / 共 {{ Math.ceil(orderTotal / PAGE_SIZE) }} 页</span><button class="btn sm ghost" :disabled="orderPageNum * PAGE_SIZE >= orderTotal" @click="orderPageNum++; loadOrders()">下一页</button></div>
       </template>
     </div>
-    <PortalLayer v-model="contractsVisible" title="我的合同" modal><LoadState empty empty-text="合同服务暂未开放，开放后可在这里查看与签署。" /></PortalLayer>
+    <PortalLayer v-model="orderContractVisible" :title="orderContractTitle" modal big>
+      <div v-loading="orderContractLoading" class="preview-wrap">
+        <iframe v-if="orderContractContent" class="contract-frame" :srcdoc="orderContractContent" sandbox="allow-same-origin"></iframe>
+        <div v-else class="load-state"><p>{{ orderContractLoading ? '合同加载中…' : '合同内容不可用' }}</p></div>
+      </div>
+      <div class="contract-modal-foot">
+        <a v-if="orderContract?.status === 'completed' && orderContract?.signedPdfUrl" class="btn sm ghost" :href="mediaUrl(orderContract.signedPdfUrl)" target="_blank" rel="noopener">下载 PDF</a>
+        <button v-if="canSignOrderContract" class="btn sm" @click="orderSignVisible = true">签署合同</button>
+      </div>
+    </PortalLayer>
+    <ContractSignDialog v-model="orderSignVisible" :contract="orderContract" :user-id="userId" @signed="reloadOrderContract" />
   </PortalLayer>
 </template>
 <script setup>
@@ -131,7 +151,11 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import PortalLayer from '../../components/PortalLayer.vue'
 import PortalTabs from '../../components/PortalTabs.vue'
 import LoadState from '../../components/LoadState.vue'
+import ContractPanel from '../../components/trade/ContractPanel.vue'
+import ContractSignDialog from '../../components/trade/ContractSignDialog.vue'
+import TradeTemplatePanel from '../../components/trade/TradeTemplatePanel.vue'
 import { usePortal } from '../../utils/portal.js'
+import { avatarUrl, contractHtml } from '../../utils/avatarUrl.js'
 import { dateText, money, asList } from '../../utils/creator.js'
 
 const props = defineProps({ modelValue: Boolean, initialTab: String })
@@ -139,8 +163,8 @@ const emit = defineEmits(['update:modelValue'])
 const { api, user, handleError } = usePortal()
 const visible = computed({ get: () => props.modelValue, set: v => emit('update:modelValue', v) })
 const tab = ref(props.initialTab || 'inquiry')
-const tabs = [{ value: 'inquiry', label: '询盘' }, { value: 'session', label: '会话' }, { value: 'order', label: '订单' }]
-const contractsVisible = ref(false)
+const tabs = [{ value: 'inquiry', label: '询盘' }, { value: 'session', label: '会话' }, { value: 'order', label: '订单' }, { value: 'contract', label: '合同' }]
+const contractPanelRef = ref(null)
 const userId = computed(() => Number(user.value?.userId))
 
 // ── 工具函数 ──
@@ -150,6 +174,11 @@ const inquiryStatusLabel = s => ({ pending: '待处理', quoted: '议价中', de
 const quoteStatusLabel = s => ({ pending: '待买方响应', pending_seller: '待卖方响应', accepted: '已接受', rejected: '已拒绝', expired: '已过期' })[s] || s
 const orderStatusLabel = s => ({ confirmed: '已确认', cancelled: '已取消', escrow_pending: '已托管', delivering: '交割中', completed: '已完成', refunded: '已退款' })[s] || s
 const isSellerOf = r => Number(r?.sellerId) === userId.value
+const isBuyerOfOrder = o => Number(o?.buyerId) === userId.value
+const isTerminalOrder = o => ['cancelled', 'refunded'].includes(o?.status)
+const mediaUrl = raw => avatarUrl(raw)
+// 封面历史数据绝对与相对混存，统一经 avatarUrl 归一到当前 API 前缀
+const coverUrl = raw => avatarUrl(raw) || raw
 const counterpartyOf = r => {
   const isBuyer = Number(r?.buyerId) === userId.value
   const name = isBuyer ? (r.sellerName || '用户' + r.sellerId) : (r.buyerName || '用户' + r.buyerId)
@@ -166,7 +195,6 @@ const inquiryKeyword = ref('')
 const inquiryPageNum = ref(1)
 const inquiryTotal = ref(0)
 const PAGE_SIZE = 10
-const expandedInquiryId = ref(null)
 
 async function loadInquiries() {
   inquiryPending.value = true; inquiryError.value = ''
@@ -181,10 +209,6 @@ async function loadInquiries() {
     syncSessionFlags()
   } catch (e) { inquiryError.value = e.message; await handleError(e) }
   finally { inquiryPending.value = false }
-}
-
-function toggleInquiry(inq) {
-  expandedInquiryId.value = expandedInquiryId.value === inq.inquiryId ? null : inq.inquiryId
 }
 
 async function doAcceptInquiry(inq) {
@@ -238,6 +262,10 @@ async function selectSession(s) {
   stopChatPoll()
   chatSessionId.value = s.sessionId
   activeSessionInquiryId.value = s.inquiryId || null
+  sessionInquiry.value = null
+  if (s.inquiryId) {
+    try { sessionInquiry.value = await api.value.getInquiry(s.inquiryId) } catch { sessionInquiry.value = null }
+  }
   await loadChatMessages()
   await loadLatestQuote()
   await nextTick()
@@ -251,25 +279,21 @@ const chatSessionDetail = ref(null)
 const chatMessages = ref([])
 const chatLoading = ref(false)
 const chatError = ref('')
-const chatText = ref('')
-const chatAmount = ref('')
-const chatSending = ref(false)
 const chatBodyEl = ref(null)
 const latestQuote = ref(null)
+// 当前会话关联的询盘：用于定型文角色过滤、授权类型与金额兜底（会话列表不携带询盘明细）
+const sessionInquiry = ref(null)
+const templateVisible = ref(true)
 let chatPollTimer = null
-let lastSentAmountFen = null
 let lastMsgId = 0
 
-const chatAmountFen = computed(() => {
-  const v = parseFloat(chatAmount.value)
-  return isNaN(v) || v <= 0 ? null : Math.round(v * 100)
-})
-const chatAmountChanged = computed(() => chatAmountFen.value !== null && chatAmountFen.value !== lastSentAmountFen)
 const negAmountYuan = computed(() => {
   if (latestQuote.value) return moneyFromFen(latestQuote.value.price)
-  const inq = inquiries.value.find(i => i.inquiryId === activeSessionInquiryId.value)
+  const inq = sessionInquiry.value || inquiries.value.find(i => i.inquiryId === activeSessionInquiryId.value)
   return moneyFromFen(inq?.budget || 0)
 })
+const isCurrentBuyer = computed(() => Number(sessionInquiry.value?.buyerId) === userId.value)
+const currentLicenseType = computed(() => sessionInquiry.value?.licenseType || latestQuote.value?.licenseType || 'exclusive')
 const negSource = computed(() => {
   if (!latestQuote.value) return '预算金额'
   return latestQuote.value.quoterRole === 'seller' ? '卖方报价' : '买方议价'
@@ -341,40 +365,16 @@ function stopChatPoll() {
   if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null }
 }
 
-async function doSendChat() {
-  if (chatSending.value || !chatSessionId.value) return
-  const text = chatText.value.trim()
-  const amountFen = chatAmountFen.value
-  if (!text && !amountFen) return
-  chatSending.value = true
-  try {
-    if (amountFen !== null && amountFen !== lastSentAmountFen) {
-      const inqId = activeSessionInquiryId.value
-      const inq = inquiries.value.find(i => i.inquiryId === inqId)
-      const defaultLicense = inq?.licenseType || latestQuote.value?.licenseType || 'exclusive'
-      if (!latestQuote.value) {
-        await api.value.createQuote({ inquiryId: inqId, price: amountFen, licenseType: defaultLicense, description: text || undefined })
-      } else {
-        await api.value.modifyQuote(latestQuote.value.quoteId, { price: amountFen, licenseType: latestQuote.value.licenseType || defaultLicense, description: text || undefined })
-      }
-      lastSentAmountFen = amountFen
-      await loadLatestQuote()
-      // 报价/议价后刷新消息列表（后端会插入 [报价]/[议价] 系统消息）
-      await loadChatMessages()
-      // 金额变化且有文本时，同时发普通消息
-      if (text) {
-        const msg = await api.value.sendChat(chatSessionId.value, text)
-        if (msg) { chatMessages.value.push(msg); const id = msg.messageId || msg.msgId; if (id > lastMsgId) lastMsgId = id }
-      }
-    } else if (text) {
-      const msg = await api.value.sendChat(chatSessionId.value, text)
-      if (msg) { chatMessages.value.push(msg); const id = msg.messageId || msg.msgId; if (id > lastMsgId) lastMsgId = id }
-    }
-    chatText.value = ''
-    await nextTick()
-    scrollChatBottom()
-  } catch (e) { await handleError(e) }
-  finally { chatSending.value = false }
+/** 定型文已发出：追加消息并刷新最新报价。 */
+async function onTemplateSent(msg) {
+  if (msg) {
+    chatMessages.value.push(msg)
+    const id = msg.messageId || msg.msgId
+    if (id > lastMsgId) lastMsgId = id
+  }
+  await loadLatestQuote()
+  await nextTick()
+  scrollChatBottom()
 }
 
 async function doAcceptLatestQuote() {
@@ -414,6 +414,54 @@ async function doDeliverOrder(o) {
   try { await ElMessageBox.confirm('确认交割后买方将进入验收环节，请确保已完成作品授权交付。确定吗？', '确认交割', { type: 'warning' }); await api.value.deliverOrder(o.orderId); ElMessage.success('已确认交割'); o.status = 'delivering'; await loadOrders() } catch (e) { if (e !== 'cancel') await handleError(e) }
 }
 
+async function doPayOrder(o) {
+  try { await ElMessageBox.confirm('付款后资金进入平台托管，等待卖方交割。确定付款吗？', '确认付款', { type: 'warning' }); await api.value.payOrder(o.orderId); ElMessage.success('付款成功，资金已托管'); await loadOrders() } catch (e) { if (e !== 'cancel') await handleError(e) }
+}
+
+async function doCompleteOrder(o) {
+  try { await ElMessageBox.confirm('确认收货后订单完成，平台将向卖方结算。确定吗？', '确认收货', { type: 'warning' }); await api.value.completeOrder(o.orderId); ElMessage.success('已确认收货'); await loadOrders() } catch (e) { if (e !== 'cancel') await handleError(e) }
+}
+
+// ── 订单关联合同：预览 / 签署 / PDF ──
+const orderContractVisible = ref(false)
+const orderContractLoading = ref(false)
+const orderContract = ref(null)
+const orderContractContent = ref('')
+const orderContractTitle = ref('合同预览')
+const orderSignVisible = ref(false)
+const canSignOrderContract = computed(() => {
+  if (!orderContract.value || orderContract.value.status === 'completed') return false
+  const mine = isBuyerOfOrder(orderContract.value) ? orderContract.value.buyerSignStatus : orderContract.value.sellerSignStatus
+  return Number(mine) !== 1
+})
+
+async function openOrderContract(o) {
+  orderContractTitle.value = `合同预览 · ${o.workTitle || '订单#' + o.orderId}`
+  orderContract.value = null
+  orderContractContent.value = ''
+  orderContractVisible.value = true
+  await fetchOrderContract(o.orderId)
+}
+
+async function fetchOrderContract(orderId) {
+  orderContractLoading.value = true
+  try {
+    const detail = await api.value.getContractByOrder(orderId)
+    orderContract.value = detail
+    orderContractContent.value = contractHtml(detail?.content)
+  } catch (e) {
+    await handleError(e)
+  } finally {
+    orderContractLoading.value = false
+  }
+}
+
+/** 签署完成后刷新合同正文与订单列表。 */
+async function reloadOrderContract() {
+  if (orderContract.value?.orderId) await fetchOrderContract(orderContract.value.orderId)
+  await loadOrders()
+}
+
 const orderProgressSteps = [{ key: 'confirmed', label: '已确认' }, { key: 'escrow_pending', label: '已托管' }, { key: 'delivering', label: '交割中' }, { key: 'completed', label: '已完成' }]
 function getProgressIndex(o) {
   if (!o?.status) return -1
@@ -429,10 +477,12 @@ function getTerminalLabel(o) {
 // ── Tab 切换自动加载 ──
 let inquirySearchTimer = null
 watch(inquiryKeyword, () => { clearTimeout(inquirySearchTimer); inquirySearchTimer = setTimeout(() => { inquiryPageNum.value = 1; loadInquiries() }, 300) })
-watch(expandedInquiryId, v => { if (!v) expandedInquiryId.value = null })
 watch(tab, v => {
+  // 定型文是会话唯一发送入口：进入会话默认展开，离开会话收起
+  templateVisible.value = v === 'session'
   if (v === 'inquiry') loadInquiries()
   else if (v === 'session') loadTradeSessions()
+  else if (v === 'contract') nextTick(() => contractPanelRef.value?.refresh())
   else if (v === 'order') loadOrders()
 })
 watch(() => props.initialTab, v => { if (v) tab.value = v })
@@ -464,10 +514,6 @@ onUnmounted(() => { stopChatPoll() })
 .session-last { font-size: 12px; color: #909399; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 2px 0 0 }
 .session-chat-panel { flex: 1; display: flex; flex-direction: column; padding: 0; overflow: hidden }
 .session-chat-panel .chat-messages { flex: 1; margin: 0; border: none; border-radius: 0; height: auto }
-.session-chat-panel .quote-input-card { margin: 0; border-radius: 0; border-left: 0; border-right: 0 }
-.session-chat-panel .quote-input-card .yen-sign { font-size: 16px; font-weight: 600; color: #606266 }
-.session-chat-panel .quote-input-card .amount-input::-webkit-inner-spin-button,
-.session-chat-panel .quote-input-card .amount-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0 }
 .session-chat-panel .chat-input-row { margin: 0; padding: 8px; border-top: 1px solid #ebeef5 }
 
 /* ── 原有样式 ── */
@@ -486,8 +532,16 @@ onUnmounted(() => { stopChatPoll() })
 .order-top b { font-size: 14px }
 .order-meta { font-size: 12.5px; color: #606266; margin: 0 }
 .order-body .order-progress { margin: 8px 0 0 }
-.order-foot { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 6px }
+.order-foot { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 6px; gap: 8px }
 .order-foot .cost { font-size: 12px; color: #909399 }
+.foot-actions { display: flex; gap: 8px; align-items: center }
+.foot-actions a { text-decoration: none }
+
+/* ── 订单合同预览弹窗 ── */
+.preview-wrap { min-height: 200px }
+.contract-frame { width: 100%; height: min(64vh, 680px); border: 0; display: block; background: #fff }
+.contract-modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding-top: 10px }
+.contract-modal-foot a { text-decoration: none }
 
 .order-progress { display: flex; align-items: center; gap: 0; margin: 16px 0 8px; padding: 0 4px }
 .progress-step { display: flex; flex-direction: column; align-items: center; flex: 1; position: relative }
@@ -540,8 +594,16 @@ onUnmounted(() => { stopChatPoll() })
 ::-webkit-scrollbar-track { background: transparent }
 ::-webkit-scrollbar-thumb { background: #d0d0d0; border-radius: 2px }
 ::-webkit-scrollbar-thumb:hover { background: #b0b0b0 }
-.chat-input-row { display: flex; gap: 8px; margin-top: 4px }
-.chat-input-row input { flex: 1; padding: 8px 12px; border: 1px solid #dcdfe6; border-radius: 4px; font-size: 13px }
+.chat-input-row { display: flex; gap: 8px; align-items: center; margin-top: 4px }
+/* 假输入框：外观与真实聊天框一致，点击整块切换定型文面板展开/收起 */
+.fake-input { flex: 1; display: flex; align-items: center; min-height: 38px; padding: 8px 12px; border: 1px solid #dcdfe6; border-radius: 6px; background: #fff; cursor: pointer; font-size: 13px; transition: border-color .15s, box-shadow .15s; user-select: none }
+.fake-input:hover { border-color: #c0c4cc }
+.fake-input.active { border-color: #409eff; box-shadow: 0 0 0 2px rgba(64, 158, 255, .12) }
+.fake-placeholder { color: #a8abb2; flex: 1 }
+.fake-input.active .fake-placeholder { color: #909399 }
+.fake-caret { width: 1px; height: 16px; background: #409eff; opacity: 0 }
+.fake-input.active .fake-caret { opacity: 1; animation: fake-caret-blink 1.1s step-end infinite }
+@keyframes fake-caret-blink { 50% { opacity: 0 } }
 .status-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 500 }
 .tag-pending { background: #fdf6ec; color: #e6a23c }
 .tag-pending_seller { background: #ecf5ff; color: #409eff }
