@@ -67,6 +67,16 @@ export async function mockCreatorApi(context, apiPrefix = '/dev-api') {
     else if (path.endsWith('/real-name')) result.data = { status: 'NOT_SUBMITTED' }
     else if (path.endsWith('/profile')) { if (method === 'PUT') Object.assign(profile, body); result.data = profile }
     else if (path === '/api/v1/feedback') { if (method === 'POST') feedback.push({ ...body, feedbackId: feedback.length + 1, status: 'PENDING' }); result.data = feedback }
+    else if (path === '/api/v1/trade/finance/income/overview') result.data = { totalIncome: 64000, pendingSettleAmount: 48000, availableAmount: 64000, withdrawnAmount: 0, frozenAmount: 0, pendingSettleCount: 1 }
+    else if (path.startsWith('/api/v1/trade/finance/income/stats')) result.data = { period: 'month', periodStart: '2026-10-01', periodEnd: '2026-10-27', incomeAmount: 64000, withdrawAmount: 0 }
+    else if (path.match(/^\/api\/v1\/trade\/finance\/income\/detail\/\d+$/)) result.data = { billId: 21, billNo: 'BILL21', billType: 'income', incomeSource: '订单收入', amount: 4800000, balanceAfter: 6400000, remark: '结算入账', createdAt: '2026-10-12 10:00:00', orderNo: 'SO20261012001', workTitle: '归途列车', totalAmount: 6000000, platformFee: 1200000, splitRate: 0.2, sellerAmount: 4800000 }
+    else if (path.startsWith('/api/v1/trade/finance/income/detail')) result.data = { total: 1, rows: [{ billId: 21, billNo: 'BILL21', billType: 'income', incomeSource: '订单收入', amount: 4800000, orderNo: 'SO20261012001', workTitle: '归途列车', createdAt: '2026-10-12 10:00:00' }] }
+    else if (path.match(/^\/api\/v1\/trade\/finance\/income\/settle\/\d+\/confirm$/) && method === 'POST') result.data = { settleId: 2, status: 'confirmed', sellerAmount: 4800000 }
+    else if (path.match(/^\/api\/v1\/trade\/finance\/income\/settle\/\d+\/dispute$/) && method === 'POST') result.data = { settleId: 2, status: 'disputed', disputeReason: body?.reason }
+    else if (path.match(/^\/api\/v1\/trade\/finance\/income\/settle\/\d+$/)) result.data = { settleId: 2, settleNo: 'JS20261012002', orderNo: 'SO20261012001', workTitle: '归途列车', totalAmount: 6000000, platformFee: 1200000, splitRate: 0.2, sellerAmount: 4800000, status: 'pending', createdAt: '2026-10-12 10:00:00' }
+    else if (path.startsWith('/api/v1/trade/finance/income/settle/list')) result.data = { total: 1, rows: [{ settleId: 2, settleNo: 'JS20261012002', orderNo: 'SO20261012001', workTitle: '归途列车', totalAmount: 6000000, platformFee: 1200000, splitRate: 0.2, sellerAmount: 4800000, status: 'pending', createdAt: '2026-10-12 10:00:00' }] }
+    else if (path === '/api/v1/trade/finance/withdraw/apply' && method === 'POST') result.data = { withdrawId: 9, withdrawNo: 'WD9', status: 'pending' }
+    else if (path.startsWith('/api/v1/trade/finance/withdraw/list')) result.data = { total: 0, rows: [] }
     else result = { code: 404, message: '未配置测试接口：' + path }
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify(result) })
   })

@@ -7,7 +7,8 @@
       <AssetsPanel v-else-if="tab === 'assets'" />
       <CertPanel v-else-if="tab === 'certs'" ref="certPanelRef" />
       <SealPanel v-else-if="tab === 'seal'" />
-      <LoadState v-else empty empty-text="版权与收益服务暂未开放，可通过「消息 → 与平台沟通」咨询。" />
+      <SettlePanel v-else-if="tab === 'settle'" />
+      <WithdrawPanel v-else-if="tab === 'withdraw'" />
     </div>
   </PortalLayer>
 </template>
@@ -15,11 +16,12 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import PortalLayer from '../../components/PortalLayer.vue'
 import PortalTabs from '../../components/PortalTabs.vue'
-import LoadState from '../../components/LoadState.vue'
 import SealPanel from './seal/SealPanel.vue'
 import ApplyPanel from './copyright/ApplyPanel.vue'
 import AssetsPanel from './copyright/AssetsPanel.vue'
 import CertPanel from './copyright/CertPanel.vue'
+import SettlePanel from './finance/SettlePanel.vue'
+import WithdrawPanel from './finance/WithdrawPanel.vue'
 
 const props = defineProps({ modelValue: Boolean, initialTab: String })
 const emit = defineEmits(['update:modelValue'])

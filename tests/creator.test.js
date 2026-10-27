@@ -262,6 +262,42 @@ test('generateStream displays CRLF deltas before completion and completes withou
   assert.equal((await output).outline, '书名：雨夜')
 })
 
+test('income and withdraw APIs share App finance routes without admin paths', async () => {
+  const calls = []
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, ...options })
+    return { ok: true, status: 200, json: async () => ({ code: 200, data: { total: 0, rows: [] } }) }
+  }
+  await api.getIncomeOverview()
+  await api.getIncomeStats('week')
+  await api.listIncomeDetails({ billType: 'income', pageNum: 1, pageSize: 20 })
+  await api.getIncomeBillDetail(21)
+  await api.listIncomeSettles({ status: 'pending' })
+  await api.getIncomeSettle(2)
+  await api.confirmIncomeSettle(2)
+  await api.disputeIncomeSettle(2, '金额不符')
+  await api.applyWithdraw({ amount: 10.5, withdrawType: 'alipay', accountName: '江叙', accountNo: '13800000000', clientToken: 'wd_1' })
+  await api.listWithdraws({ status: 'pending' })
+  assert.equal(calls[0].url, '/dev-api/api/v1/trade/finance/income/overview')
+  assert.ok(calls[1].url.includes('/api/v1/trade/finance/income/stats?period=week'))
+  assert.ok(calls[2].url.includes('/api/v1/trade/finance/income/detail?'))
+  assert.ok(calls[2].url.includes('billType=income'))
+  assert.equal(calls[3].url, '/dev-api/api/v1/trade/finance/income/detail/21')
+  assert.ok(calls[4].url.includes('/income/settle/list'))
+  assert.equal(calls[5].url, '/dev-api/api/v1/trade/finance/income/settle/2')
+  assert.equal(calls[6].url, '/dev-api/api/v1/trade/finance/income/settle/2/confirm')
+  assert.equal(calls[6].method, 'POST')
+  assert.equal(calls[7].method, 'POST')
+  assert.deepEqual(JSON.parse(calls[7].body), { reason: '金额不符' })
+  assert.equal(calls[8].url, '/dev-api/api/v1/trade/finance/withdraw/apply')
+  assert.equal(JSON.parse(calls[8].body).amount, 10.5)
+  assert.ok(calls[9].url.includes('/trade/finance/withdraw/list'))
+  for (const call of calls) {
+    assert.equal(call.headers.Authorization, 'Bearer test-user-token')
+    assert.ok(!call.url.includes('/admin/'))
+  }
+})
+
 test('generateStream rejects a truncated response without losing delivered text', async () => {
   globalThis.fetch = async () => ({ ok: true, status: 200, body: new ReadableStream({ start(controller) {
     controller.enqueue(new TextEncoder().encode('data:{"delta":"已经生成的内容"}\n\n'))

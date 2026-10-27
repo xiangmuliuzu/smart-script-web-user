@@ -239,3 +239,23 @@ export const listTradeTemplates = async () => asList(await data('/api/v1/users/m
 // ──── 印章：签约时可选已审核通过的印章 ────
 export const listMySeals = async () => asList(await data('/api/v1/content/copyright-seals'))
 
+// ──── 收益 / 结算 / 提现（与 App 共用 /api/v1/trade/finance） ────
+const financeBase = '/api/v1/trade/finance'
+export const getIncomeOverview = () => data(financeBase + '/income/overview')
+export const getIncomeStats = (period = 'month') => data(financeBase + '/income/stats' + qs({ period }))
+export const listIncomeDetails = (params = {}) =>
+  data(financeBase + '/income/detail' + qs({ pageNum: 1, pageSize: 20, ...params }))
+export const getIncomeBillDetail = id =>
+  data(financeBase + '/income/detail/' + encodeURIComponent(id))
+export const listIncomeSettles = (params = {}) =>
+  data(financeBase + '/income/settle/list' + qs({ pageNum: 1, pageSize: 20, ...params }))
+export const getIncomeSettle = id =>
+  data(financeBase + '/income/settle/' + encodeURIComponent(id))
+export const confirmIncomeSettle = id =>
+  data(financeBase + '/income/settle/' + encodeURIComponent(id) + '/confirm', { method: 'POST' })
+export const disputeIncomeSettle = (id, reason) =>
+  data(financeBase + '/income/settle/' + encodeURIComponent(id) + '/dispute', { method: 'POST', body: { reason } })
+export const applyWithdraw = form => data(financeBase + '/withdraw/apply', { method: 'POST', body: form })
+export const listWithdraws = (params = {}) =>
+  data(financeBase + '/withdraw/list' + qs({ pageNum: 1, pageSize: 20, ...params }))
+
