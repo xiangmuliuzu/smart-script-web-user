@@ -3,7 +3,10 @@
     <aside class="login-aside">
       <div class="brand"><b>剧云策</b><span>创作者中心</span></div>
       <blockquote>好故事值得一份<br />盖章的凭证。<footer>创作 · 审核 · 确权 · 收益</footer></blockquote>
-      <img :src="creatorIllustration" class="login-illustration" alt="编剧使用电脑和笔记创作剧本，桌上摆放分镜与场记板" />
+      <picture>
+        <source :srcset="creatorIllustration" type="image/webp" media="(min-width: 821px)" />
+        <img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" width="1254" height="1254" fetchpriority="high" decoding="async" class="login-illustration" alt="编剧使用电脑和笔记创作剧本，桌上摆放分镜与场记板" />
+      </picture>
       <div class="fine">剧云策 · 智能剧本创作平台</div>
     </aside>
     <main class="login-main">
@@ -34,7 +37,7 @@
 </template>
 <script setup>
 import { computed, reactive, ref, onMounted } from 'vue'
-import creatorIllustration from '../assets/images/login-creator-v2.png'
+import creatorIllustration from '../assets/images/login-creator-v2.webp'
 import { useRoute, useRouter } from 'vue-router'
 import { User, Lock } from '@element-plus/icons-vue'
 import { getCaptcha, login, safeRedirect } from '../auth.js'
