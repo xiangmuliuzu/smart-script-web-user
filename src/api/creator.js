@@ -213,14 +213,25 @@ export const modifyQuote = (id, form) => data(`/api/v1/trade/quote/${encodeURICo
 export const acceptQuote = id => data(`/api/v1/trade/quote/${encodeURIComponent(id)}/accept`, { method: 'PUT' })
 // 订单
 export const listOrders = params => data('/api/v1/trade/order/list?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))).toString())
-export const deliverOrder = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/deliver`, { method: 'POST' })
 export const payOrder = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/pay`, { method: 'POST' })
 export const completeOrder = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/complete`, { method: 'POST' })
+// 取消订单（仅 confirmed 可取消）；reason 选填，走 query 参数
+export const cancelOrder = (id, reason) => data(`/api/v1/trade/order/${encodeURIComponent(id)}/cancel${reason ? '?' + new URLSearchParams({ reason }).toString() : ''}`, { method: 'POST' })
 
 // ──── C 交易域：合同（签署前置实名认证由后端校验） ────
 export const listContracts = params => data('/api/v1/trade/contracts/list?' + new URLSearchParams(Object.fromEntries(Object.entries(params || {}).filter(([, v]) => v != null && v !== ''))).toString())
 export const getContractByOrder = orderId => data(`/api/v1/trade/contracts/${encodeURIComponent(orderId)}`)
 export const signContract = (contractId, formData) => data(`/api/v1/trade/contracts/${encodeURIComponent(contractId)}/sign`, { method: 'POST', body: formData })
+// 合同模板目录（传 contractId 时按该合同生成贴合默认条款）与正文条款编辑（进入签署即锁定）
+export const listContractTemplates = async contractId => asList(await data('/api/v1/trade/contracts/templates' + (contractId ? '?' + new URLSearchParams({ contractId }).toString() : '')))
+export const updateContractContent = (contractId, payload) => data(`/api/v1/trade/contracts/${encodeURIComponent(contractId)}/content`, { method: 'PUT', body: payload })
+// 上传 PDF 替换模板（multipart：file）与从上传件切回平台模板（body：{ templateId }）；均在进入签署后锁定
+export const uploadContractSourcePdf = (contractId, file) => {
+  const body = new FormData()
+  body.append('file', file, file.name || 'contract.pdf')
+  return data(`/api/v1/trade/contracts/${encodeURIComponent(contractId)}/source-pdf`, { method: 'POST', body })
+}
+export const switchContractToTemplate = (contractId, templateId) => data(`/api/v1/trade/contracts/${encodeURIComponent(contractId)}/source-pdf/off`, { method: 'PUT', body: { templateId } })
 
 // ──── 交易会话定型文（与 APP 同源：/users/me/chat/trade-templates） ────
 export const listTradeTemplates = async () => asList(await data('/api/v1/users/me/chat/trade-templates'))

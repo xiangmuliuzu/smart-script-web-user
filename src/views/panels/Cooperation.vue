@@ -42,9 +42,11 @@
       <template v-else-if="tab === 'session'">
         <div class="session-layout">
           <div class="session-list-panel">
+            <div class="session-search"><input v-model="sessionKeyword" class="filter-input session-search-input" placeholder="搜索会话/对方/消息"></div>
             <LoadState :pending="sessionListPending" :error="sessionListError" :retry="loadTradeSessions" />
             <div v-if="!sessionListPending && !sessions.length" class="load-state"><p>暂无交易会话</p></div>
-            <div v-for="s in sessions" :key="s.sessionId" class="session-item" :class="{ active: chatSessionId === s.sessionId }" @click="selectSession(s)">
+            <div v-else-if="!sessionListPending && sessions.length && !filteredSessions.length" class="load-state"><p>无匹配会话</p></div>
+            <div v-for="s in filteredSessions" :key="s.sessionId" class="session-item" :class="{ active: chatSessionId === s.sessionId }" @click="selectSession(s)">
               <div class="session-top"><b>《{{ s.businessName || '会话#' + s.sessionId }}》</b><span v-if="s.unread" class="unread-badge">{{ s.unread }}</span></div>
               <p class="session-peer cost">{{ s.peerName || '用户' + s.peerId }}</p>
               <p v-if="s.lastMessage" class="session-last">{{ s.lastMessage }}</p>
@@ -74,10 +76,9 @@
               </div>
               <TradeTemplatePanel v-model:visible="templateVisible" :session-id="chatSessionId" :inquiry-id="activeSessionInquiryId" :is-buyer="isCurrentBuyer" :license-type="currentLicenseType" @sent="onTemplateSent" />
               <div class="chat-input-row">
-                <div class="fake-input" :class="{ active: templateVisible }" role="button" tabindex="0" @click="templateVisible = !templateVisible" @keyup.enter="templateVisible = !templateVisible">
-                  <span class="fake-placeholder">{{ templateVisible ? '收起定型文' : '点击选择定型文消息…' }}</span>
-                  <span class="fake-caret" aria-hidden="true"></span>
-                </div>
+                <button type="button" class="template-toggle-btn" :class="{ active: templateVisible }" @click="templateVisible = !templateVisible">{{ templateVisible ? '收起定型文' : '定型文' }}</button>
+                <textarea v-model="chatInput" class="chat-textarea" rows="1" placeholder="输入消息，Enter 发送 / Shift+Enter 换行" @keydown.enter.exact.prevent="sendFreeText"></textarea>
+                <button type="button" class="send-btn" :disabled="chatSending || !chatInput.trim()" @click="sendFreeText">发送</button>
               </div>
             </template>
             <div v-else class="load-state"><p>选择一个会话开始沟通</p></div>
@@ -94,7 +95,8 @@
       <template v-else-if="tab === 'order'">
         <div class="filter-bar">
           <select v-model="orderRole" class="filter-select" @change="orderPageNum = 1; loadOrders()"><option value="seller">我卖出的</option><option value="buyer">我买入的</option></select>
-          <select v-model="orderStatus" class="filter-select" @change="orderPageNum = 1; loadOrders()"><option value="">全部状态</option><option value="confirmed">已确认</option><option value="cancelled">已取消</option><option value="escrow_pending">已托管</option><option value="delivering">交割中</option><option value="completed">已完成</option><option value="refunded">已退款</option></select>
+          <select v-model="orderStatus" class="filter-select" @change="orderPageNum = 1; loadOrders()"><option value="">全部状态</option><option value="confirmed">待签署</option><option value="paying">付款中</option><option value="delivering">交割中</option><option value="completed">已完成</option></select>
+          <input v-model="orderKeyword" class="filter-input" placeholder="搜索订单号/作品/对方" @keyup.enter="orderPageNum = 1; loadOrders()">
         </div>
         <LoadState :pending="orderPending" :error="orderError" :retry="loadOrders" />
         <div v-if="!orderPending && !orderError && !orders.length" class="load-state"><p>暂无订单</p></div>
@@ -122,9 +124,9 @@
               <span class="cost">创建于 {{ dateText(o.createdAt) }}</span>
               <div class="foot-actions">
                 <button v-if="!isTerminalOrder(o)" class="btn sm quiet" @click="openOrderContract(o)">查看合同</button>
-                <button v-if="isBuyerOfOrder(o) && o.status === 'confirmed'" class="btn sm" @click="doPayOrder(o)">付款</button>
+                <button v-if="o.status === 'confirmed'" class="btn sm ghost" @click="doCancelOrder(o)">取消订单</button>
+                <button v-if="isBuyerOfOrder(o) && o.status === 'paying'" class="btn sm" @click="doPayOrder(o)">付款</button>
                 <button v-if="isBuyerOfOrder(o) && o.status === 'delivering'" class="btn sm" @click="doCompleteOrder(o)">确认收货</button>
-                <button v-if="isSellerOf(o) && o.status === 'escrow_pending'" class="btn sm" @click="doDeliverOrder(o)">确认交割</button>
               </div>
             </div>
           </div>
@@ -138,7 +140,7 @@
         <div v-else class="load-state"><p>{{ orderContractLoading ? '合同加载中…' : '合同内容不可用' }}</p></div>
       </div>
       <div class="contract-modal-foot">
-        <a v-if="orderContract?.status === 'completed' && orderContract?.signedPdfUrl" class="btn sm ghost" :href="mediaUrl(orderContract.signedPdfUrl)" target="_blank" rel="noopener">下载 PDF</a>
+        <a v-if="(orderContract?.status === 'completed' || orderContract?.status === 'archived') && orderContract?.signedPdfUrl" class="btn sm ghost" :href="mediaUrl(orderContract.signedPdfUrl)" target="_blank" rel="noopener">下载 PDF</a>
         <button v-if="canSignOrderContract" class="btn sm" @click="orderSignVisible = true">签署合同</button>
       </div>
     </PortalLayer>
@@ -172,7 +174,7 @@ const moneyFromFen = fen => money(Number(fen || 0) / 100)
 const licenseLabel = t => ({ exclusive: '独家授权', non_exclusive: '非独家授权', adaptation: '改编授权' })[t] || t || '未指定'
 const inquiryStatusLabel = s => ({ pending: '待处理', quoted: '议价中', deal: '已达成', rejected: '已拒绝', closed: '已关闭' })[s] || s
 const quoteStatusLabel = s => ({ pending: '待买方响应', pending_seller: '待卖方响应', accepted: '已接受', rejected: '已拒绝', expired: '已过期' })[s] || s
-const orderStatusLabel = s => ({ confirmed: '已确认', cancelled: '已取消', escrow_pending: '已托管', delivering: '交割中', completed: '已完成', refunded: '已退款' })[s] || s
+const orderStatusLabel = s => ({ confirmed: '待签署', paying: '付款中', cancelled: '已取消', escrow_pending: '已托管', delivering: '交割中', completed: '已完成', refunded: '已退款' })[s] || s
 const isSellerOf = r => Number(r?.sellerId) === userId.value
 const isBuyerOfOrder = o => Number(o?.buyerId) === userId.value
 const isTerminalOrder = o => ['cancelled', 'refunded'].includes(o?.status)
@@ -240,6 +242,16 @@ const sessions = ref([])
 const sessionListPending = ref(false)
 const sessionListError = ref('')
 const activeSessionInquiryId = ref(null)
+// 会话列表为全量返回（无分页），搜索走客户端过滤：按会话名/对方昵称/最后一条消息模糊匹配
+const sessionKeyword = ref('')
+const filteredSessions = computed(() => {
+  const kw = sessionKeyword.value.trim().toLowerCase()
+  if (!kw) return sessions.value
+  return sessions.value.filter(s =>
+    String(s.businessName || '').toLowerCase().includes(kw)
+    || String(s.peerName || '').toLowerCase().includes(kw)
+    || String(s.lastMessage || '').toLowerCase().includes(kw))
+})
 
 async function loadTradeSessions() {
   sessionListPending.value = true; sessionListError.value = ''
@@ -284,6 +296,8 @@ const latestQuote = ref(null)
 // 当前会话关联的询盘：用于定型文角色过滤、授权类型与金额兜底（会话列表不携带询盘明细）
 const sessionInquiry = ref(null)
 const templateVisible = ref(true)
+const chatInput = ref('')
+const chatSending = ref(false)
 let chatPollTimer = null
 let lastMsgId = 0
 
@@ -377,6 +391,23 @@ async function onTemplateSent(msg) {
   scrollChatBottom()
 }
 
+/** 自由打字发送：复用定型文发出后的追加与滚动逻辑。 */
+async function sendFreeText() {
+  const content = chatInput.value.trim()
+  if (!content || chatSending.value || !chatSessionId.value) return
+  chatSending.value = true
+  try {
+    const msg = await api.value.sendChat(chatSessionId.value, content)
+    if (!msg) throw new Error('发送响应不完整，请刷新会话确认')
+    chatInput.value = ''
+    await onTemplateSent(msg)
+  } catch (e) {
+    ElMessage.error('发送失败：' + (e?.message || e))
+  } finally {
+    chatSending.value = false
+  }
+}
+
 async function doAcceptLatestQuote() {
   if (!latestQuote.value) return
   try {
@@ -395,6 +426,7 @@ const orderPending = ref(false)
 const orderError = ref('')
 const orderRole = ref('seller')
 const orderStatus = ref('')
+const orderKeyword = ref('')
 const orderPageNum = ref(1)
 const orderTotal = ref(0)
 
@@ -403,6 +435,7 @@ async function loadOrders() {
   try {
     const params = { role: orderRole.value, pageNum: orderPageNum.value, pageSize: PAGE_SIZE }
     if (orderStatus.value) params.status = orderStatus.value
+    if (orderKeyword.value.trim()) params.keyword = orderKeyword.value.trim()
     const result = await api.value.listOrders(params)
     orders.value = asList(result)
     orderTotal.value = result?.total || 0
@@ -410,16 +443,22 @@ async function loadOrders() {
   finally { orderPending.value = false }
 }
 
-async function doDeliverOrder(o) {
-  try { await ElMessageBox.confirm('确认交割后买方将进入验收环节，请确保已完成作品授权交付。确定吗？', '确认交割', { type: 'warning' }); await api.value.deliverOrder(o.orderId); ElMessage.success('已确认交割'); o.status = 'delivering'; await loadOrders() } catch (e) { if (e !== 'cancel') await handleError(e) }
-}
-
 async function doPayOrder(o) {
-  try { await ElMessageBox.confirm('付款后资金进入平台托管，等待卖方交割。确定付款吗？', '确认付款', { type: 'warning' }); await api.value.payOrder(o.orderId); ElMessage.success('付款成功，资金已托管'); await loadOrders() } catch (e) { if (e !== 'cancel') await handleError(e) }
+  try { await ElMessageBox.confirm('确认已付款后订单进入交割，卖方将交付作品。确定付款吗？', '确认付款', { type: 'warning' }); await api.value.payOrder(o.orderId); ElMessage.success('付款成功，订单进入交割'); o.status = 'delivering'; await loadOrders() } catch (e) { if (e !== 'cancel') await handleError(e) }
 }
 
 async function doCompleteOrder(o) {
   try { await ElMessageBox.confirm('确认收货后订单完成，平台将向卖方结算。确定吗？', '确认收货', { type: 'warning' }); await api.value.completeOrder(o.orderId); ElMessage.success('已确认收货'); await loadOrders() } catch (e) { if (e !== 'cancel') await handleError(e) }
+}
+
+// 取消订单：仅合同双方签署完成前（confirmed）可取消，买卖双方任一方均可发起
+async function doCancelOrder(o) {
+  let reason = ''
+  try {
+    const res = await ElMessageBox.prompt('确定取消该订单吗？合同双方签署完成后将不可取消。可填写取消原因（选填）。', '取消订单', { type: 'warning', inputPlaceholder: '取消原因（选填）', confirmButtonText: '确定取消', cancelButtonText: '再想想', inputValidator: v => (v && v.length > 200) ? '原因不超过200字' : true })
+    reason = (res?.value || '').trim()
+  } catch { return } // 用户关闭/取消
+  try { await api.value.cancelOrder(o.orderId, reason); ElMessage.success('订单已取消'); await loadOrders() } catch (e) { await handleError(e) }
 }
 
 // ── 订单关联合同：预览 / 签署 / PDF ──
@@ -430,8 +469,9 @@ const orderContractContent = ref('')
 const orderContractTitle = ref('合同预览')
 const orderSignVisible = ref(false)
 const canSignOrderContract = computed(() => {
-  if (!orderContract.value || orderContract.value.status === 'completed') return false
-  const mine = isBuyerOfOrder(orderContract.value) ? orderContract.value.buyerSignStatus : orderContract.value.sellerSignStatus
+  const c = orderContract.value
+  if (!c || !['pending', 'partial_signed'].includes(c.status)) return false
+  const mine = isBuyerOfOrder(c) ? c.buyerSignStatus : c.sellerSignStatus
   return Number(mine) !== 1
 })
 
@@ -462,7 +502,7 @@ async function reloadOrderContract() {
   await loadOrders()
 }
 
-const orderProgressSteps = [{ key: 'confirmed', label: '已确认' }, { key: 'escrow_pending', label: '已托管' }, { key: 'delivering', label: '交割中' }, { key: 'completed', label: '已完成' }]
+const orderProgressSteps = [{ key: 'confirmed', label: '待签署' }, { key: 'paying', label: '付款中' }, { key: 'delivering', label: '交割中' }, { key: 'completed', label: '已完成' }]
 function getProgressIndex(o) {
   if (!o?.status) return -1
   return orderProgressSteps.findIndex(st => st.key === o.status)
@@ -477,6 +517,8 @@ function getTerminalLabel(o) {
 // ── Tab 切换自动加载 ──
 let inquirySearchTimer = null
 watch(inquiryKeyword, () => { clearTimeout(inquirySearchTimer); inquirySearchTimer = setTimeout(() => { inquiryPageNum.value = 1; loadInquiries() }, 300) })
+let orderSearchTimer = null
+watch(orderKeyword, () => { clearTimeout(orderSearchTimer); orderSearchTimer = setTimeout(() => { orderPageNum.value = 1; loadOrders() }, 300) })
 watch(tab, v => {
   // 定型文是会话唯一发送入口：进入会话默认展开，离开会话收起
   templateVisible.value = v === 'session'
@@ -504,6 +546,8 @@ onUnmounted(() => { stopChatPoll() })
 /* ── 会话列表 ── */
 .session-layout { display: flex; gap: 0; flex: 1; min-height: 0; height: auto; border: 1px solid #ebeef5; border-radius: 6px; overflow: hidden }
 .session-list-panel { width: 220px; flex-shrink: 0; border-right: 1px solid #ebeef5; overflow-y: auto; background: #fafafa }
+.session-search { position: sticky; top: 0; z-index: 1; padding: 8px; background: #fafafa; border-bottom: 1px solid #ebeef5 }
+.session-search-input { width: 100%; box-sizing: border-box }
 .session-item { padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #f0f0f0; transition: background .12s }
 .session-item:hover { background: #f0f2f5 }
 .session-item.active { background: #ecf5ff; border-left: 3px solid #409eff }
@@ -595,15 +639,15 @@ onUnmounted(() => { stopChatPoll() })
 ::-webkit-scrollbar-thumb { background: #d0d0d0; border-radius: 2px }
 ::-webkit-scrollbar-thumb:hover { background: #b0b0b0 }
 .chat-input-row { display: flex; gap: 8px; align-items: center; margin-top: 4px }
-/* 假输入框：外观与真实聊天框一致，点击整块切换定型文面板展开/收起 */
-.fake-input { flex: 1; display: flex; align-items: center; min-height: 38px; padding: 8px 12px; border: 1px solid #dcdfe6; border-radius: 6px; background: #fff; cursor: pointer; font-size: 13px; transition: border-color .15s, box-shadow .15s; user-select: none }
-.fake-input:hover { border-color: #c0c4cc }
-.fake-input.active { border-color: #409eff; box-shadow: 0 0 0 2px rgba(64, 158, 255, .12) }
-.fake-placeholder { color: #a8abb2; flex: 1 }
-.fake-input.active .fake-placeholder { color: #909399 }
-.fake-caret { width: 1px; height: 16px; background: #409eff; opacity: 0 }
-.fake-input.active .fake-caret { opacity: 1; animation: fake-caret-blink 1.1s step-end infinite }
-@keyframes fake-caret-blink { 50% { opacity: 0 } }
+/* 左下角圆角"定型文"开关按钮 + 自由文本输入 + 圆角发送按钮 */
+.template-toggle-btn { flex: none; align-self: flex-end; min-width: 84px; height: 38px; padding: 0 16px; border: 1px solid #dcdfe6; border-radius: 999px; background: #fff; color: #606266; font-size: 13px; cursor: pointer; transition: border-color .15s, color .15s, background .15s; user-select: none }
+.template-toggle-btn:hover { border-color: #c0c4cc }
+.template-toggle-btn.active { border-color: #409eff; color: #409eff; background: rgba(64, 158, 255, .08) }
+.chat-textarea { flex: 1; min-height: 38px; max-height: 120px; padding: 8px 12px; border: 1px solid #dcdfe6; border-radius: 8px; font-size: 13px; font-family: inherit; line-height: 1.5; resize: none; outline: none; transition: border-color .15s, box-shadow .15s }
+.chat-textarea:focus { border-color: #409eff; box-shadow: 0 0 0 2px rgba(64, 158, 255, .12) }
+.send-btn { flex: none; align-self: flex-end; height: 38px; padding: 0 18px; border: none; border-radius: 999px; background: #409eff; color: #fff; font-size: 13px; cursor: pointer; transition: background .15s, opacity .15s }
+.send-btn:hover { background: #66b1ff }
+.send-btn:disabled { background: #a0cfff; cursor: not-allowed }
 .status-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 500 }
 .tag-pending { background: #fdf6ec; color: #e6a23c }
 .tag-pending_seller { background: #ecf5ff; color: #409eff }

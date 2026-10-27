@@ -1,9 +1,17 @@
 <template>
   <PortalLayer :model-value="modelValue" title="签署合同" modal big :before-close="close" @update:model-value="v => !v && close()">
     <div class="sign-dialog" v-loading="loading">
-      <!-- 合同正文预览（HTML 原样渲染，含已签方签字盖章） -->
+      <!-- 合同正文预览：模板走 HTML iframe；上传件走分页 PDF 图 + 拖拽定位层 -->
       <div class="sign-preview">
-        <iframe v-if="content" class="contract-frame" :srcdoc="content" sandbox="allow-same-origin"></iframe>
+        <PdfPlacementPad
+          v-if="isUploaded && pageImageUrls.length"
+          ref="placementPadRef"
+          :pages="pageImageUrls"
+          :signature-src="signaturePreview"
+          :seal-src="sealPreview"
+          hint="上传件不支持在线编辑，请将签名/印章拖动到需要的位置后确认签署。"
+        />
+        <iframe v-else-if="content" class="contract-frame" :srcdoc="content" sandbox="allow-same-origin"></iframe>
         <div v-else class="load-state"><p>{{ loading ? '合同加载中…' : '合同内容不可用' }}</p></div>
       </div>
 
@@ -47,6 +55,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import PortalLayer from '../PortalLayer.vue'
+import PdfPlacementPad from './PdfPlacementPad.vue'
 import { usePortal } from '../../utils/portal.js'
 import { avatarUrl, contractHtml } from '../../utils/avatarUrl.js'
 
@@ -61,6 +70,16 @@ const approvedSeals = ref([])
 const selectedSeal = ref(null)
 const padEl = ref(null)
 const hasSignature = ref(false)
+const sourceType = ref('template')
+const pageImageUrls = ref([])
+const signaturePreview = ref('')
+const placementPadRef = ref(null)
+
+const isUploaded = computed(() => sourceType.value === 'uploaded')
+const sealPreview = computed(() => {
+  const s = selectedSeal.value
+  return s && s.sealImageUrl ? avatarUrl(s.sealImageUrl) : null
+})
 
 const contractId = computed(() => Number(props.contract?.contractId) || 0)
 const isBuyer = computed(() => Number(props.contract?.buyerId) === props.userId)
@@ -76,6 +95,9 @@ watch(() => props.modelValue, async v => {
   content.value = ''
   hasSignature.value = false
   selectedSeal.value = null
+  sourceType.value = 'template'
+  pageImageUrls.value = []
+  signaturePreview.value = ''
   await Promise.all([loadContent(), loadSeals()])
   await nextTick()
   initCanvas()
@@ -85,6 +107,8 @@ async function loadContent() {
   loading.value = true
   try {
     const detail = await api.value.getContractByOrder(props.contract.orderId)
+    sourceType.value = detail?.sourceType || 'template'
+    pageImageUrls.value = Array.isArray(detail?.pageImageUrls) ? detail.pageImageUrls : []
     content.value = contractHtml(detail?.content)
   } catch (e) {
     await handleError(e)
@@ -136,13 +160,24 @@ function onPointerMove(e) {
   ctx.stroke()
   hasSignature.value = true
 }
-function onPointerUp() { drawing = false }
+function onPointerUp() {
+  drawing = false
+  // 上传件需要实时把签名笔迹导出为预览图交给定位层展示/落位
+  if (isUploaded.value && hasSignature.value && padEl.value) {
+    try {
+      signaturePreview.value = padEl.value.toDataURL('image/png')
+    } catch {
+      signaturePreview.value = ''
+    }
+  }
+}
 
 function clearCanvas() {
   const canvas = padEl.value
   if (!canvas || !ctx) return
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   hasSignature.value = false
+  signaturePreview.value = ''
 }
 
 function toggleSeal(seal) {
@@ -183,6 +218,14 @@ async function submit() {
     if (!form.has('signatureImage') && !form.has('sealImage')) {
       ElMessage.warning('手写签名或印章至少选择一项')
       return
+    }
+    if (isUploaded.value) {
+      const placements = placementPadRef.value?.getPlacements?.() || []
+      if (!placements.length) {
+        ElMessage.warning('请将签名或印章拖动到合同页面后再签署')
+        return
+      }
+      form.append('placements', JSON.stringify(placements))
     }
     await api.value.signContract(contractId.value, form)
     ElMessage.success('签署成功')
