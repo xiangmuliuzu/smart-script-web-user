@@ -3,7 +3,8 @@
     <div class="drawer-tools"><button class="btn quiet sm" :disabled="reading || !messages.some(m => !m.isRead)" @click="readAll">{{ reading ? '处理中…' : '全部已读' }}</button></div>
     <PortalTabs v-model="tab" :items="tabs" drawer label="消息类型" />
     <div v-if="tab === 'notice'"><LoadState :pending="pending" :error="error" :retry="load" :empty="!pending && !error && !messages.length" empty-text="还没有新的通知" /><button v-for="message in messages" :key="message.messageId" class="msg" :data-unread="!message.isRead" @click="openMessage(message)"><span class="top"><b>{{ message.title }}</b><time>{{ dateText(message.createTime).slice(5) }}</time></span><p>{{ message.content }}</p></button></div>
-    <div v-else class="chat-panel"><div class="chat-head"><span class="avatar">平</span><div><div class="who">平台运营</div><div class="cost">有问题，随时在这里与我们沟通</div></div><button class="text-button" :disabled="chatLoading" @click="loadChat">刷新</button></div><LoadState :pending="chatLoading" :error="chatError" :retry="loadChat" /><div v-if="!chatLoading && !chatError" ref="chatBody" class="chat-body"><div v-for="message in chat" :key="message.messageId || message.msgId" class="bubble" :class="Number(message.senderId) === Number(user.userId) ? 'me' : 'them'">{{ message.content }}<time>{{ dateText(message.createTime || message.createdAt).slice(5) }}</time></div><p v-if="!chat.length" class="cost">说说你遇到的问题，平台会为你跟进。</p></div><form class="chat-input" @submit.prevent="send"><input v-model="text" maxlength="2000" placeholder="输入消息…" aria-label="输入消息" :disabled="chatLoading || !!chatError" /><button class="btn" :disabled="sending || !text.trim() || !sessionId || !!chatError">{{ sending ? '发送中…' : '发送' }}</button></form></div>
+    <div v-else-if="!activeSession"><LoadState :pending="sessionsLoading" :error="sessionsError" :retry="loadSessions" :empty="!sessionsLoading && !sessionsError && !sessions.length" empty-text="暂无沟通会话" /><button v-for="session in sessions" :key="session.sessionId" class="msg" :data-unread="session.unread > 0" @click="openSession(session)"><span class="top"><b>{{ sessionTitle(session) }}</b><time>{{ dateText(session.lastMessageTime || session.createdAt).slice(5) }}</time></span><p>{{ session.lastMessage || '发起会话沟通…' }}</p></button></div>
+    <div v-else class="chat-panel"><div class="chat-head"><button class="text-button back" @click="backToSessions">← 返回</button><div class="peer"><span class="avatar">{{ (activeSession.peerName || '平').slice(0, 1) }}</span><div><div class="who">{{ sessionTitle(activeSession) }}</div><div class="cost">{{ activeSession.peerName || '平台运营' }}</div></div></div><button class="text-button" :disabled="chatLoading" @click="loadChat">刷新</button></div><LoadState :pending="chatLoading" :error="chatError" :retry="loadChat" /><div v-if="!chatLoading && !chatError" ref="chatBody" class="chat-body"><div v-for="message in chat" :key="message.messageId || message.msgId" class="bubble" :class="Number(message.senderId) === Number(user.userId) ? 'me' : 'them'">{{ message.content }}<time>{{ dateText(message.createTime || message.createdAt).slice(5) }}</time></div><p v-if="!chat.length" class="cost">说说你遇到的问题，平台会为你跟进。</p></div><form class="chat-input" @submit.prevent="send"><input v-model="text" maxlength="2000" placeholder="输入消息…" aria-label="输入消息" :disabled="chatLoading || !!chatError" /><button class="btn" :disabled="sending || !text.trim() || !sessionId || !!chatError">{{ sending ? '发送中…' : '发送' }}</button></form></div>
     <PortalLayer v-model="detailVisible" :title="selected?.title || '通知详情'" modal><p class="cost">{{ dateText(selected?.createTime) }}</p><p class="notification-content">{{ selected?.content }}</p></PortalLayer>
   </PortalLayer>
 </template>
@@ -26,6 +27,10 @@ const error = ref('')
 const chat = ref([])
 const chatLoading = ref(false)
 const chatError = ref('')
+const sessions = ref([])
+const sessionsLoading = ref(false)
+const sessionsError = ref('')
+const activeSession = ref(null)
 const sessionId = ref(null)
 const text = ref('')
 const sending = ref(false)
@@ -50,10 +55,31 @@ async function openMessage(message) {
     else { selected.value = { ...message, content: detail?.content || message.content }; detailVisible.value = true }
   } catch (failure) { await handleError(failure) }
 }
+async function loadSessions() {
+  if (sessionsLoading.value) return
+  sessionsLoading.value = true; sessionsError.value = ''
+  try { sessions.value = await api.value.listSessions() }
+  catch (failure) { sessionsError.value = failure.message; await handleError(failure) }
+  finally { sessionsLoading.value = false }
+}
+function sessionTitle(session) { return session.businessName || session.peerName || '平台沟通' }
+async function openSession(session) {
+  activeSession.value = session
+  sessionId.value = session.sessionId
+  chat.value = []; chatError.value = ''
+  chatLoading.value = true
+  try {
+    chat.value = await api.value.listChat(session.sessionId)
+    session.unread = 0
+    try { await api.value.readChatSession(session.sessionId); await refreshUnread() } catch { /* 已读失败不阻塞展示 */ }
+  } catch (failure) { chatError.value = failure.message; await handleError(failure) }
+  finally { chatLoading.value = false; await nextTick(); chatBody.value?.scrollTo({ top: chatBody.value.scrollHeight }) }
+}
+function backToSessions() { activeSession.value = null; sessionId.value = null; chat.value = []; chatError.value = '' }
 async function loadChat() {
-  if (chatLoading.value) return
+  if (chatLoading.value || !sessionId.value) return
   chatLoading.value = true; chatError.value = ''
-  try { const session = await api.value.openChat(); if (!session?.sessionId) throw new Error('暂时无法建立会话，请重试'); sessionId.value = session.sessionId; chat.value = await api.value.listChat(sessionId.value) }
+  try { chat.value = await api.value.listChat(sessionId.value) }
   catch (failure) { chatError.value = failure.message; await handleError(failure) }
   finally { chatLoading.value = false; await nextTick(); chatBody.value?.scrollTo({ top: chatBody.value.scrollHeight }) }
 }
@@ -65,7 +91,7 @@ async function send() {
   catch (failure) { await handleError(failure) }
   finally { sending.value = false }
 }
-watch(tab, value => { if (value === 'talk') loadChat() })
+watch(tab, value => { if (value === 'talk' && !activeSession.value) loadSessions() })
 watch(() => props.initialTab, value => { if (value) tab.value = value })
-onMounted(() => { load(); if (tab.value === 'talk') loadChat() })
+onMounted(() => { load(); if (tab.value === 'talk') loadSessions() })
 </script>

@@ -95,6 +95,9 @@ button.workitem { text-align: left; padding: 0; width: 100%; font: inherit; colo
 .chat-panel { display: flex; flex-direction: column; height: calc(100dvh - 177px); }
 .chat-panel .chat-head { flex: none; }
 .chat-panel .chat-head .text-button { margin-left: auto; }
+.chat-panel .chat-head .text-button.back { margin-left: 0; }
+.chat-panel .chat-head .peer { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.chat-panel .chat-head .peer .who { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chat-panel .chat-body { flex: 1; overflow-y: auto; }
 .bubble { white-space: pre-wrap; overflow-wrap: anywhere; }
 .chat-input { margin-top: auto; flex: none; }
