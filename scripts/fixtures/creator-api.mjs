@@ -11,6 +11,7 @@ export async function mockCreatorApi(context, apiPrefix = '/dev-api') {
     { workId: 3, title: '第三次告白', status: 'draft', genreId: 2, summary: '电台主播的故事。' },
     { workId: 4, title: '山河故人', status: 'published', genreId: 2, summary: '父女的重逢。' }
   ]
+  works.forEach(work => { work.price = 0 })
   const chapters = Object.fromEntries(works.map(work => [work.workId, ['雨夜的乘客', '无人认领的行李', '十二号车厢'].map((chapterTitle, index) => ({ chapterId: work.workId * 10 + index, chapterNo: index + 1, chapterTitle, content: '雨夜，列车驶入站台。', status: index === 2 ? 'revision' : '0', wordCount: 10 }))]))
   const messages = [{ messageId: 1, title: '审核通知', read: false, summary: '请查看作品审核结果', createdAt: '2026-10-14 09:00' }]
   const profile = { nickname: user.nickname, avatar: '', bio: '', phoneMasked: '152****5578' }

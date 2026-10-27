@@ -1,0 +1,66 @@
+import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
+import { mockCreatorApi } from './fixtures/creator-api.mjs'
+let playwright
+try { playwright = createRequire(import.meta.url)('playwright') }
+catch { playwright = createRequire(new URL('../../shared/scripts/package.json', import.meta.url))('playwright') }
+const browser = await playwright.chromium.launch({ headless: true })
+const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+const { works } = await mockCreatorApi(context)
+works[0].cover = 'http://old-host/profile/upload/missing.png'
+works[0].price = 2999
+works[0].tradeType = 'exclusive'
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nmQAAAABJRU5ErkJggg==', 'base64')
+await context.route('**/dev-api/profile/upload/**', route => route.request().url().endsWith('missing.png')
+  ? route.fulfill({ status: 404 })
+  : route.fulfill({ status: 200, contentType: 'image/png', body: png }))
+await context.addInitScript(() => localStorage.setItem('PcUser-Token', 'browser-test-only'))
+const page = await context.newPage()
+try {
+  await page.goto('http://127.0.0.1:3001/user/works')
+  await page.locator('.workitem').filter({ hasText: '归途列车' }).click()
+  await page.getByRole('button', { name: '作品设置', exact: true }).click()
+  const drawer = page.getByRole('dialog', { name: '作品设置' })
+  await drawer.getByText('封面加载失败').waitFor()
+  await page.waitForTimeout(400)
+  assert.equal(await drawer.locator('.cover-preview img').count(), 0)
+  const upload = drawer.getByLabel('上传作品封面')
+  const uploadBox = await upload.boundingBox()
+  const labelBox = await drawer.locator('.cover-upload').boundingBox()
+  assert.ok(uploadBox.width > 0 && Math.abs(uploadBox.width - labelBox.width) < 3)
+  assert.ok(Math.abs(uploadBox.height - labelBox.height) < 3)
+  await page.screenshot({ path: process.env.TEMP + '/work-settings-desktop.png' })
+  await upload.setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: Buffer.from('test') })
+  await drawer.locator('.cover-preview img').waitFor()
+  await page.waitForFunction(() => document.querySelector('.cover-preview img')?.naturalWidth > 0)
+  assert.equal(await drawer.getByLabel('定价（元）').inputValue(), '2999')
+  assert.equal(await drawer.getByLabel('合作方式').inputValue(), 'exclusive')
+  await drawer.getByLabel('定价（元）').fill('120.50')
+  await drawer.getByLabel('合作方式').selectOption('non_exclusive')
+  await drawer.getByLabel('简介', { exact: true }).fill('更新后的作品简介')
+  await drawer.getByRole('button', { name: '保存设置', exact: true }).click()
+  await page.getByText('更新后的作品简介', { exact: true }).waitFor()
+  assert.equal(works[0].cover, '/profile/upload/test-script.txt')
+  assert.equal(works[0].price, '120.50')
+  assert.equal(works[0].tradeType, 'non_exclusive')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByRole('button', { name: '作品设置', exact: true }).click()
+  const mobile = page.getByRole('dialog', { name: '作品设置' })
+  await mobile.getByRole('region', { name: '作品信息' }).waitFor()
+  assert.equal(await mobile.getByLabel('定价（元）').inputValue(), '120.50')
+  assert.equal(await mobile.getByLabel('合作方式').inputValue(), 'non_exclusive')
+  await page.waitForTimeout(400)
+  assert.equal(await mobile.locator('.settings-grid').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length), 1)
+  assert.equal(await mobile.locator('.work-settings').evaluate(el => el.scrollWidth > el.clientWidth), false)
+  await page.screenshot({ path: process.env.TEMP + '/work-settings-mobile.png' })
+  await mobile.getByLabel('简介', { exact: true }).fill('未保存的修改')
+  await mobile.getByRole('button', { name: '取消', exact: true }).click()
+  const confirmation = page.getByRole('dialog', { name: '未保存的修改' })
+  await confirmation.getByRole('button', { name: '继续编辑' }).click()
+  assert.equal(await mobile.getByLabel('简介', { exact: true }).inputValue(), '未保存的修改')
+  await mobile.getByRole('button', { name: '取消', exact: true }).click()
+  await confirmation.getByRole('button', { name: '放弃修改' }).click()
+  await mobile.waitFor({ state: 'hidden' })
+  console.log('PASS work settings layout, image failure, upload and save on desktop and mobile')
+} finally { await browser.close() }
+
