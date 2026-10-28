@@ -3,8 +3,43 @@ import assert from 'node:assert/strict'
 import { safeRedirect, request, getToken } from '../src/auth.js'
 import { portal } from '../src/portal.js'
 import * as api from '../src/api/creator.js'
-import { canEdit, validateWork, validateChapter, validateFile, wordCount, dateText, quotaTip, outlineToText } from '../src/utils/creator.js'
+import { canEdit, validateWork, validateChapter, validateFile, wordCount, dateText, quotaTip, outlineToText, outlineChapters, matchOutlineChapter, planOutlineChapters } from '../src/utils/creator.js'
 const storage = new Map([[portal.tokenKey, 'test-user-token']])
+test('chapter outlines are split by explicit episode headings without inventing chapters', () => {
+  assert.deepEqual(outlineChapters('书名：故事\n第一集：相遇\n两人在车站相遇。\n第二集：告别\n两人分别。'), [
+    { title: '第一集：相遇', summary: '两人在车站相遇。' },
+    { title: '第二集：告别', summary: '两人分别。' }
+  ])
+  assert.deepEqual(outlineChapters('第一幕：相遇\n故事开始'), [])
+  assert.deepEqual(outlineChapters('第一集：相遇\n内容\n第一集：相遇\n内容'), [])
+})
+test('outlines recognize common chapter numbers and matching avoids ambiguity', () => {
+  const outline = '第１集（相遇）\n剧情一\n第贰章告别\n剧情二\n第3集 重逢\n剧情三\n第四回·终章\n剧情四'
+  assert.deepEqual(outlineChapters(outline).map(x => x.title), ['第１集（相遇）', '第贰章告别', '第3集 重逢', '第四回·终章'])
+  const chapter = { chapterTitle: '第一章：相遇', content: '' }
+  assert.equal(matchOutlineChapter('第１集（相遇）', [chapter]).chapter, chapter)
+  assert.equal(matchOutlineChapter('第2章：告别', [{ chapterTitle: '告别' }]).chapter.chapterTitle, '告别')
+  assert.equal(matchOutlineChapter('第2章：告别', [{ chapterTitle: '第二集：重逢' }]).conflict, true)
+  assert.equal(matchOutlineChapter('第2章：告别', [{ chapterTitle: '第二集' }, { chapterTitle: '第2章：告别' }]).conflict, true)
+  assert.deepEqual(outlineChapters('第一集：相遇\n剧情\n第1章 相遇\n剧情'), [])
+  assert.deepEqual(outlineChapters('第1集：相遇\n剧情\n第一章：告别\n剧情'), [])
+  assert.equal(outlineChapters('一、相遇\n剧情\n二、告别\n剧情').length, 2)
+  assert.equal(matchOutlineChapter('第两百零一集：相遇', [{ chapterTitle: '第２０１章相遇' }]).chapter.chapterTitle, '第２０１章相遇')
+  assert.deepEqual(outlineChapters('第一集：相遇\n剧情\n2. 主角到站\n相遇'), [])
+})
+test('outline plan checks actual sequence, names, and safe append order', () => {
+  const entries = outlineChapters('第一集：相遇\n剧情\n第二集：告别\n剧情\n第三集：重逢\n剧情\n第四集：终章\n剧情')
+  const chapters = [{ chapterId: 1, chapterNo: 1, chapterTitle: '序幕', content: '' }, { chapterId: 2, chapterNo: 2, chapterTitle: '第2集：告别', content: '正文' }, { chapterId: 3, chapterNo: 4, chapterTitle: '第3集：重逢', content: '' }]
+  const plan = planOutlineChapters(entries, chapters)
+  assert.deepEqual(plan.map(x => x.action), ['conflict', 'skip', 'conflict', 'conflict'])
+  const fresh = planOutlineChapters(outlineChapters('第二集：告别\n剧情'), [{ draftId: 'a', chapterTitle: '第 1 集', content: '' }])
+  assert.equal(fresh[0].action, 'conflict')
+  const ok = planOutlineChapters(outlineChapters('第一集：相遇\n剧情\n第二集：告别\n剧情'), [{ draftId: 'a', chapterTitle: '第 1 集', content: '' }])
+  assert.deepEqual(ok.map(x => x.action), ['fill', 'create'])
+  assert.equal(planOutlineChapters(outlineChapters('第二集：相遇\n剧情'), [{ chapterId: 1, chapterNo: 1, chapterTitle: '第一集：相遇', content: '' }])[0].action, 'conflict')
+  assert.equal(planOutlineChapters(outlineChapters('第一集：相遇\n剧情'), [{ chapterId: 1, chapterNo: 2, chapterTitle: '第一集：相遇', content: '' }])[0].action, 'conflict')
+  assert.equal(planOutlineChapters(outlineChapters('第一集：相遇\n剧情'), [{ chapterTitle: '自定义章节', content: '' }])[0].action, 'conflict')
+})
 globalThis.localStorage = { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) }
 
 test('work deletion sends only the code and shares App endpoints with authenticated requests', async t => {
@@ -49,6 +84,18 @@ test('chapter trial flags round-trip through authenticated saves without changin
   assert.deepEqual(JSON.parse(calls[2].options.body), { chapterTitle: '取消试读', content: '原文', isFree: '0' })
   assert.equal(calls[2].options.method, 'PUT')
   assert.equal(calls[2].options.headers.Authorization, 'Bearer test-user-token')
+})
+test('publishing a chapter updates only its visibility status', async t => {
+  let call
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    call = { url, options }
+    return { ok: true, json: async () => ({ code: 200, data: {} }) }
+  })
+  await api.publishChapter(8)
+  assert.ok(call.url.endsWith('/api/v1/content/chapters/8'))
+  assert.equal(call.options.method, 'PUT')
+  assert.deepEqual(JSON.parse(call.options.body), { status: '0' })
+  assert.equal(call.options.headers.Authorization, 'Bearer test-user-token')
 })
 test('redirect permits implemented work routes and rejects path tricks', () => {
   for (const path of ['/works', '/works/create', '/works/12?tab=chapter#review']) assert.equal(safeRedirect(path), path)

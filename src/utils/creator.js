@@ -24,6 +24,89 @@ export function outlineToText(value) {
   appendOutline(lines, value, 0, null)
   return lines.join('\n').trim()
 }
+const CHINESE_DIGITS = { 零: 0, 〇: 0, 一: 1, 壹: 1, 二: 2, 两: 2, 兩: 2, 贰: 2, 貳: 2, 三: 3, 叁: 3, 參: 3, 四: 4, 肆: 4, 五: 5, 伍: 5, 六: 6, 陆: 6, 陸: 6, 七: 7, 柒: 7, 八: 8, 捌: 8, 九: 9, 玖: 9 }
+const CHINESE_UNITS = { 十: 10, 拾: 10, 百: 100, 佰: 100, 千: 1000, 仟: 1000 }
+const NUMBER = '0-9零〇一壹二两兩贰貳三叁參四肆五伍六陆陸七柒八捌九玖十拾百佰千仟'
+function chapterNumber(raw) {
+  if (/^\d+$/.test(raw)) { const value = Number(raw); return Number.isSafeInteger(value) && value > 0 ? value : null }
+  if (!/[十拾百佰千仟]/.test(raw)) { const value = Number([...raw].map(c => CHINESE_DIGITS[c]).join('')); return value > 0 ? value : null }
+  let total = 0, digit = 0, lastUnit = 10000
+  for (const char of raw) {
+    if (char in CHINESE_DIGITS) digit = CHINESE_DIGITS[char]
+    else {
+      const unit = CHINESE_UNITS[char]
+      if (!unit || unit >= lastUnit) return null
+      total += (digit || 1) * unit; digit = 0; lastUnit = unit
+    }
+  }
+  return total + digit || null
+}
+function chapterIdentity(title) {
+  const normalized = String(title || '').normalize('NFKC').trim()
+  const numbered = normalized.match(new RegExp(`^(?:第\\s*([${NUMBER}]+)\\s*[章节節集回]|([${NUMBER}]+)\\s*[章节節集回]|([${NUMBER}]+)\\s*[.、:：)）])\\s*(.*)$`))
+  const number = numbered ? chapterNumber(numbered[1] || numbered[2] || numbered[3]) : null
+  const name = (numbered ? numbered[4] : normalized).replace(/^[\s:：·、.\-—(（]+|[\s)）]+$/g, '').replace(/\s+/g, '')
+  return { number, name, numbered: Boolean(numbered && number), explicit: Boolean(numbered && (numbered[1] || numbered[2])) }
+}
+// 按编号及名称匹配；同编号不同名称或多个候选视为冲突，不猜测。
+export function matchOutlineChapter(title, chapters) {
+  const wanted = chapterIdentity(title)
+  const candidates = chapters.filter(chapter => {
+    const current = chapterIdentity(chapter.chapterTitle)
+    if (wanted.number && current.number) return wanted.number === current.number
+    return Boolean(wanted.name && current.name && wanted.name === current.name)
+  })
+  if (candidates.length !== 1) return { chapter: null, conflict: candidates.length > 1 }
+  const current = chapterIdentity(candidates[0].chapterTitle)
+  if (wanted.name && current.name && wanted.name !== current.name) return { chapter: null, conflict: true }
+  return { chapter: candidates[0], conflict: false }
+}
+// 只识别明确的章节标题；无法确定边界或编号重复时不自动写入。
+export function outlineChapters(text) {
+  const chapters = []
+  const kinds = new Set()
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const heading = line.trim().replace(/^#{1,6}\s*/, '').replace(/^\*\*(.*?)\*\*$/, '$1')
+    if (chapterIdentity(heading).numbered) {
+      kinds.add(chapterIdentity(heading).explicit ? 'explicit' : 'list')
+      chapters.push({ title: heading, summary: '' })
+    } else if (chapters.length) {
+      chapters[chapters.length - 1].summary += line + '\n'
+    }
+  }
+  for (const chapter of chapters) chapter.summary = chapter.summary.trim()
+  const identities = chapters.map(chapter => chapterIdentity(chapter.title))
+  const names = identities.map(identity => identity.name).filter(Boolean)
+  if (kinds.size > 1 || chapters.some(chapter => chapter.title.length > 100 || !chapter.summary) || new Set(identities.map(identity => identity.number)).size !== chapters.length || new Set(names).size !== names.length) return []
+  return chapters
+}
+// 新章由后端按现有最大序号追加，无法安全推断的情况一律交给作者处理。
+export function planOutlineChapters(items, chapters) {
+  const placeholder = chapters.length === 1 && !chapters[0].chapterId && chapters[0].chapterTitle === '第 1 集' && !documentText(chapters[0].content).trim() ? chapters[0] : null
+  const invalid = chapters.some(chapter => chapter !== placeholder && (!chapter.chapterId || !Number.isSafeInteger(Number(chapter.chapterNo)) || Number(chapter.chapterNo) < 1))
+  const existing = chapters.map(chapter => ({ chapter, number: chapter === placeholder ? 1 : Number(chapter.chapterNo), identity: chapterIdentity(chapter.chapterTitle) }))
+  const claimed = new Set()
+  let next = Math.max(0, ...existing.filter(x => x.chapter !== placeholder).map(x => x.number)) + 1
+  return items.map(item => {
+    const wanted = chapterIdentity(item.title)
+    const result = (action, reason, chapter = null) => ({ ...item, action, reason, chapter })
+    if (invalid) return result('conflict', '存在未保存或序号不明的章节，请先保存或处理')
+    const candidates = existing.filter(x => x.number === wanted.number || x.identity.number === wanted.number || (wanted.name && x.identity.name === wanted.name))
+    if (candidates.length > 1) return result('conflict', '多个已有章节的序号或名称匹配')
+    if (candidates.length === 1) {
+      const found = candidates[0]
+      if (found.number !== wanted.number || (found.identity.number && found.identity.number !== found.number) || (wanted.name && found.identity.name && wanted.name !== found.identity.name)) return result('conflict', `与已有第 ${found.number} 章「${found.chapter.chapterTitle}」的序号或名称冲突`)
+      if (claimed.has(found.chapter)) return result('conflict', '同一已有章节被多次匹配')
+      claimed.add(found.chapter)
+      if (documentText(found.chapter.content).trim()) return result('skip', '已有正文', found.chapter)
+      if (found.chapter === placeholder) next = 2
+      return result('fill', `填充已有第 ${found.number} 章「${found.chapter.chapterTitle}」`, found.chapter)
+    }
+    if (wanted.number !== next) return result('conflict', `不能按该序号追加；下一章实际序号为 ${next}`)
+    next++
+    return result('create', `新建第 ${wanted.number} 章`)
+  })
+}
 function appendOutline(lines, node, depth, parentKey) {
   if (node == null) return
   if (Array.isArray(node)) { for (const item of node) appendOutline(lines, item, depth + 1, parentKey); return }

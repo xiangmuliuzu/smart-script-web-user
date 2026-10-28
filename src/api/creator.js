@@ -19,6 +19,7 @@ export const sendWorkDeletionCode = id => data(`/api/v1/content/works/${encodeUR
 export const deleteWork = (id, code) => data(`/api/v1/content/works/${encodeURIComponent(id)}`, { method: 'DELETE', body: { code } })
 export const submitWork = id => data(workPath(id) + '/submit', { method: 'POST' })
 export const saveChapter = (id, chapter) => data(workPath(id) + '/chapters' + (chapter.chapterId ? '/' + encodeURIComponent(chapter.chapterId) : ''), { method: chapter.chapterId ? 'PUT' : 'POST', body: { chapterTitle: chapter.chapterTitle.trim(), content: chapter.content, isFree: chapter.isFree } })
+export const publishChapter = chapterId => data('/api/v1/content/chapters/' + encodeURIComponent(chapterId), { method: 'PUT', body: { status: '0' } })
 export const deleteChapter = (id, chapterId) => data(workPath(id) + '/chapters/' + encodeURIComponent(chapterId), { method: 'DELETE' })
 export async function upload(file, purpose = 'script') {
   const body = new FormData()

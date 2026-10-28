@@ -4,8 +4,8 @@
   <div v-if="!pending && !error && work" class="work-detail-grid">
     <section class="work-detail-main">
       <div class="workhead"><div class="wh-cover"><img v-if="work.cover" :src="work.cover" alt="作品封面" /><span v-else class="glyph">{{ work.title?.slice(0, 1) }}</span></div><div class="wh-body"><div class="row"><h1 class="detail-title">{{ work.title }}</h1><span class="stamp sm" :data-s="stateOf(work.status).stamp">{{ stateOf(work.status).label }}</span></div><p class="work-info">短剧 · {{ work.genreName || '未分类' }} ｜ {{ work.episodeCount ?? chapters.length }} 章 ｜ {{ words(work.wordCount) }} ｜ 最近更新 {{ dateText(work.updateTime).slice(5) }}</p><p class="wh-intro">{{ work.summary || '暂无简介' }}</p></div></div>
-      <div class="row section-actions"><button class="btn" :disabled="!editable" @click="editChapter(null)">＋ 写新章节</button><span class="cost">{{ work.status === 'reviewing' ? '审核中暂不可编辑，可查看审核进度' : '作品 = 章节集合，先写章节再发布' }}</span></div>
-      <div class="tbl"><table><thead><tr><th class="seq-col">序</th><th>章节标题</th><th class="num">字数</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="chapter in chapters" :key="chapter.chapterId"><td class="num">{{ String(chapter.chapterNo).padStart(2, '0') }}</td><td>{{ chapter.chapterTitle }} <span v-if="chapter.isFree === '1'" class="tag ok">试读</span></td><td class="num">{{ Number(chapter.wordCount || 0).toLocaleString() }}</td><td><span class="tag" :class="chapterState(chapter.status).tone">{{ chapterState(chapter.status).label }}</span></td><td class="ops"><button class="btn sm" :class="{ quiet: chapter.status !== 'revision' }" :disabled="!editable || deleting !== null" @click="editChapter(chapter)">{{ chapter.status === 'revision' ? '修改' : '编辑' }}</button><button class="btn quiet sm" :disabled="!editable || deleting !== null" @click="remove(chapter)">{{ deleting === chapter.chapterId ? '删除中…' : '删除' }}</button></td></tr></tbody></table></div>
+      <div class="row section-actions"><button class="btn" :disabled="!editable" @click="editChapter(null)">＋ 写新章节</button><span class="cost">{{ work.status === 'reviewing' ? '审核中暂不可编辑，可查看审核进度' : '发布章节并通过作品审核后，试读章节可供读者免费阅读' }}</span></div>
+      <div class="tbl"><table><thead><tr><th class="seq-col">序</th><th>章节标题</th><th class="num">字数</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="chapter in chapters" :key="chapter.chapterId"><td class="num">{{ String(chapter.chapterNo).padStart(2, '0') }}</td><td>{{ chapter.chapterTitle }} <span v-if="chapter.isFree === '1'" class="tag ok">试读</span></td><td class="num">{{ Number(chapter.wordCount || 0).toLocaleString() }}</td><td><span class="tag" :class="chapterState(chapter.status).tone">{{ chapterState(chapter.status).label }}</span></td><td class="ops"><button v-if="chapter.status === '1'" class="btn sm" :disabled="!editable || publishing !== null || deleting !== null" @click="publish(chapter)">{{ publishing === chapter.chapterId ? '发布中…' : '发布' }}</button><button class="btn sm" :class="{ quiet: chapter.status !== 'revision' }" :disabled="!editable || deleting !== null || publishing !== null" @click="editChapter(chapter)">{{ chapter.status === 'revision' ? '修改' : '编辑' }}</button><button class="btn quiet sm" :disabled="!editable || deleting !== null || publishing !== null" @click="remove(chapter)">{{ deleting === chapter.chapterId ? '删除中…' : '删除' }}</button></td></tr></tbody></table></div>
       <LoadState :empty="!chapters.length" empty-text="还没有章节，写下故事的第一幕。" />
     </section>
     <aside class="work-detail-side">
@@ -42,6 +42,7 @@ const error = ref('')
 const reviewError = ref('')
 const submitting = ref(false)
 const deleting = ref(null)
+const publishing = ref(null)
 const settingsVisible = ref(false)
 const deleteVisible = ref(false)
 const versionsVisible = ref(false)
@@ -50,8 +51,7 @@ const versionError = ref('')
 const versions = ref([])
 const editable = computed(() => canEdit(user.value, work.value))
 const reviewLabels = { approved: '通过', pending: '等待审核', ai_reviewing: 'AI 审核中', reviewing: '审核中', revision: '需修改', rejected: '驳回' }
-// 章节 0/1 是正常/停用标记，不等于审核通过。
-const chapterState = status => status === '0' ? { label: '已保存', tone: 'off' } : status === '1' ? { label: '已停用', tone: 'bad' } : status === 'approved' ? { label: '已通过', tone: 'ok' } : stateOf(status)
+const chapterState = status => status === '0' ? { label: '已发布', tone: 'ok' } : status === '1' ? { label: '草稿', tone: 'off' } : status === 'approved' ? { label: '已通过', tone: 'ok' } : stateOf(status)
 async function loadReviews() {
   reviewError.value = ''
   try { reviews.value = await api.value.listReviews(route.params.id) }
@@ -66,6 +66,13 @@ async function load() {
 function editChapter(chapter) {
   if (!editable.value) return
   return router.push({ path: '/works/create', query: { workId: work.value.workId, chapterId: chapter?.chapterId ?? 'new' } })
+}
+async function publish(chapter) {
+  if (!editable.value || publishing.value !== null || deleting.value !== null) return
+  publishing.value = chapter.chapterId
+  try { await api.value.publishChapter(chapter.chapterId); ElMessage.success('章节已发布'); await load() }
+  catch (failure) { await handleError(failure) }
+  finally { publishing.value = null }
 }
 async function remove(chapter) {
   if (!editable.value || deleting.value !== null) return
