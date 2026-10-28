@@ -9,7 +9,8 @@
           <button v-if="realNameStatus && realNameStatus !== 'APPROVED'" class="chip verify-chip" @click="openPanel('account', 'profile')">⚠ 实名认证{{ realNameStatus === 'PENDING' ? '审核中' : '未完成' }}</button>
           <button class="nav-icon" aria-label="我的合作" @click="openPanel('cooperation', 'inquiry')"><span class="ico"><el-icon><HandshakeIcon /></el-icon></span><span class="lbl">我的合作</span></button>
           <button class="nav-icon" aria-label="版权与收益" @click="openPanel('rights', 'apply')"><span class="ico"><el-icon><Collection /></el-icon></span><span class="lbl">版权与收益</span></button>
-          <button class="nav-icon" aria-label="消息" @click="openPanel('messages', 'notice')"><span class="ico"><el-icon><Bell /></el-icon><span v-if="unread" class="badge">{{ unread > 99 ? '99+' : unread }}</span></span><span class="lbl">消息</span></button>
+          <button class="nav-icon" aria-label="消息" @click="openPanel('messages')"><span class="ico"><el-icon><Bell /></el-icon><span v-if="unread" class="badge">{{ unread > 99 ? '99+' : unread }}</span></span><span class="lbl">消息</span></button>
+          <button class="nav-icon" aria-label="平台客服" @click="openPanel('chat')"><span class="ico"><el-icon><ChatDotRound /></el-icon><span v-if="chatUnread" class="badge">{{ chatUnread > 99 ? '99+' : chatUnread }}</span></span><span class="lbl">平台客服</span></button>
           <el-dropdown trigger="click" @command="accountCommand">
             <button class="avatar-btn" aria-label="账号菜单"><el-avatar class="avatar" :size="28" :src="avatarUrl(user.avatar)" :alt="displayName + '的头像'">{{ displayName.slice(0, 1) }}</el-avatar><em>{{ displayName }}</em><el-icon><ArrowDown /></el-icon></button>
             <template #dropdown><el-dropdown-menu class="portal-menu"><div class="who"><b>{{ displayName }}</b><span>{{ user.userName || '平台用户' }}</span></div><el-dropdown-item command="profile">个人资料</el-dropdown-item><el-dropdown-item command="feedback">意见反馈</el-dropdown-item><el-dropdown-item command="logout" divided :disabled="leaving">退出登录</el-dropdown-item></el-dropdown-menu></template>
@@ -17,7 +18,8 @@
         </div>
       </header>
       <main class="portal-main" :class="{ 'portal-main-editor': route.path.endsWith('/create') }"><router-view :key="route.path" /></main>
-      <MessagesPanel v-if="panel === 'messages'" v-model="panelVisible" :initial-tab="panelTab" />
+      <MessagesPanel v-if="panel === 'messages'" v-model="panelVisible" />
+      <PlatformChatPanel v-if="panel === 'chat'" v-model="panelVisible" />
       <CooperationPanel v-if="panel === 'cooperation'" v-model="panelVisible" :initial-tab="panelTab" />
       <RightsPanel v-if="panel === 'rights'" v-model="panelVisible" :initial-tab="panelTab" />
       <AccountPanel v-if="panel === 'account'" v-model="panelVisible" :initial-tab="panelTab" />
@@ -28,12 +30,13 @@
 import { computed, onMounted, provide, ref, shallowRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Bell, Collection, Suitcase as HandshakeIcon, ArrowDown } from '@element-plus/icons-vue'
+import { Bell, ChatDotRound, Collection, Suitcase as HandshakeIcon, ArrowDown } from '@element-plus/icons-vue'
 import { getInfo, isAuthFailure, logout } from '../auth.js'
 import { portalKey } from '../utils/portal.js'
 import { avatarUrl } from '../utils/avatarUrl.js'
 import LoadState from '../components/LoadState.vue'
 import MessagesPanel from '../views/panels/Messages.vue'
+import PlatformChatPanel from '../views/panels/PlatformChat.vue'
 import CooperationPanel from '../views/panels/Cooperation.vue'
 import RightsPanel from '../views/panels/Rights.vue'
 import AccountPanel from '../views/panels/Account.vue'
@@ -45,6 +48,7 @@ const pending = ref(true)
 const error = ref('')
 const leaving = ref(false)
 const unread = ref(0)
+const chatUnread = ref(0)
 const realNameStatus = ref('')
 const panel = ref('')
 const panelTab = ref('')
@@ -61,6 +65,8 @@ async function handleError(failure) {
 }
 async function refreshUnread() {
   try { unread.value = Number(await api.value.unreadCount()) || 0 }
+  catch (failure) { if (isAuthFailure(failure)) await handleError(failure) }
+  try { chatUnread.value = Number(await api.value.chatUnreadCount()) || 0 }
   catch (failure) { if (isAuthFailure(failure)) await handleError(failure) }
 }
 async function load() {

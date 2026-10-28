@@ -179,18 +179,22 @@ export const getAiQuota = async userId => {
   const result = await data(`/api/v1/ai/quota/balance?userId=${encodeURIComponent(userId)}`)
   return { available: Number(result.availableQuota) || 0, records: result.records || [] }
 }
-export const listMessages = async () => asList(await data('/api/v1/messages?pageSize=100')).map(item => ({ ...item, isRead: item.read, content: item.summary, createTime: item.createdAt }))
+// 创作者端=卖方门户：交易通知只取 SELLER/BOTH（及无受众的通用通知），买方视角通知（如询盘已被接受）不进此端。
+export const listMessages = async () => asList(await data('/api/v1/messages' + qs({ pageSize: 100, portalRole: 'SELLER' }))).map(item => ({ ...item, isRead: item.read, content: item.summary, createTime: item.createdAt }))
 export const getMessage = id => data(`/api/v1/messages/${encodeURIComponent(id)}`)
 export const unreadCount = async () => (await data('/api/v1/messages/unread-count')).total
 export const readMessage = id => data(`/api/v1/messages/${encodeURIComponent(id)}/read`, { method: 'PUT' })
 export const readAllMessages = () => data('/api/v1/messages/read-all', { method: 'PUT' })
 export const openChat = () => data('/api/v1/users/me/chat/sessions', { method: 'POST', body: { businessType: 'GENERAL', businessName: '平台沟通' } })
 export const getSessionDetail = id => data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}`)
-export const listSessions = async () => asList(await data('/api/v1/users/me/chat/sessions'))
+// 「与平台沟通」只列与管理员/平台的会话（sessionType=ADMIN，后端含 ADMIN/CHAT），过滤掉与交易对手的个人会话（TRADE）。
+export const listSessions = async () => asList(await data('/api/v1/users/me/chat/sessions' + qs({ sessionType: 'ADMIN' })))
 export const listTradeSessions = () => data('/api/v1/users/me/chat/sessions?sessionType=TRADE')
 export const listChat = async id => asList(await data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/messages`))
 export const sendChat = (id, content) => data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/messages`, { method: 'POST', body: { msgType: 'TEXT', content } })
 export const readChatSession = id => data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/read`, { method: 'PUT' })
+// 聊天未读总数（顶栏「沟通」徽标）；后端不区分会话类型，含交易会话的未读。
+export const chatUnreadCount = async () => Number((await data('/api/v1/users/me/chat/unread-count'))?.chatUnread || 0)
 export const getProfile = () => data('/api/v1/users/me/profile')
 export const saveProfile = form => data('/api/v1/users/me/profile', { method: 'PUT', body: { nickname: form.nickname, avatar: form.avatar, bio: form.bio } })
 export const getRealName = () => data('/api/v1/users/me/real-name')
