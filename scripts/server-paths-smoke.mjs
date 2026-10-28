@@ -1,14 +1,11 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { createRequire } from 'node:module'
+import * as playwright from 'playwright'
 import { readFile, writeFile } from 'node:fs/promises'
 import { resolve, sep, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { mockCreatorApi } from './fixtures/creator-api.mjs'
 
-let playwright
-try { playwright = createRequire(import.meta.url)('playwright') }
-catch { playwright = createRequire(new URL('../../shared/scripts/package.json', import.meta.url))('playwright') }
 const apps = [
   { prefix: '/user/', root: fileURLToPath(new URL('../dist/', import.meta.url)) },
   { prefix: '/enterprise/', root: fileURLToPath(new URL('../../smart-script-web-enterprise/dist/', import.meta.url)) },

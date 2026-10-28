@@ -1,11 +1,8 @@
 import assert from 'node:assert/strict'
 import { mockCreatorApi } from './fixtures/creator-api.mjs'
-import { createRequire } from 'node:module'
+import * as playwright from 'playwright'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-let playwright
-try { playwright = createRequire(import.meta.url)('playwright') }
-catch { playwright = createRequire(new URL('../../shared/scripts/package.json', import.meta.url))('playwright') }
 const { chromium } = playwright
 const base = (process.env.PREVIEW_URL || 'http://127.0.0.1:3001/user').replace(/\/$/, '')
 const shots = fileURLToPath(new URL('../docs/screenshots/', import.meta.url))

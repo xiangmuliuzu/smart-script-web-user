@@ -1,10 +1,7 @@
 import assert from 'node:assert/strict'
-import { createRequire } from 'node:module'
+import * as playwright from 'playwright'
 import { mockCreatorApi } from './fixtures/creator-api.mjs'
 
-let playwright
-try { playwright = createRequire(import.meta.url)('playwright') }
-catch { playwright = createRequire(new URL('../../shared/scripts/package.json', import.meta.url))('playwright') }
 const base = (process.env.PREVIEW_URL || 'http://127.0.0.1:3001/user').replace(/\/$/, '')
 const browser = await playwright.chromium.launch({ headless: true })
 const checks = []
