@@ -6,10 +6,10 @@
       <el-button type="primary" class="result-back" @click="emit('back')">返回登录</el-button>
     </div>
     <el-form v-else ref="formRef" :model="form" :rules="rules" label-position="top" class="account-form" @submit.prevent="submit">
-      <el-form-item label="手机号" prop="phone">
-        <el-input v-model="form.phone" maxlength="11" placeholder="请输入 11 位手机号" autocomplete="tel" inputmode="numeric" />
+      <el-form-item label="手机号或邮箱" prop="phone">
+        <el-input v-model="form.phone" :maxlength="50" placeholder="请输入手机号或邮箱" autocomplete="username" inputmode="email" />
       </el-form-item>
-      <el-form-item label="短信验证码" prop="code">
+      <el-form-item label="验证码" prop="code">
         <div class="code-row">
           <el-input v-model="form.code" maxlength="8" placeholder="请输入验证码" autocomplete="one-time-code" inputmode="numeric" />
           <button type="button" class="code-button" :disabled="countdown > 0 || sending" @click="sendCode">
@@ -46,7 +46,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getAgreements, register, resetPassword, sendSmsCode } from '../auth.js'
+import { getAgreements, register, resetPassword, sendSmsCode, sendEmailCode } from '../auth.js'
 import AgreementDialog from './AgreementDialog.vue'
 
 const props = defineProps({
@@ -83,8 +83,12 @@ function passwordError(value) {
 }
 
 const rules = {
-  phone: [{ validator: (rule, value, callback) => (/^1\d{10}$/.test((value || '').trim()) ? callback() : callback(new Error('请输入 11 位手机号'))), trigger: 'blur' }],
-  code: [{ validator: (rule, value, callback) => (/^\d{4,8}$/.test((value || '').trim()) ? callback() : callback(new Error('请输入 4–8 位短信验证码'))), trigger: 'blur' }],
+  phone: [{ validator: (rule, value, callback) => {
+    const text = (value || '').trim()
+    const valid = /^1\d{10}$/.test(text) || (text.length <= 50 && /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(text))
+    valid ? callback() : callback(new Error('请输入有效的手机号或邮箱'))
+  }, trigger: 'blur' }],
+  code: [{ validator: (rule, value, callback) => (/^\d{4,8}$/.test((value || '').trim()) ? callback() : callback(new Error('请输入 4–8 位验证码'))), trigger: 'blur' }],
   password: [{ validator: (rule, value, callback) => (passwordError(value) ? callback(new Error(passwordError(value))) : callback()), trigger: 'blur' }],
   confirm: [{ validator: (rule, value, callback) => (value && value === form.password ? callback() : callback(new Error('两次输入的密码不一致'))), trigger: 'blur' }],
   agreed: [{ validator: (rule, value, callback) => (value ? callback() : callback(new Error('请先阅读并同意用户协议与隐私政策'))), trigger: 'change' }]
@@ -137,12 +141,12 @@ async function sendCode() {
   sending.value = true
   error.value = ''
   try {
-    const result = await sendSmsCode({
-      phone: form.phone.trim(),
-      scene: props.mode === 'register' ? 'REGISTER' : 'RESET_PASSWORD'
+    const email = form.phone.includes('@')
+    const result = email ? await sendEmailCode(form.phone, props.mode === 'sms' ? 'LOGIN' : props.mode === 'register' ? 'REGISTER' : 'RESET_PASSWORD') : await sendSmsCode({
+      phone: form.phone.trim(), scene: props.mode === 'register' ? 'REGISTER' : 'RESET_PASSWORD'
     })
     startCountdown(Number(result?.data?.cooldownSeconds) || 60)
-    ElMessage.success('验证码已发送，请查收短信')
+    ElMessage.success(email ? '验证码已发送，请查收邮件' : '验证码已发送，请查收短信')
   } catch (failure) {
     error.value = failure.message || '验证码发送失败，请稍后重试'
   } finally {

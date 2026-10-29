@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { login, getCaptcha, getInfo, logout, request, getToken, safeRedirect, assertUser, register, sendSmsCode, resetPassword } from '../src/auth.js'
+import { login, getCaptcha, getInfo, logout, request, getToken, safeRedirect, assertUser, register, sendSmsCode, sendEmailCode, resetPassword } from '../src/auth.js'
 import { portal } from '../src/portal.js'
 const storage = new Map()
 globalThis.localStorage = { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, String(value)), removeItem: key => storage.delete(key) }
@@ -138,6 +138,39 @@ test('registration submits the live agreement versions and never stores a sessio
   assert.deepEqual(calls, ['/dev-api/api/v1/auth/agreements', '/dev-api/api/v1/auth/register'])
   // 新账号还没有创作者能力，注册流程不得把令牌写进本地。
   assert.equal(getToken(), 'previous')
+})
+
+test('email registration requests a code and submits a normalized email', async () => {
+  const calls = []
+  globalThis.fetch = async (url, options) => {
+    calls.push([url, options])
+    if (url.endsWith('/agreements')) return { ok: true, status: 200, json: async () => ({ code: 200, data: { agreements: [
+      { type: 'USER_AGREEMENT', version: '1.0.0' }, { type: 'PRIVACY_POLICY', version: '1.0.0' }
+    ] } }) }
+    return { ok: true, status: 200, json: async () => ({ code: 200, token: 'issued', user }) }
+  }
+  await sendEmailCode(' Example@163.com ')
+  await register({ phone: ' Example@163.com ', code: '123456', password: 'test-only-secret1' })
+  assert.equal(calls[0][0], '/dev-api/api/v1/auth/email/send')
+  assert.deepEqual(JSON.parse(calls[0][1].body), { email: 'example@163.com' })
+  assert.equal(calls[2][0], '/dev-api/api/v1/auth/register')
+  const body = JSON.parse(calls[2][1].body)
+  assert.equal(body.email, 'example@163.com')
+  assert.equal(body.phone, undefined)
+  assert.equal(calls[0][1].headers.Authorization, undefined)
+  assert.equal(calls[2][1].headers.Authorization, undefined)
+})
+
+test('email password reset uses a separate verification scene', async () => {
+  const calls = []
+  globalThis.fetch = async (url, options) => {
+    calls.push([url, options])
+    return { ok: true, status: 200, json: async () => ({ code: 200 }) }
+  }
+  await sendEmailCode('Writer@Example.com', 'RESET_PASSWORD')
+  await resetPassword({ phone: 'Writer@Example.com', code: '123456', newPassword: 'test-only-secret1' })
+  assert.deepEqual(JSON.parse(calls[0][1].body), { email: 'writer@example.com', scene: 'RESET_PASSWORD' })
+  assert.deepEqual(JSON.parse(calls[1][1].body), { email: 'writer@example.com', code: '123456', newPassword: 'test-only-secret1' })
 })
 
 test('registration refuses to submit when the agreement versions cannot be loaded', async () => {

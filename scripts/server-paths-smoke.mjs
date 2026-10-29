@@ -59,7 +59,7 @@ try {
     await page.goto(origin + '/user/works/create')
     await page.getByRole('heading', { name: '登录创作者中心', exact: true }).waitFor()
     assert.equal(new URL(page.url()).pathname, '/user/login')
-    await page.getByLabel('用户名 / 手机号', { exact: true }).fill('test-only')
+    await page.getByLabel('用户名 / 手机号 / 邮箱', { exact: true }).fill('test-only')
     await page.getByLabel('密码', { exact: true }).fill('test-only-password')
     await page.getByRole('button', { name: '登录', exact: true }).click()
     await page.getByLabel('分集正文', { exact: true }).waitFor()

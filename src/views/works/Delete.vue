@@ -3,8 +3,8 @@
     <form @submit.prevent="confirm">
       <p>确定删除《{{ work.title || '未命名作品' }}》吗？</p>
       <p class="note bad">删除后作品将下架，并从我的作品中移除，无法自行恢复。有关联订单、合同或付费记录的作品不能删除，请使用下架功能。</p>
-      <p class="cost">{{ phoneMasked ? '验证码已发送至 ' + phoneMasked : '请获取绑定手机号的验证码，验证身份后删除。' }}</p>
-      <label class="field">短信验证码
+      <p class="cost">{{ phoneMasked ? '验证码已发送至 ' + phoneMasked : '请获取绑定手机号或邮箱的验证码，验证身份后删除。' }}</p>
+      <label class="field">验证码
         <div class="captcha-row">
           <input v-model="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" pattern="[0-9]{4,8}" required :disabled="busy" />
           <button type="button" class="btn quiet" :disabled="busy || countdown > 0" @click="sendCode">{{ countdown > 0 ? countdown + ' 秒后重发' : sending ? '发送中…' : '获取验证码' }}</button>
@@ -55,7 +55,7 @@ async function sendCode() {
 }
 async function confirm() {
   if (busy.value) return
-  if (!/^\d{4,8}$/.test(code.value.trim())) { error.value = '请输入正确格式的短信验证码'; return }
+  if (!/^\d{4,8}$/.test(code.value.trim())) { error.value = '请输入正确格式的验证码'; return }
   deleting.value = true
   error.value = ''
   try {

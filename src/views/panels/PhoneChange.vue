@@ -1,7 +1,7 @@
 <template>
-  <PortalLayer v-model="visible" title="换绑手机" modal :before-close="beforeClose"><div class="note info">{{ step === 1 ? '先验证当前绑定手机，验证后再绑定新号码。' : '当前手机已验证，请填写新手机号与验证码。' }}</div><form class="top-gap" @submit.prevent="confirm">
-    <label v-if="step === 1" class="field">当前手机<input :value="phone || '服务端绑定的手机'" readonly /></label><label v-else class="field">新手机号<input v-model="newPhone" inputmode="tel" maxlength="11" pattern="1[3-9][0-9]{9}" required :disabled="busy" /></label>
-    <label class="field">短信验证码<div class="captcha-row"><input v-model="code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required :disabled="busy" /><button type="button" class="btn ghost" :disabled="busy || countdown > 0" @click="sendCode">{{ countdown > 0 ? countdown + ' 秒后重试' : '获取验证码' }}</button></div></label><p v-if="error" class="note bad" role="alert">{{ error }}</p><button class="btn" :disabled="busy">{{ busy ? '处理中…' : step === 1 ? '验证并继续' : '确认换绑' }}</button>
+  <PortalLayer v-model="visible" title="换绑手机" modal :before-close="beforeClose"><div class="note info">{{ step === 1 ? '先通过已绑定手机号或邮箱验证身份，再绑定新号码。' : '身份已验证，请填写新手机号与验证码。' }}</div><form class="top-gap" @submit.prevent="confirm">
+    <label v-if="step === 1" class="field">当前账号<input :value="'验证码将发送至绑定邮箱或手机号'" readonly /></label><label v-else class="field">新手机号<input v-model="newPhone" inputmode="tel" maxlength="11" pattern="1[3-9][0-9]{9}" required :disabled="busy" /></label>
+    <label class="field">验证码<div class="captcha-row"><input v-model="code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required :disabled="busy" /><button type="button" class="btn ghost" :disabled="busy || countdown > 0" @click="sendCode">{{ countdown > 0 ? countdown + ' 秒后重试' : '获取验证码' }}</button></div></label><p v-if="error" class="note bad" role="alert">{{ error }}</p><button class="btn" :disabled="busy">{{ busy ? '处理中…' : step === 1 ? '验证并继续' : '确认换绑' }}</button>
   </form></PortalLayer>
 </template>
 <script setup>

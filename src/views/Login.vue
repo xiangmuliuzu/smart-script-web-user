@@ -15,7 +15,7 @@
         <template v-if="mode === 'login'">
           <div v-if="route.query.reason === 'creator-required'" class="note bad error-message" role="alert">账号未开通创作者能力，暂时无法登录创作者端。</div>
           <el-form ref="formRef" :model="form" :rules="rules" class="auth-form" label-position="top" @submit.prevent="submit">
-            <el-form-item label="用户名 / 手机号" prop="username"><el-input v-model="form.username" placeholder="请输入用户名或手机号" autocomplete="username" :prefix-icon="User" /></el-form-item>
+            <el-form-item label="用户名 / 手机号 / 邮箱" prop="username"><el-input v-model="form.username" placeholder="请输入用户名、手机号或邮箱" autocomplete="username" :prefix-icon="User" /></el-form-item>
             <el-form-item label="密码" prop="password"><el-input v-model="form.password" type="password" placeholder="请输入密码" show-password autocomplete="current-password" :prefix-icon="Lock" /></el-form-item>
             <el-form-item v-if="captchaEnabled" label="验证码"><div class="captcha-row"><el-input v-model="form.code" placeholder="请输入验证码" maxlength="8" autocomplete="off" /><button type="button" class="captcha-img" :disabled="captchaLoading" aria-label="刷新验证码" @click="refreshCaptcha"><img v-if="captchaImage" :src="captchaImage" alt="验证码" /><span v-else>点击重试</span></button></div></el-form-item>
             <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon class="error-message" />
@@ -27,7 +27,7 @@
         <AccountPanel
           v-else
           :mode="mode"
-          register-desc="账号已创建。创作者中心仅向已开通创作者能力的账号开放，请打开剧云策 App 用该手机号登录并提交创作者认证，审核通过后即可登录。"
+          register-desc="账号已创建。创作者中心仅向已开通创作者能力的账号开放，请打开剧云策 App 用该账号登录并提交创作者认证，审核通过后即可登录。"
           @back="mode = 'login'"
           @switch="mode = $event"
         />
@@ -51,10 +51,10 @@ const mode = ref('login')
 const heading = computed(() => (mode.value === 'register' ? '注册个人账号' : mode.value === 'reset' ? '找回密码' : '登录创作者中心'))
 const subheading = computed(() =>
   mode.value === 'register'
-    ? '用手机号注册剧云策账号，注册后可在 App 提交创作者认证。'
+    ? '用手机号或邮箱注册剧云策账号，注册后可在 App 提交创作者认证。'
     : mode.value === 'reset'
-      ? '通过绑定手机号接收短信验证码，重置登录密码。'
-      : '用手机号或账号登录，管理你的作品、版权与收益。'
+      ? '通过绑定手机号或邮箱接收验证码，重置登录密码。'
+      : '用手机号、邮箱或账号登录，管理你的作品、版权与收益。'
 )
 // 记住密码：勾选后把账号和密码一起写进本机 localStorage，取消勾选立即清除。
 // 兼容早期只存账号的纯文本值，读到时按「只有账号」处理。
@@ -78,7 +78,7 @@ const captchaEnabled = ref(true)
 const captchaReady = ref(false)
 const captchaImage = ref('')
 const error = ref('')
-const rules = { username: [{ validator: (rule, value, callback) => callback(value?.trim() ? undefined : new Error('请输入用户名或手机号')), trigger: 'blur' }], password: [{ required: true, message: '请输入密码', trigger: 'blur' }] }
+const rules = { username: [{ validator: (rule, value, callback) => callback(value?.trim() ? undefined : new Error('请输入用户名、手机号或邮箱')), trigger: 'blur' }], password: [{ required: true, message: '请输入密码', trigger: 'blur' }] }
 async function refreshCaptcha() {
   if (captchaLoading.value) return
   captchaLoading.value = true
