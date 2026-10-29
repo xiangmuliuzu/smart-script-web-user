@@ -26,7 +26,7 @@ export async function upload(file, purpose = 'script') {
   // 后端剧本上传白名单包含 txt/docx，Markdown 保留文本内容并按 txt 上传。
   const uploaded = purpose === 'script' && /\.md$/i.test(file.name) ? new File([file], file.name.replace(/\.md$/i, '.txt'), { type: 'text/plain' }) : file
   body.append('file', uploaded)
-  const path = purpose === 'avatar' ? '/api/v1/users/me/avatar' : purpose === 'material' ? '/api/v1/users/me/real-name/material' : '/api/v1/content/upload'
+  const path = purpose === 'avatar' ? '/api/v1/users/me/avatar' : '/api/v1/content/upload'
   if (purpose === 'script' || purpose === 'cover') body.append('type', purpose)
   // 印章图/审核材料与 App 一致：走 content/upload，type=material。
   if (purpose === 'seal') body.append('type', 'material')
