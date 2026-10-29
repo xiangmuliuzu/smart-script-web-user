@@ -24,13 +24,13 @@
       <MessagesPanel v-if="panel === 'messages'" v-model="panelVisible" />
       <PlatformChatPanel v-if="panel === 'chat'" v-model="panelVisible" />
       <CooperationPanel v-if="panel === 'cooperation'" v-model="panelVisible" :initial-tab="panelTab" :order-search="panelOrderSearch" />
-      <RightsPanel v-if="panel === 'rights'" v-model="panelVisible" :initial-tab="panelTab" />
+      <RightsPanel v-if="panel === 'rights'" ref="rightsPanelRef" v-model="panelVisible" :initial-tab="panelTab" />
       <AccountPanel v-if="panel === 'account'" v-model="panelVisible" :initial-tab="panelTab" />
     </template>
   </div>
 </template>
 <script setup>
-import { computed, onMounted, provide, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Bell, ChatDotRound, ChatLineSquare, ChatRound, Collection, Document, Tickets, ArrowDown } from '@element-plus/icons-vue'
@@ -58,11 +58,19 @@ const panelTab = ref('')
 const panelOrderSearch = ref('')
 const panelVisible = ref(false)
 const workspace = ref(null)
+const rightsPanelRef = ref(null)
 const displayName = computed(() => user.value?.nickname || user.value?.userName || '用户')
 const canCreate = computed(() => user.value?.authorCapability === true)
 const basePath = '/works'
 function openPanel(name, tab, orderSearch = '') { panelVisible.value = false; panel.value = name; panelTab.value = tab; panelOrderSearch.value = orderSearch; panelVisible.value = true }
 watch(panelVisible, visible => { if (!visible && panel.value === 'cooperation') workspace.value?.loadTodo?.() })
+async function openDeliveryByOrder(orderId) {
+  if (!orderId) return
+  openPanel('rights', 'delivery')
+  await nextTick()
+  await nextTick()
+  rightsPanelRef.value?.openDeliveryByOrder?.(orderId)
+}
 function goWorks() { panelVisible.value = false; return router.push(basePath) }
 function goWork(id) { panelVisible.value = false; return router.push(`${basePath}/${id}`) }
 async function handleError(failure) {
@@ -92,7 +100,7 @@ async function accountCommand(command) {
   catch { ElMessage.warning('服务端退出未成功，已清理本地登录状态') }
   finally { user.value = null; panelVisible.value = false; await router.replace('/login'); leaving.value = false }
 }
-provide(portalKey, { api, user, canCreate, basePath, openPanel, goWork, goWorks, handleError, refreshUnread })
+provide(portalKey, { api, user, canCreate, basePath, openPanel, openDeliveryByOrder, goWork, goWorks, handleError, refreshUnread })
 async function refreshRealName() { try { realNameStatus.value = (await api.value.getRealName())?.status || '' } catch (failure) { if (isAuthFailure(failure)) await handleError(failure) } }
 onMounted(load)
 </script>

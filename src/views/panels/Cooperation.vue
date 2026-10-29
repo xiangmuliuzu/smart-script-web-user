@@ -125,7 +125,10 @@
                 <button v-if="!isTerminalOrder(o)" class="btn sm quiet" @click="openOrderContract(o)">查看合同</button>
                 <button v-if="o.status === 'confirmed'" class="btn sm ghost" @click="doCancelOrder(o)">取消订单</button>
                 <button v-if="isBuyerOfOrder(o) && o.status === 'paying'" class="btn sm" @click="doPayOrder(o)">付款</button>
-                <button v-if="isBuyerOfOrder(o) && o.status === 'delivering'" class="btn sm" @click="doCompleteOrder(o)">确认收货</button>
+                <button v-if="isSellerOf(o) && o.status === 'delivering' && !isDeliveryUploaded(o)" class="btn sm" @click="goOrderDelivery(o)">去交割</button>
+                <button v-if="isSellerOf(o) && o.status === 'delivering' && isDeliveryUploaded(o)" class="btn quiet sm" @click="goOrderDelivery(o)">等待买家收货</button>
+                <button v-if="isBuyerOfOrder(o) && o.status === 'delivering' && isDeliveryUploaded(o)" class="btn sm" @click="goOrderDelivery(o)">去确认收货</button>
+                <button v-if="isBuyerOfOrder(o) && o.status === 'delivering' && !isDeliveryUploaded(o)" class="btn quiet sm" @click="goOrderDelivery(o)">查看交割</button>
               </div>
             </div>
           </div>
@@ -161,7 +164,7 @@ import { orderStatusLabel } from '../../utils/orderTodo.js'
 
 const props = defineProps({ modelValue: Boolean, initialTab: String, orderSearch: { type: String, default: '' } })
 const emit = defineEmits(['update:modelValue'])
-const { api, user, handleError } = usePortal()
+const { api, user, handleError, openDeliveryByOrder } = usePortal()
 const visible = computed({ get: () => props.modelValue, set: v => emit('update:modelValue', v) })
 const tab = ref(props.initialTab || 'inquiry')
 const panelTitle = computed(() => ({ inquiry: '询盘', session: '会话', order: '订单', contract: '合同' })[tab.value] || '询盘')
@@ -428,6 +431,23 @@ const orderKeyword = ref('')
 const orderPageNum = ref(1)
 const orderTotal = ref(0)
 
+/** 交割单是否已提交材料（待确认 / 已完成），用于交割中订单按钮文案。 */
+const isDeliveryUploaded = o => ['pending_confirm', 'completed'].includes(o?.deliveryStatus)
+
+async function attachDeliveryStatus(rows) {
+  const delivering = rows.filter(o => o?.status === 'delivering' && o?.orderId)
+  if (!delivering.length) return rows
+  await Promise.all(delivering.map(async o => {
+    try {
+      const delivery = await api.value.getDeliveryByOrder(o.orderId)
+      o.deliveryStatus = delivery?.status || ''
+    } catch {
+      o.deliveryStatus = ''
+    }
+  }))
+  return rows
+}
+
 async function loadOrders() {
   orderPending.value = true; orderError.value = ''
   try {
@@ -435,7 +455,9 @@ async function loadOrders() {
     if (orderStatus.value) params.status = orderStatus.value
     if (orderKeyword.value.trim()) params.keyword = orderKeyword.value.trim()
     const result = await api.value.listOrders(params)
-    orders.value = asList(result)
+    const rows = asList(result)
+    await attachDeliveryStatus(rows)
+    orders.value = rows
     orderTotal.value = result?.total || 0
   } catch (e) { orderError.value = e.message; await handleError(e) }
   finally { orderPending.value = false }
@@ -445,8 +467,17 @@ async function doPayOrder(o) {
   try { await ElMessageBox.confirm('确认已付款后订单进入交割，卖方将交付作品。确定付款吗？', '确认付款', { type: 'warning' }); await api.value.payOrder(o.orderId); ElMessage.success('付款成功，订单进入交割'); o.status = 'delivering'; await loadOrders() } catch (e) { if (e !== 'cancel') await handleError(e) }
 }
 
-async function doCompleteOrder(o) {
-  try { await ElMessageBox.confirm('确认收货后订单完成，平台将向卖方结算。确定吗？', '确认收货', { type: 'warning' }); await api.value.completeOrder(o.orderId); ElMessage.success('已确认收货'); await loadOrders() } catch (e) { if (e !== 'cancel') await handleError(e) }
+/** 交割中：与 App 一致，进入交割详情（卖方上传 / 买方确认），不再直接调 completeOrder。 */
+async function goOrderDelivery(o) {
+  if (!o?.orderId || typeof openDeliveryByOrder !== 'function') {
+    ElMessage.warning('暂时无法打开交割详情')
+    return
+  }
+  try {
+    await openDeliveryByOrder(o.orderId)
+  } catch (e) {
+    await handleError(e)
+  }
 }
 
 // 取消订单：仅合同双方签署完成前（confirmed）可取消，买卖双方任一方均可发起

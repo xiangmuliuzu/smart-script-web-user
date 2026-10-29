@@ -224,6 +224,19 @@ export const completeOrder = id => data(`/api/v1/trade/order/${encodeURIComponen
 // 取消订单（仅 confirmed 可取消）；reason 选填，走 query 参数
 export const cancelOrder = (id, reason) => data(`/api/v1/trade/order/${encodeURIComponent(id)}/cancel${reason ? '?' + new URLSearchParams({ reason }).toString() : ''}`, { method: 'POST' })
 
+// ──── 版权交割（与 App 共用 /api/v1/trade/delivery，付款后建单；卖方上传、买方确认） ────
+const deliveryBase = '/api/v1/trade/delivery'
+export const listDeliveries = (params = {}) =>
+  data(deliveryBase + '/list' + qs({ pageNum: 1, pageSize: 10, ...params }))
+export const getDelivery = id =>
+  data(deliveryBase + '/' + encodeURIComponent(id))
+export const getDeliveryByOrder = orderId =>
+  data(deliveryBase + '/by-order/' + encodeURIComponent(orderId))
+export const uploadDelivery = (id, body) =>
+  data(deliveryBase + '/' + encodeURIComponent(id) + '/upload', { method: 'POST', body })
+export const confirmDelivery = id =>
+  data(deliveryBase + '/' + encodeURIComponent(id) + '/confirm', { method: 'POST' })
+
 // ──── C 交易域：合同（签署前置实名认证由后端校验） ────
 export const listContracts = params => data('/api/v1/trade/contracts/list?' + new URLSearchParams(Object.fromEntries(Object.entries(params || {}).filter(([, v]) => v != null && v !== ''))).toString())
 export const getContractByOrder = orderId => data(`/api/v1/trade/contracts/${encodeURIComponent(orderId)}`)

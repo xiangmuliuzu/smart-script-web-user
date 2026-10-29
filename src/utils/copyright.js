@@ -60,6 +60,67 @@ export const canDeleteApply = item => item?.status === 'pending'
 export const isCertificated = item => item?.status === 'certificated'
 export const isCertIssued = item => item?.status === 'issued'
 
+/**
+ * 版权交割状态（对齐 App + 现行交易流程）：
+ * 合同签署 → 买方付款 → 后端建交割单(pending_upload) → 卖方上传 → pending_confirm → 买方确认 → completed。
+ * 未付款不会出现交割单。
+ */
+export const DELIVERY_STATUS = {
+  pending_upload: '待卖方上传',
+  pending_confirm: '等待买家收货',
+  completed: '已完成',
+  cancelled: '已取消'
+}
+
+export const DELIVERY_FILE_TYPES = [
+  { value: 'cert', label: '版权证书' },
+  { value: 'source', label: '作品源文件' },
+  { value: 'doc', label: '授权文档' },
+  { value: 'other', label: '其他材料' }
+]
+
+export const deliveryStatusLabel = status => DELIVERY_STATUS[status] || status || '未知'
+export const deliveryFileTypeLabel = type =>
+  DELIVERY_FILE_TYPES.find(item => item.value === type)?.label || type || '—'
+export const deliveryStatusTone = status => ({
+  pending_upload: 'warn',
+  pending_confirm: 'wait',
+  completed: 'ok',
+  cancelled: 'off'
+}[status] || 'off')
+export const deliveryLicenseLabel = type => ({
+  exclusive: '独家授权',
+  non_exclusive: '非独家授权',
+  adaptation: '改编授权'
+}[type] || type || '—')
+
+/** 交割状态说明（列表/详情副文案）。 */
+export function deliveryStatusDescription(status) {
+  switch (status) {
+    case 'pending_upload': return '买方已付款，等待卖方上传版权证书等交割材料'
+    case 'pending_confirm': return '卖方已提交材料，等待买方确认收货'
+    case 'completed': return '买方已确认收货，交割完成'
+    case 'cancelled': return '交割已取消'
+    default: return ''
+  }
+}
+
+/**
+ * 列表操作按钮文案：按当前用户角色 + 交割状态（与订单侧一致）。
+ * @returns {{ label: string, primary: boolean } | null}
+ */
+export function deliveryActionMeta(item, userId) {
+  if (!item) return null
+  const uid = Number(userId)
+  const isSeller = Number(item.sellerId) === uid
+  const isBuyer = Number(item.buyerId) === uid
+  if (item.status === 'pending_upload' && isSeller) return { label: '去交割', primary: true }
+  if (item.status === 'pending_upload' && isBuyer) return { label: '查看交割', primary: false }
+  if (item.status === 'pending_confirm' && isSeller) return { label: '等待买家收货', primary: false }
+  if (item.status === 'pending_confirm' && isBuyer) return { label: '去确认收货', primary: true }
+  return { label: '详情', primary: false }
+}
+
 export function applyStatusDescription(item) {
   if (!item) return ''
   switch (item.status) {
