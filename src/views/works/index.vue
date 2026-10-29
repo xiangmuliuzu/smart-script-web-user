@@ -12,7 +12,7 @@
       <div v-if="!pending && !error" class="worklist">
         <button class="workitem new-work" :disabled="!canCreate" @click="router.push(basePath + '/create')"><span class="work-cover"><span class="plus" aria-hidden="true">＋</span></span><span class="work-copy"><span class="work-title"><h3>创作与上传</h3><span class="work-kind">新建作品</span></span><span class="work-synopsis">从一个新故事开始，或上传你已经完成的剧本。创建后可以继续补充简介、章节和版权信息。</span><span class="work-foot"><span class="work-meta">点击此处进入创作页面</span><span class="btn sm">开始创作</span></span></span></button>
         <button v-for="work in filtered" :key="work.workId" class="workitem" :data-reviewing="work.status === 'reviewing'" @click="goWork(work.workId)">
-          <span class="work-cover"><img v-if="work.cover" :src="work.cover" alt="" /><span v-else class="glyph">{{ work.title?.slice(0, 1) }}</span><span class="stamp" :data-s="stateOf(work.status).stamp">{{ stateOf(work.status).label }}</span></span>
+          <span class="work-cover"><img v-if="avatarUrl(work.cover) && failedCovers[work.workId] !== work.cover" :src="avatarUrl(work.cover)" alt="" @error="failedCovers[work.workId] = work.cover" /><span v-else class="glyph">{{ work.title?.slice(0, 1) }}</span><span class="stamp" :data-s="stateOf(work.status).stamp">{{ stateOf(work.status).label }}</span></span>
           <span class="work-copy"><span class="work-title"><h3>{{ work.title }}</h3><span class="work-kind">{{ workType(work.workType) }} · {{ work.genreName || '未分类' }}</span></span><span class="work-synopsis">{{ work.summary || '故事还在酝酿中，继续写下你的下一章。' }}</span><span class="work-foot"><span class="work-meta">{{ work.episodeCount != null ? work.episodeCount + ' 章 · ' : '' }}{{ words(work.wordCount) }} · 更新于 {{ dateText(work.updateTime || work.createTime).slice(5) }}</span><span class="btn sm" :class="{ quiet: !['revision', 'rejected'].includes(work.status) }">{{ stateOf(work.status).action }}</span></span></span>
         </button>
       </div>
@@ -32,11 +32,13 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePortal } from '../../utils/portal.js'
+import { avatarUrl } from '../../utils/avatarUrl.js'
 import { stateOf, words, dateText } from '../../utils/creator.js'
 import LoadState from '../../components/LoadState.vue'
 const { api, canCreate, basePath, goWork, openPanel, handleError } = usePortal()
 const router = useRouter()
 const works = ref([])
+const failedCovers = ref({})
 const pending = ref(true)
 const error = ref('')
 const filterOpen = ref(false)
@@ -49,7 +51,7 @@ const recent = computed(() => [...works.value].sort((a, b) => String(b.updateTim
 const summary = computed(() => `${works.value.length} 部 · 草稿 ${works.value.filter(w => w.status === 'draft').length} · 审核中 ${works.value.filter(w => w.status === 'reviewing').length} · 待修改 ${works.value.filter(w => ['revision', 'rejected'].includes(w.status)).length} · 已发布 ${works.value.filter(w => w.status === 'published').length}`)
 async function load() {
   pending.value = true; error.value = ''
-  try { works.value = await api.value.listWorks() }
+  try { works.value = await api.value.listWorks(); failedCovers.value = {} }
   catch (failure) { error.value = failure.message || '作品加载失败'; await handleError(failure) }
   finally { pending.value = false }
 }

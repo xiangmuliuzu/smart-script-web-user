@@ -3,7 +3,7 @@
   <LoadState :pending="pending" :error="error" :retry="load" />
   <div v-if="!pending && !error && work" class="work-detail-grid">
     <section class="work-detail-main">
-      <div class="workhead"><div class="wh-cover"><img v-if="work.cover" :src="work.cover" alt="作品封面" /><span v-else class="glyph">{{ work.title?.slice(0, 1) }}</span></div><div class="wh-body"><div class="row"><h1 class="detail-title">{{ work.title }}</h1><span class="stamp sm" :data-s="stateOf(work.status).stamp">{{ stateOf(work.status).label }}</span></div><p class="work-info">短剧 · {{ work.genreName || '未分类' }} ｜ {{ work.episodeCount ?? chapters.length }} 章 ｜ {{ words(work.wordCount) }} ｜ 最近更新 {{ dateText(work.updateTime).slice(5) }}</p><p class="wh-intro">{{ work.summary || '暂无简介' }}</p></div></div>
+      <div class="workhead"><div class="wh-cover"><img v-if="avatarUrl(work.cover) && !coverFailed" :src="avatarUrl(work.cover)" alt="作品封面" @error="coverFailed = true" /><span v-else class="glyph">{{ work.title?.slice(0, 1) }}</span></div><div class="wh-body"><div class="row"><h1 class="detail-title">{{ work.title }}</h1><span class="stamp sm" :data-s="stateOf(work.status).stamp">{{ stateOf(work.status).label }}</span></div><p class="work-info">短剧 · {{ work.genreName || '未分类' }} ｜ {{ work.episodeCount ?? chapters.length }} 章 ｜ {{ words(work.wordCount) }} ｜ 最近更新 {{ dateText(work.updateTime).slice(5) }}</p><p class="wh-intro">{{ work.summary || '暂无简介' }}</p></div></div>
       <div class="row section-actions"><button class="btn" :disabled="!editable" @click="editChapter(null)">＋ 写新章节</button><span class="cost">{{ work.status === 'reviewing' ? '审核中暂不可编辑，可查看审核进度' : '发布章节并通过作品审核后，试读章节可供读者免费阅读' }}</span></div>
       <div class="tbl"><table><thead><tr><th class="seq-col">序</th><th>章节标题</th><th class="num">字数</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="chapter in chapters" :key="chapter.chapterId"><td class="num">{{ String(chapter.chapterNo).padStart(2, '0') }}</td><td>{{ chapter.chapterTitle }} <span v-if="chapter.isFree === '1'" class="tag ok">试读</span></td><td class="num">{{ Number(chapter.wordCount || 0).toLocaleString() }}</td><td><span class="tag" :class="chapterState(chapter.status).tone">{{ chapterState(chapter.status).label }}</span></td><td class="ops"><button v-if="chapter.status === '1'" class="btn sm" :disabled="!editable || publishing !== null || deleting !== null" @click="publish(chapter)">{{ publishing === chapter.chapterId ? '发布中…' : '发布' }}</button><button class="btn sm" :class="{ quiet: chapter.status !== 'revision' }" :disabled="!editable || deleting !== null || publishing !== null" @click="editChapter(chapter)">{{ chapter.status === 'revision' ? '修改' : '编辑' }}</button><button class="btn quiet sm" :disabled="!editable || deleting !== null || publishing !== null" @click="remove(chapter)">{{ deleting === chapter.chapterId ? '删除中…' : '删除' }}</button></td></tr></tbody></table></div>
       <LoadState :empty="!chapters.length" empty-text="还没有章节，写下故事的第一幕。" />
@@ -25,6 +25,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Setting } from '@element-plus/icons-vue'
 import { usePortal } from '../../utils/portal.js'
+import { avatarUrl } from '../../utils/avatarUrl.js'
 import { canEdit, stateOf, words, dateText } from '../../utils/creator.js'
 import LoadState from '../../components/LoadState.vue'
 import PortalLayer from '../../components/PortalLayer.vue'
@@ -34,6 +35,7 @@ const { api, user, canCreate, goWorks, handleError } = usePortal()
 const route = useRoute()
 const router = useRouter()
 const work = ref(null)
+const coverFailed = ref(false)
 const chapters = ref([])
 const reviews = ref([])
 const latestReview = ref(null)
@@ -59,7 +61,7 @@ async function loadReviews() {
 }
 async function load() {
   pending.value = true; error.value = ''
-  try { const detail = await api.value.getWork(route.params.id); work.value = detail.work; chapters.value = detail.chapters || []; latestReview.value = detail.latestReview; await loadReviews() }
+  try { const detail = await api.value.getWork(route.params.id); work.value = detail.work; coverFailed.value = false; chapters.value = detail.chapters || []; latestReview.value = detail.latestReview; await loadReviews() }
   catch (failure) { error.value = failure.message || '作品加载失败'; await handleError(failure) }
   finally { pending.value = false }
 }
