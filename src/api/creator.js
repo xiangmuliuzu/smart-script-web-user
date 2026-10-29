@@ -198,7 +198,7 @@ export const chatUnreadCount = async () => Number((await data('/api/v1/users/me/
 export const getProfile = () => data('/api/v1/users/me/profile')
 export const saveProfile = form => data('/api/v1/users/me/profile', { method: 'PUT', body: { nickname: form.nickname, avatar: form.avatar, bio: form.bio } })
 export const getRealName = () => data('/api/v1/users/me/real-name')
-export const submitRealName = (form, resubmit = false) => data('/api/v1/users/me/real-name' + (resubmit ? '/resubmit' : ''), { method: 'POST', body: form })
+export const submitRealName = (form, resubmit = false) => { const body = new FormData(); for (const key of ['realName', 'idNumber', 'front', 'back']) body.append(key, form[key]); return data('/api/v1/users/me/real-name' + (resubmit ? '/resubmit' : ''), { method: 'POST', body }) }
 export const changePassword = form => data('/api/v1/auth/password/change', { method: 'POST', body: form })
 export const phoneChange = (step, body) => data('/api/v1/users/me/phone/change/' + step, { method: 'POST', body })
 export const listFeedback = async () => asList(await data('/api/v1/feedback'))
