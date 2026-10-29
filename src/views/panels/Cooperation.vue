@@ -1,6 +1,5 @@
 <template>
-  <PortalLayer v-model="visible" title="我的合作" wide>
-    <PortalTabs v-model="tab" :items="tabs" drawer label="合作类型" />
+  <PortalLayer v-model="visible" :title="panelTitle" wide>
     <div class="panel-content">
       <!-- ═══ 询盘 Tab ═══ -->
       <template v-if="tab === 'inquiry'">
@@ -151,7 +150,6 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PortalLayer from '../../components/PortalLayer.vue'
-import PortalTabs from '../../components/PortalTabs.vue'
 import LoadState from '../../components/LoadState.vue'
 import ContractPanel from '../../components/trade/ContractPanel.vue'
 import ContractSignDialog from '../../components/trade/ContractSignDialog.vue'
@@ -159,13 +157,14 @@ import TradeTemplatePanel from '../../components/trade/TradeTemplatePanel.vue'
 import { usePortal } from '../../utils/portal.js'
 import { avatarUrl, contractHtml } from '../../utils/avatarUrl.js'
 import { dateText, money, asList } from '../../utils/creator.js'
+import { orderStatusLabel } from '../../utils/orderTodo.js'
 
-const props = defineProps({ modelValue: Boolean, initialTab: String })
+const props = defineProps({ modelValue: Boolean, initialTab: String, orderSearch: { type: String, default: '' } })
 const emit = defineEmits(['update:modelValue'])
 const { api, user, handleError } = usePortal()
 const visible = computed({ get: () => props.modelValue, set: v => emit('update:modelValue', v) })
 const tab = ref(props.initialTab || 'inquiry')
-const tabs = [{ value: 'inquiry', label: '询盘' }, { value: 'session', label: '会话' }, { value: 'order', label: '订单' }, { value: 'contract', label: '合同' }]
+const panelTitle = computed(() => ({ inquiry: '询盘', session: '会话', order: '订单', contract: '合同' })[tab.value] || '询盘')
 const contractPanelRef = ref(null)
 const userId = computed(() => Number(user.value?.userId))
 
@@ -174,7 +173,6 @@ const moneyFromFen = fen => money(Number(fen || 0) / 100)
 const licenseLabel = t => ({ exclusive: '独家授权', non_exclusive: '非独家授权', adaptation: '改编授权' })[t] || t || '未指定'
 const inquiryStatusLabel = s => ({ pending: '待处理', quoted: '议价中', deal: '已达成', rejected: '已拒绝', closed: '已关闭' })[s] || s
 const quoteStatusLabel = s => ({ pending: '待买方响应', pending_seller: '待卖方响应', accepted: '已接受', rejected: '已拒绝', expired: '已过期' })[s] || s
-const orderStatusLabel = s => ({ confirmed: '待签署', paying: '付款中', cancelled: '已取消', escrow_pending: '已托管', delivering: '交割中', completed: '已完成', refunded: '已退款' })[s] || s
 const isSellerOf = r => Number(r?.sellerId) === userId.value
 const isBuyerOfOrder = o => Number(o?.buyerId) === userId.value
 const isTerminalOrder = o => ['cancelled', 'refunded'].includes(o?.status)
@@ -528,7 +526,18 @@ watch(tab, v => {
   else if (v === 'order') loadOrders()
 })
 watch(() => props.initialTab, v => { if (v) tab.value = v })
-onMounted(() => { loadInquiries() })
+function applyOrderSearch(value) {
+  if (value) { orderRole.value = 'seller'; orderStatus.value = ''; orderPageNum.value = 1 }
+  orderKeyword.value = value
+}
+watch(() => props.orderSearch, applyOrderSearch)
+watch(() => props.modelValue, v => { if (v) { tab.value = props.initialTab || 'inquiry'; applyOrderSearch(props.orderSearch) } })
+onMounted(() => {
+  applyOrderSearch(props.orderSearch)
+  if (tab.value === 'session') { templateVisible.value = true; loadTradeSessions() }
+  else if (tab.value === 'order') loadOrders()
+  else if (tab.value === 'inquiry') loadInquiries()
+})
 onUnmounted(() => { stopChatPoll() })
 </script>
 <style scoped>

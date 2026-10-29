@@ -1,15 +1,158 @@
 import assert from 'node:assert/strict'
-import { createRequire } from 'node:module'
+import * as playwright from 'playwright'
 import { mockCreatorApi } from './fixtures/creator-api.mjs'
+import { documentText } from '../src/utils/document.js'
 
-let playwright
-try { playwright = createRequire(import.meta.url)('playwright') }
-catch { playwright = createRequire(new URL('../../shared/scripts/package.json', import.meta.url))('playwright') }
 const base = (process.env.PREVIEW_URL || 'http://127.0.0.1:3001/user').replace(/\/$/, '')
 const browser = await playwright.chromium.launch({ headless: true })
 const checks = []
 async function check(name, run) { await run(); checks.push(name); console.log('PASS ' + name) }
 try {
+  await check('canceling a continuation keeps the partial chapter and makes no further requests', async () => {
+    const context = await browser.newContext()
+    await mockCreatorApi(context)
+    await context.addInitScript(() => localStorage.setItem('PcUser-Token', 'browser-test-only'))
+    const page = await context.newPage()
+    await page.route('**/content/ai/outline/stream', route => route.fulfill({ contentType: 'text/event-stream', body: 'data: ' + JSON.stringify({ delta: '第一集：相遇\n车站相遇。\n第二集：告别\n车站告别。' }) + '\n\ndata: {"done":true}\n\n' }))
+    let requests = 0
+    await page.route('**/content/ai/write/stream', route => { requests++; return route.fulfill({ contentType: 'text/event-stream', body: 'data: {"delta":"部分正文"}\n\ndata: {"done":true,"truncated":true}\n\n' }) })
+    await page.goto(base + '/works/create')
+    await page.waitForFunction(() => !document.querySelector('.creation-title')?.disabled)
+    await page.getByLabel('你的要求', { exact: true }).fill('故事')
+    await page.getByRole('button', { name: '生成大纲', exact: true }).click()
+    await page.getByRole('button', { name: '按大纲生成各章', exact: true }).click()
+    await page.getByRole('button', { name: '开始生成', exact: true }).click()
+    await page.getByRole('button', { name: '暂时停止', exact: true }).click()
+    await page.getByRole('alert').filter({ hasText: '尚未写完' }).first().waitFor()
+    assert.equal(requests, 1)
+    const draft = await page.evaluate(() => JSON.parse(localStorage.getItem('PcUser-CreationDraft:7')))
+    assert.equal(draft.chapters.length, 1)
+    assert.match(documentText(draft.chapters[0].content), /部分正文/)
+    await context.close()
+  })
+  await check('a truncated chapter waits for confirmation before spending quota on continuation', async () => {
+    const context = await browser.newContext()
+    await mockCreatorApi(context)
+    await context.addInitScript(() => localStorage.setItem('PcUser-Token', 'browser-test-only'))
+    const page = await context.newPage()
+    await page.route('**/content/ai/outline/stream', route => route.fulfill({ contentType: 'text/event-stream', body: 'data: ' + JSON.stringify({ delta: '第一集：相遇\n车站相遇。\n第二集：告别\n车站告别。' }) + '\n\ndata: {"done":true}\n\n' }))
+    const requests = []
+    await page.route('**/content/ai/write/stream', route => {
+      requests.push(route.request().postDataJSON())
+      const content = ['第一段', '续写结束', '第二章正文'][requests.length - 1]
+      return route.fulfill({ contentType: 'text/event-stream', body: 'data: ' + JSON.stringify({ delta: content }) + '\n\ndata: ' + JSON.stringify({ done: true, truncated: requests.length === 1 }) + '\n\n' })
+    })
+    await page.goto(base + '/works/create')
+    await page.waitForFunction(() => !document.querySelector('.creation-title')?.disabled)
+    await page.getByLabel('你的要求', { exact: true }).fill('故事')
+    await page.getByRole('button', { name: '生成大纲', exact: true }).click()
+    await page.getByRole('button', { name: '按大纲生成各章', exact: true }).click()
+    await page.getByRole('button', { name: '开始生成', exact: true }).click()
+    await page.getByRole('dialog', { name: '章节需要续写' }).waitFor()
+    assert.equal(requests.length, 1)
+    const partial = await page.evaluate(() => JSON.parse(localStorage.getItem('PcUser-CreationDraft:7')))
+    assert.match(documentText(partial.chapters[0].content), /第一段/)
+    await page.getByRole('button', { name: '续写本章', exact: true }).click()
+    await page.getByText('已生成 2 章，请检查后保存草稿').waitFor()
+    assert.equal(requests.length, 3)
+    assert.match(requests[1].prompt, /第一段/)
+    const draft = await page.evaluate(() => JSON.parse(localStorage.getItem('PcUser-CreationDraft:7')))
+    assert.match(documentText(draft.chapters[0].content), /第一段[\s\S]*续写结束/)
+    assert.match(documentText(draft.chapters[1].content), /第二章正文/)
+    await context.close()
+  })
+  await check('changes from another page prevent generation before spending quota', async () => {
+    const context = await browser.newContext()
+    const state = await mockCreatorApi(context)
+    await context.addInitScript(() => localStorage.setItem('PcUser-Token', 'browser-test-only'))
+    const page = await context.newPage()
+    let writes = 0
+    await page.route('**/content/ai/outline/stream', route => route.fulfill({ contentType: 'text/event-stream', body: 'data: ' + JSON.stringify({ delta: '第一集：相遇\n车站相遇。' }) + '\n\ndata: {"done":true}\n\n' }))
+    await page.route('**/content/ai/write/stream', route => { writes++; return route.abort() })
+    await page.goto(base + '/works/create?workId=3')
+    await page.waitForFunction(() => !document.querySelector('.creation-title')?.disabled)
+    await page.getByLabel('你的要求', { exact: true }).fill('故事')
+    await page.getByRole('button', { name: '生成大纲', exact: true }).click()
+    state.chapters[3][0].chapterNo = 9
+    await page.getByRole('button', { name: '按大纲生成各章', exact: true }).click()
+    await page.getByRole('alert').filter({ hasText: '其他页面变更' }).first().waitFor()
+    assert.equal(writes, 0)
+    assert.equal(await page.getByRole('button', { name: '开始生成', exact: true }).count(), 0)
+    await context.close()
+  })
+  await check('batch failure keeps completed chapters and does not fill the failed chapter', async () => {
+    const context = await browser.newContext()
+    await mockCreatorApi(context)
+    await context.addInitScript(() => localStorage.setItem('PcUser-Token', 'browser-test-only'))
+    const page = await context.newPage()
+    await page.route('**/content/ai/outline/stream', route => route.fulfill({ contentType: 'text/event-stream', body: 'data: ' + JSON.stringify({ delta: '第一集：相遇\n车站相遇。\n第二集：告别\n车站告别。' }) + '\n\ndata: {"done":true}\n\n' }))
+    let count = 0
+    await page.route('**/content/ai/write/stream', route => {
+      count++
+      return route.fulfill({ contentType: 'text/event-stream', body: count === 1 ? 'data: {"delta":"第一集正文"}\n\ndata: {"done":true}\n\n' : 'event: error\ndata: {"code":400,"message":"AI次数不足"}\n\n' })
+    })
+    await page.goto(base + '/works/create')
+    await page.waitForFunction(() => !document.querySelector('.creation-title')?.disabled)
+    await page.getByLabel('你的要求', { exact: true }).fill('故事')
+    await page.getByRole('button', { name: '生成大纲', exact: true }).click()
+    await page.getByRole('button', { name: '按大纲生成各章', exact: true }).click()
+    await page.getByRole('button', { name: '开始生成', exact: true }).click()
+    await page.getByRole('alert').filter({ hasText: '已生成 1 章' }).first().waitFor()
+    const draft = await page.evaluate(() => JSON.parse(localStorage.getItem('PcUser-CreationDraft:7')))
+    assert.deepEqual(draft.chapters.map(c => [c.chapterTitle, documentText(c.content)]), [['第一集：相遇', '第一集正文']])
+    await context.close()
+  })
+  await check('outline generation fills matching empty chapters and preserves existing text', async () => {
+    const context = await browser.newContext()
+    const state = await mockCreatorApi(context)
+    state.chapters[3] = [
+      { chapterId: 30, chapterNo: 1, chapterTitle: '第1章 相遇', content: '已有正文', status: '0', wordCount: 4 },
+      { chapterId: 31, chapterNo: 2, chapterTitle: '第贰章（告别）', content: '', status: '1', wordCount: 0 },
+      { chapterId: 32, chapterNo: 4, chapterTitle: '第4集：不同名称', content: '', status: '1', wordCount: 0 }
+    ]
+    await context.addInitScript(() => localStorage.setItem('PcUser-Token', 'browser-test-only'))
+    const page = await context.newPage()
+    const requests = []
+    await page.route('**/content/ai/outline/stream', route => route.fulfill({ contentType: 'text/event-stream', body: 'data: ' + JSON.stringify({ delta: '第一集：相遇\n两人在车站相遇。\n第二集：告别\n两人依依惜别。\n第三集：重逢\n多年后再次相见。\n第四章：终章\n故事结束。\n第五集：续篇\n新的开始。' }) + '\n\ndata: {"done":true}\n\n' }))
+    await page.route('**/content/ai/write/stream', route => {
+      const body = route.request().postDataJSON(); requests.push(body)
+      return route.fulfill({ contentType: 'text/event-stream', body: 'data: ' + JSON.stringify({ delta: body.prompt.includes('为“第二集：告别”') ? '告别正文' : '重逢正文' }) + '\n\ndata: {"done":true}\n\n' })
+    })
+    await page.goto(base + '/works/create?workId=3')
+    await page.waitForFunction(() => !document.querySelector('.creation-title')?.disabled)
+    await page.getByLabel('你的要求', { exact: true }).fill('写一个重逢故事')
+    await page.getByRole('button', { name: '生成大纲', exact: true }).click()
+    await page.getByRole('button', { name: '按大纲生成各章', exact: true }).click()
+    await page.getByRole('dialog').getByText('第三集：重逢：冲突，跳过', { exact: false }).waitFor()
+    await page.getByRole('dialog').getByText('第四章：终章：冲突，跳过', { exact: false }).waitFor()
+    await page.getByRole('button', { name: '开始生成', exact: true }).click()
+    await page.getByText('已生成 2 章，请检查后保存草稿').waitFor()
+    assert.equal(requests.length, 2)
+    assert.ok(requests.every(request => request.workId === 3))
+    const draft = await page.evaluate(() => JSON.parse(localStorage.getItem('PcUser-CreationDraft:7:work:3')))
+    assert.deepEqual(draft.chapters.map(c => [c.chapterTitle, c.content]), [['第1章 相遇', '已有正文'], ['第贰章（告别）', '告别正文'], ['第4集：不同名称', ''], ['第五集：续篇', '重逢正文']])
+    await context.close()
+  })
+  await check('a trial draft can be published from the work detail', async () => {
+    const context = await browser.newContext()
+    const state = await mockCreatorApi(context)
+    state.chapters[3][0].status = '1'
+    state.chapters[3][0].isFree = '1'
+    await context.addInitScript(() => localStorage.setItem('PcUser-Token', 'browser-test-only'))
+    const page = await context.newPage()
+    await page.route('**/api/v1/content/chapters/30', async route => {
+      assert.deepEqual(route.request().postDataJSON(), { status: '0' })
+      state.chapters[3][0].status = '0'
+      await route.fulfill({ json: { code: 200, data: {} } })
+    })
+    await page.goto(base + '/works/3')
+    const row = page.locator('tbody tr').first()
+    await row.getByText('草稿', { exact: true }).waitFor()
+    await row.getByRole('button', { name: '发布', exact: true }).click()
+    await row.getByText('已发布', { exact: true }).waitFor()
+    assert.equal(state.chapters[3][0].isFree, '1')
+    await context.close()
+  })
   await check('writing a new chapter opens the workspace, restores its draft and saves only the new chapter', async () => {
     const context = await browser.newContext()
     const state = await mockCreatorApi(context)

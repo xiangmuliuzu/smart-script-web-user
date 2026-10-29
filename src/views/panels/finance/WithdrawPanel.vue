@@ -21,6 +21,7 @@
       <label class="field">提现金额（元）
         <input v-model.trim="amount" inputmode="decimal" maxlength="12" :disabled="submitting" placeholder="请输入大于 0 的金额" />
       </label>
+      <p class="cost">1 万元及以下自动通过；超过 1 万元需人工审核。</p>
       <p v-if="formError" class="note bad" role="alert">{{ formError }}</p>
       <button class="btn sm" :disabled="submitting">{{ submitting ? '提交中…' : '申请提现' }}</button>
     </form>
@@ -233,7 +234,7 @@ async function submit() {
   }
   submitting.value = true
   try {
-    await api.value.applyWithdraw({
+    const result = await api.value.applyWithdraw({
       amount: value,
       withdrawType: withdrawType.value,
       accountName: bind.accountName,
@@ -241,7 +242,7 @@ async function submit() {
       bankName: withdrawType.value === 'bank' ? bind.bankName : undefined,
       clientToken: `wd_${Date.now()}_${value.toFixed(2)}`.slice(0, 64)
     })
-    ElMessage.success('提现申请已提交')
+    ElMessage.success(result?.status === 'pending' ? '提现申请已提交，等待人工审核' : '提现已自动通过')
     amount.value = ''
     await Promise.all([loadOverview(), reloadList()])
   } catch (failure) {

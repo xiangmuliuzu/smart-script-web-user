@@ -9,7 +9,7 @@
         <template v-else><button v-if="embedded" class="text-button ai-read-current" type="button" :disabled="generating || !currentContent.trim()" @click="form.content = documentText(currentContent)">读取当前分集正文</button><label class="field">要润色的原文<textarea v-model="form.content" placeholder="粘贴需要润色的片段" /></label><label class="field">润色方向<select v-model="form.style"><option>增强画面感</option><option>精简啰嗦</option><option>加强情绪</option></select></label></template>
         <p v-if="error" class="note bad" role="alert">{{ error }}</p><button class="btn" :disabled="generating || !canCreate">{{ generating ? '正在生成…' : tab === 'outline' ? '生成大纲' : tab === 'write' ? '生成正文' : '开始润色' }}</button><p class="cost">生成结果和积分消耗以服务端返回为准</p>
       </form>
-      <div class="compose-out"><h3>{{ tab === 'polish' ? '润色结果' : '生成结果' }}</h3><div class="ai-scroll"><p v-if="generating && result" class="cost" role="status">正在生成，内容持续更新…</p><div v-if="result" class="prose ai-result">{{ displayResult }}</div><LoadState v-else :pending="generating" :empty="!generating" empty-text="写下你的想法，故事将在这里展开。" /><div v-if="result" class="row top-gap"><button v-if="embedded" class="btn sm" :disabled="generating || insertDisabled" @click="$emit('insert', displayResult)">插入正文</button><button v-else class="btn sm" :disabled="generating || copying" @click="adopt">{{ tab === 'outline' ? '采用' : '写入章节' }}</button><button class="btn quiet sm" :disabled="generating" @click="generate">重新生成</button><button v-if="embedded" class="btn quiet sm" :disabled="copying" @click="copyResult">复制</button><button v-else class="btn quiet sm" :disabled="generating" @click="results[tab] = ''">丢弃</button></div><p v-if="result && !form.workId && !embedded" class="cost">未选择作品时，采用会将内容复制到剪贴板。</p><p v-if="embedded && result" class="cost">插入会追加到当前分集，保留原文。</p></div></div>
+      <div class="compose-out"><h3>{{ tab === 'polish' ? '润色结果' : '生成结果' }}</h3><div class="ai-scroll"><p v-if="generating && result" class="cost" role="status">正在生成，内容持续更新…</p><div v-if="result" class="prose ai-result">{{ displayResult }}</div><LoadState v-else :pending="generating" :empty="!generating" empty-text="写下你的想法，故事将在这里展开。" /><div v-if="result" class="row top-gap"><button v-if="embedded && tab === 'outline'" class="btn sm" :disabled="generating || insertDisabled || outlineIncomplete" @click="$emit('fill-outline', displayResult)">按大纲生成各章</button><button v-if="embedded" class="btn sm" :disabled="generating || insertDisabled" @click="$emit('insert', displayResult)">插入正文</button><button v-else class="btn sm" :disabled="generating || copying" @click="adopt">{{ tab === 'outline' ? '采用' : '写入章节' }}</button><button class="btn quiet sm" :disabled="generating || insertDisabled" @click="generate">重新生成</button><button v-if="embedded" class="btn quiet sm" :disabled="copying" @click="copyResult">复制</button><button v-else class="btn quiet sm" :disabled="generating" @click="results[tab] = ''">丢弃</button></div><p v-if="result && !form.workId && !embedded" class="cost">未选择作品时，采用会将内容复制到剪贴板。</p><p v-if="embedded && result" class="cost">插入会追加到当前分集，保留原文。按大纲生成仅填充空章节，每章消耗一次 AI 次数。</p></div></div>
     </div>
     <div v-else class="top-gap"><LoadState :pending="recordLoading" :error="recordError" :retry="loadRecords" :empty="!recordLoading && !recordError && !records.length" /><div v-if="embedded && records.length && !recordError" class="ai-records"><article v-for="record in records" :key="record.recordId" :class="{ open: expanded.has(record.recordId) }"><button class="ai-record-row" type="button" @click="toggleRecord(record.recordId)"><b>{{ typeLabels[record.type] || record.type || 'AI 创作' }}</b><span>{{ record.tokens ?? '—' }} token</span><p>{{ record.title || '独立创作' }}</p><small>{{ dateText(record.createdAt || record.createTime) }}</small></button><div v-if="expanded.has(record.recordId)" class="ai-record-detail"><div v-if="record.input"><h4>我的输入</h4><pre>{{ record.input }}</pre></div><div v-if="record.output"><h4>AI 输出</h4><pre>{{ record.output }}</pre></div><p v-else-if="record.type === 'outline'" class="note">大纲请求未留存内容，请生成后及时保存。</p></div></article></div><div v-else-if="records.length && !recordError" class="tbl"><table><thead><tr><th>时间</th><th>类型</th><th>作品 / 章节</th><th class="num">消耗</th></tr></thead><tbody><tr v-for="record in records" :key="record.recordId"><td>{{ dateText(record.createTime || record.createdAt) }}</td><td>{{ typeLabels[record.type] || record.type || 'AI 创作' }}</td><td>{{ record.workTitle || record.title || '—' }}</td><td>{{ record.tokens ?? '—' }} token</td></tr></tbody></table></div></div>
     <ChapterEditor v-if="editorVisible" v-model="editorVisible" :work-id="form.workId" :chapter-no="nextChapterNo" :initial-content="adopted" />
@@ -25,7 +25,7 @@ import PortalTabs from '../../components/PortalTabs.vue'
 import LoadState from '../../components/LoadState.vue'
 import ChapterEditor from '../../components/ChapterEditor.vue'
 const props = defineProps({ works: Array, embedded: Boolean, workId: [Number, String], currentContent: { type: String, default: '' }, insertDisabled: Boolean, workspaceState: Object })
-defineEmits(['insert'])
+defineEmits(['insert', 'fill-outline'])
 const { api, user, canCreate, handleError } = usePortal()
 const quota = ref(null)
 const quotaText = computed(() => quota.value === null ? '剩余积分 —' : quota.value > 0 ? `剩余 ${quota.value} 积分` : '剩余 0 积分，需到手机获取')
@@ -43,6 +43,7 @@ const tabs = [{ value: 'outline', label: 'AI 大纲' }, { value: 'write', label:
 const typeLabels = { outline: 'AI 大纲', write: props.embedded ? 'AI 续写' : 'AI 写正文', polish: 'AI 润色' }
 const form = props.workspaceState?.form || reactive({ workId: '', genre: '', episodes: 12, prompt: '', content: '', style: '增强画面感', chapterTitle: '' })
 const results = props.workspaceState?.results || reactive({ outline: '', write: '', polish: '' })
+const outlineIncomplete = props.workspaceState ? toRef(props.workspaceState, 'outlineIncomplete') : ref(false)
 const result = computed(() => results[tab.value] || '')
 // 展示用结果：AI 大纲为 JSON 流时，可完整解析则转「字段：值」可读文本；未完整（流式进行中）显示占位，避免暴露 JSON/代码结构。
 const displayResult = computed(() => {
@@ -77,7 +78,7 @@ const editorVisible = ref(false)
 const adopted = ref('')
 const nextChapterNo = ref(1)
 async function generate() {
-  if (generating.value || !canCreate.value) return
+  if (generating.value || props.insertDisabled || !canCreate.value) return
   const type = tab.value
   error.value = ''
   // 去次数化：不再前端拦截次数，直接调用，积分是否足够由后端校验（不足返回积分不足提示）。
@@ -85,11 +86,16 @@ async function generate() {
   if (type === 'outline' && (!Number.isInteger(Number(form.episodes)) || Number(form.episodes) < 1 || Number(form.episodes) > 200)) { error.value = '集数需为 1–200 的整数'; return }
   generating.value = true
   results[type] = ''
+  if (type === 'outline') outlineIncomplete.value = true
   try {
-    const body = type === 'outline' ? { inspiration: form.prompt, genre: form.genre, style: `共 ${form.episodes} 集`, workId: form.workId || undefined } : type === 'polish' ? { content: documentText(form.content), style: form.style } : { prompt: `${form.chapterTitle}\n${props.embedded && props.currentContent ? '已有正文：\n' + documentText(props.currentContent) + '\n续写要求：\n' : ''}${form.prompt}`, workId: form.workId || undefined, type: 'script' }
+    const body = type === 'outline' ? { inspiration: `${form.prompt}\n请提供 ${form.episodes} 个分集，每集单独一行标题，格式为“第1集：章节名称”，下一行写该集剧情概要。`, genre: form.genre, style: `共 ${form.episodes} 集`, workId: form.workId || undefined } : type === 'polish' ? { content: documentText(form.content), style: form.style } : { prompt: `${form.chapterTitle}\n${props.embedded && props.currentContent ? '已有正文：\n' + documentText(props.currentContent) + '\n续写要求：\n' : ''}${form.prompt}`, workId: form.workId || undefined, type: 'script' }
     // 流式生成：delta 逐块追加，实现打字机式实时输出。
     if (api.value.generateStream) {
-      await api.value.generateStream(type, body, delta => { results[type] += delta })
+      const response = await api.value.generateStream(type, body, delta => { results[type] += delta })
+      if (type === 'outline') {
+        outlineIncomplete.value = Boolean(response.truncated)
+        if (response.truncated) error.value = '大纲达到生成长度上限，请减少集数后重新生成。'
+      }
       // 大纲整体为 JSON 对象时转结构化大纲文本（对齐 App 端兜底解析）。
       if (type === 'outline' && results[type]?.trim()) {
         try {
@@ -103,6 +109,7 @@ async function generate() {
       const content = raw && typeof raw === 'object' ? outlineToText(raw) : typeof raw === 'string' ? raw : ''
       if (typeof content !== 'string' || !content.trim()) throw new Error('本次未返回生成内容，请重试')
       results[type] = content
+      if (type === 'outline') outlineIncomplete.value = Boolean(output.truncated)
     }
   } catch (failure) { error.value = failure.message; if (failure.message && failure.message.includes('积分不足')) await promptExchange(); else await handleError(failure) }
   finally { generating.value = false; await loadQuota() }
@@ -130,6 +137,7 @@ async function loadRecords() {
   finally { recordLoading.value = false }
 }
 watch(tab, value => { error.value = ''; loadQuota(); if (value === 'log') loadRecords() })
+watch(() => props.insertDisabled, (disabled, previous) => { if (previous && !disabled) loadQuota() })
 watch(() => props.workId, value => { if (props.embedded) form.workId = value || '' }, { immediate: true })
 watch(user, value => { if (value?.userId) loadQuota() }, { immediate: true })
 // 次数余额实时刷新：组件常驻时 onMounted 只执行一次，补上页面切回/窗口聚焦时的重取。

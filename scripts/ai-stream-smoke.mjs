@@ -1,11 +1,8 @@
 import assert from 'node:assert/strict'
-import { createRequire } from 'node:module'
+import * as playwright from 'playwright'
 import { createServer } from 'vite'
 import { mockCreatorApi } from './fixtures/creator-api.mjs'
 
-let playwright
-try { playwright = createRequire(import.meta.url)('playwright') }
-catch { playwright = createRequire(new URL('../../shared/scripts/package.json', import.meta.url))('playwright') }
 let response
 const event = data => 'data:' + JSON.stringify(data) + '\n\n'
 const server = await createServer({

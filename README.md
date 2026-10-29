@@ -22,7 +22,7 @@ npm run gate
 
 开发地址 http://localhost:3001/user/。通过 .env.local 的 VITE_API_TARGET 指定同一整体后端；默认 http://localhost:8080。
 
-浏览器验证：先启动开发服务，再运行 `npm run test:browser`。测试脚本在浏览器拦截 API 响应，应用仍执行正常登录与接口流程。脚本优先使用项目可解析的 Playwright，也可复用本工作区 `../shared/scripts` 已安装的 Playwright；独立 checkout 需自行准备 Playwright 及 Chromium。截图与校验结果在 `docs/screenshots`，验证范围和联调边界见 `docs/superpowers/reports/2026-10-14-user-prototype-v2-validation.md`。
+浏览器验证：先启动开发服务，再运行 `npm run test:browser`。测试脚本在浏览器拦截 API 响应，应用仍执行正常登录与接口流程。Playwright 已作为本项目开发依赖，安装依赖后执行 `npx playwright install chromium` 准备浏览器。截图与校验结果在 `docs/screenshots`，验证范围和联调边界见 `docs/superpowers/reports/2026-10-14-user-prototype-v2-validation.md`。
 
 创作上传采用三栏工作区：左侧管理资料和分集、中间编辑正文、右侧 AI 助手。默认分集名为「第 1 集、第 2 集…」，删除按钮在各分集卡片右下角，确认后删除，删除其他分集时保留当前正文。字体、字号、文字与段落格式及剧本工具使用单行可左右滚动的工具栏；窄屏目录与 AI 使用抽屉。草稿按用户保存在本机，保存草稿后同步到作品并进入详情；提交审核前确认锁定规则。人物便签仅在本机存档，可导出。
 

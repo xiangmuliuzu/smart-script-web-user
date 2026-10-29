@@ -1,11 +1,8 @@
 import assert from 'node:assert/strict'
 import { mockCreatorApi } from './fixtures/creator-api.mjs'
-import { createRequire } from 'node:module'
+import * as playwright from 'playwright'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-let playwright
-try { playwright = createRequire(import.meta.url)('playwright') }
-catch { playwright = createRequire(new URL('../../shared/scripts/package.json', import.meta.url))('playwright') }
 const { chromium } = playwright
 const base = (process.env.PREVIEW_URL || 'http://127.0.0.1:3001/user').replace(/\/$/, '')
 const shots = fileURLToPath(new URL('../docs/screenshots/', import.meta.url))
@@ -52,6 +49,29 @@ try {
     await page.waitForTimeout(500)
     await page.reload(); await editor.waitFor()
     assert.match(await editor.innerHTML(), /ql-font-songti/); assert.match(await editor.innerHTML(), /font-size: 24px/); assert.match(await editor.innerHTML(), /ql-align-center/)
+  })
+  await check('reading mode preserves formatted drafts and prevents edits', async () => {
+    const original = await editor.innerHTML()
+    const title = await page.getByLabel('分集标题', { exact: true }).inputValue()
+    await page.getByRole('button', { name: '阅读', exact: true }).click()
+    assert.equal(await page.getByRole('button', { name: '阅读', exact: true }).getAttribute('aria-pressed'), 'true')
+    assert.equal(await editor.getAttribute('contenteditable'), 'false')
+    assert.equal(await page.locator('.document-toolbar-frame').isVisible(), false)
+    assert.equal(await page.getByLabel('分集标题', { exact: true }).getAttribute('readonly'), '')
+    assert.equal(await page.getByRole('button', { name: '新建分集', exact: true }).isDisabled(), true)
+    assert.equal(await page.getByRole('button', { name: '导入剧本', exact: true }).isDisabled(), true)
+    await page.getByRole('button', { name: '故事简介', exact: true }).click()
+    assert.equal(await page.getByLabel('故事简介', { exact: true }).getAttribute('readonly'), '')
+    await page.getByRole('button', { name: '人物便签', exact: true }).click()
+    assert.equal(await page.getByLabel('人物便签', { exact: true }).getAttribute('readonly'), '')
+    await page.getByRole('navigation', { name: '正文分集', exact: true }).locator('.episode-select').first().click()
+    assert.equal(await editor.innerHTML(), original)
+    assert.equal(await editor.getAttribute('contenteditable'), 'false')
+    await page.getByRole('button', { name: '编辑', exact: true }).click()
+    assert.equal(await editor.getAttribute('contenteditable'), 'true')
+    assert.equal(await page.locator('.document-toolbar-frame').isVisible(), true)
+    assert.equal(await page.getByLabel('分集标题', { exact: true }).inputValue(), title)
+    assert.equal(await editor.innerHTML(), original)
   })
   await check('chapter switching, removal and AI append preserve previous text and formatting', async () => {
     const first = await editor.innerHTML()
