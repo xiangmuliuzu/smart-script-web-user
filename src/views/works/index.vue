@@ -24,7 +24,7 @@
         <button v-for="work in todos" :key="work.workId" class="todo-item" :data-tone="work.status === 'reviewing' ? 'wait' : 'bad'" @click="goWork(work.workId)"><b>{{ work.title }} · {{ work.status === 'reviewing' ? '内容审核中' : '需要修改' }}</b><span>{{ work.reviewSummary || (work.status === 'reviewing' ? '审核完成后将通过站内消息通知你' : '查看审核意见，修改后可重新提交') }}</span></button>
         <p v-if="!pending && !todos.length" class="cost">{{ error ? '作品加载后显示待办' : '暂无待办，专心写下一个故事。' }}</p>
       </div>
-      <div class="aside-block"><h3>最近动态</h3><ul class="aside-log"><li v-for="work in recent" :key="work.workId"><time>{{ dateText(work.updateTime || work.createTime) }}</time>{{ work.title }} · {{ stateOf(work.status).label }}</li></ul><p v-if="!pending && !recent.length" class="cost">暂无最近动态</p></div>
+      <details class="aside-block activity-list"><summary><h3>最近动态</h3></summary><ul class="aside-log"><li v-for="work in recent" :key="work.workId"><time>{{ dateText(work.updateTime || work.createTime) }}</time>{{ work.title }} · {{ stateOf(work.status).label }}</li></ul><p v-if="!pending && !recent.length" class="cost">暂无最近动态</p></details>
     </aside>
   </div>
 </template>
@@ -57,3 +57,11 @@ async function load() {
 }
 onMounted(load)
 </script>
+<style scoped>
+.activity-list summary { display: flex; align-items: center; justify-content: space-between; cursor: pointer; list-style: none; }
+.activity-list summary::-webkit-details-marker { display: none; }
+.activity-list summary h3 { margin: 0; }
+.activity-list summary::after { content: '⌄'; color: var(--ink-3); font-size: 16px; }
+.activity-list[open] summary::after { transform: rotate(180deg); }
+.activity-list summary:focus-visible { outline: 2px solid var(--indigo); outline-offset: 3px; }
+</style>
