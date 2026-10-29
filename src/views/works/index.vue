@@ -22,7 +22,7 @@
       <div class="aside-head"><h2>工作台</h2><span class="aside-note">{{ orderPending || orderError ? '订单待办' : todos.length + ' 项待办' }}</span></div>
       <div class="aside-block"><h3>待办<span v-if="!orderPending && !orderError" class="count">{{ todos.length }}</span></h3>
         <LoadState :pending="orderPending" :error="orderError" :retry="loadTodo" loading-text="正在加载订单…" />
-        <template v-if="!orderError"><button v-for="order in todos" :key="order.orderId" class="todo-item order-todo" @click="openPanel('cooperation', 'order', order.orderNo || order.workTitle || '')"><span class="todo-order-head"><b>《{{ order.workTitle || '订单#' + order.orderId }}》</b><em>{{ orderStatusLabel(order.status) }}</em></span><span>订单号：{{ order.orderNo || '#' + order.orderId }} · {{ money(Number(order.amount || 0) / 100) }}</span><span class="todo-progress"><span v-for="(step, i) in orderSteps" :key="step" :class="{ active: orderStepIndex(order.status) >= i }">{{ step }}</span></span></button></template>
+        <div v-if="!orderError && todos.length" class="todo-list" role="region" aria-label="订单待办列表" tabindex="0"><button v-for="order in todos" :key="order.orderId" class="todo-item order-todo" @click="openPanel('cooperation', 'order', order.orderNo || order.workTitle || '')"><span class="todo-order-head"><b>《{{ order.workTitle || '订单#' + order.orderId }}》</b><em>{{ orderStatusLabel(order.status) }}</em></span><span>订单号：{{ order.orderNo || '#' + order.orderId }} · {{ money(Number(order.amount || 0) / 100) }}</span><span class="todo-progress"><span v-for="(step, i) in orderSteps" :key="step" :class="{ active: orderStepIndex(order.status) >= i }">{{ step }}</span></span></button></div>
         <p v-if="!orderPending && !orderError && !todos.length" class="cost">暂无待处理订单。</p>
       </div>
       <details class="aside-block activity-list"><summary><h3>最近动态</h3></summary><ul class="aside-log"><li v-for="work in recent" :key="work.workId"><time>{{ dateText(work.updateTime || work.createTime) }}</time>{{ work.title }} · {{ stateOf(work.status).label }}</li></ul><p v-if="!pending && !recent.length" class="cost">暂无最近动态</p></details>
@@ -69,6 +69,8 @@ onMounted(() => { load(); loadTodo() })
 defineExpose({ loadTodo })
 </script>
 <style scoped>
+.todo-list { max-height: min(320px, 35vh); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--rule-2) transparent; }
+.todo-list:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
 .activity-list summary { display: flex; align-items: center; justify-content: space-between; cursor: pointer; list-style: none; }
 .activity-list summary::-webkit-details-marker { display: none; }
 .activity-list summary h3 { margin: 0; }
