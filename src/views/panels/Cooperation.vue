@@ -1,5 +1,5 @@
 <template>
-  <PortalLayer v-model="visible" title="我的合作" wide>
+  <PortalLayer v-model="visible" title="交易管理" wide>
     <PortalTabs v-model="tab" :items="tabs" drawer label="合作类型" />
     <div class="panel-content">
       <!-- ═══ 询盘 Tab ═══ -->
@@ -528,7 +528,11 @@ watch(tab, v => {
   else if (v === 'order') loadOrders()
 })
 watch(() => props.initialTab, v => { if (v) tab.value = v })
-onMounted(() => { loadInquiries() })
+onMounted(() => {
+  if (tab.value === 'session') { templateVisible.value = true; loadTradeSessions() }
+  else if (tab.value === 'order') loadOrders()
+  else if (tab.value === 'inquiry') loadInquiries()
+})
 onUnmounted(() => { stopChatPoll() })
 </script>
 <style scoped>

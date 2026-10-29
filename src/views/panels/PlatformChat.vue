@@ -3,7 +3,7 @@
     <header class="workspace-page-head">
       <div class="page-head-copy">
         <h1>平台客服</h1>
-        <p>向平台客服反馈问题与跟进处理进度（与作者的交易对话请在「我的合作」的会话中进行）</p>
+        <p>向平台客服反馈问题与跟进处理进度（交易对话请在顶部「会话」中进行）</p>
       </div>
       <button class="workspace-page-close" type="button" @click="$emit('update:modelValue', false)">关闭</button>
     </header>
