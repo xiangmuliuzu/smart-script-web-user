@@ -30,7 +30,7 @@ export async function mockCreatorApi(context, apiPrefix = '/dev-api') {
     else if (path.endsWith('/auth/getInfo')) result = { code: 200, user: { ...user, ...profile }, roles: [], permissions: [] }
     else if (path.endsWith('/auth/logout')) result.data = null
     else if (path.endsWith('/categories')) result.data = categories
-    else if (path === '/api/v1/ai/quota/balance') result.data = { availableQuota: 12 }
+    else if (path === '/api/v1/welfare/points/balance') result.data = { balance: 80 }
     else if (upload) result.data = { url: '/profile/upload/test-script.txt', materialRef: 'test-material' }
     else if (path === '/api/v1/content/works' && method === 'POST') {
       const workId = Math.max(...works.map(work => work.workId), 0) + 1

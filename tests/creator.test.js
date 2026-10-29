@@ -80,18 +80,17 @@ test('business API uses current-user routes, mapped fields and the existing Bear
   for (const call of calls) { assert.equal(call.headers.Authorization, 'Bearer test-user-token'); assert.ok(!call.url.includes('/admin/')) }
   assert.equal(getToken(), 'test-user-token')
 })
-test('ai quota balance reads availableQuota with Bearer token and no client-side fallback', async () => {
+test('ai quota balance reads points balance with Bearer token and no client-side fallback', async () => {
   let called
-  globalThis.fetch = async (url, options) => { called = { url, headers: options.headers }; return { ok: true, status: 200, json: async () => ({ code: 200, data: { availableQuota: 3, totalEarned: 5, records: [{ recordId: 1 }] } }) } }
+  globalThis.fetch = async (url, options) => { called = { url, headers: options.headers }; return { ok: true, status: 200, json: async () => ({ code: 200, data: { balance: 80, totalEarned: 200 } }) } }
   const quota = await api.getAiQuota(106)
-  assert.equal(called.url, '/dev-api/api/v1/ai/quota/balance?userId=106')
+  assert.equal(called.url, '/dev-api/api/v1/welfare/points/balance?userId=106')
   assert.equal(called.headers.Authorization, 'Bearer test-user-token')
-  assert.equal(quota.available, 3)
-  assert.equal(quota.records.length, 1)
-  globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ code: 200, data: { availableQuota: 0 } }) })
+  assert.equal(quota.available, 80)
+  globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ code: 200, data: { balance: 0 } }) })
   assert.equal((await api.getAiQuota(7)).available, 0)
-  globalThis.fetch = async () => ({ ok: true, status: 503, json: async () => ({ code: 503, message: 'AI 服务暂不可用' }) })
-  await assert.rejects(api.getAiQuota(7), /AI 服务暂不可用/)
+  globalThis.fetch = async () => ({ ok: true, status: 503, json: async () => ({ code: 503, message: '积分服务暂不可用' }) })
+  await assert.rejects(api.getAiQuota(7), /积分服务暂不可用/)
 })
 test('multipart upload lets the browser set its boundary and sends no client user id', async () => {
   let sent
@@ -134,20 +133,21 @@ test('quota tip only appears when balance hits zero and steers PC users to the p
 })
 test('ai records merge write/polish and outline records, tagged by type and newest first', async () => {
   globalThis.fetch = async url => {
-    if (url.includes('/write-records')) return { ok: true, status: 200, json: async () => ({ code: 200, data: { list: [{ recordId: 1, writeType: 'polish', title: '润色测试', inputPrompt: '原句', outputContent: '润色后', status: 'success', createdAt: '2026-10-15 10:00:00' }, { recordId: 2, writeType: 'write', title: '续写测试', inputPrompt: '提示词', outputContent: '正文', createdAt: '2026-10-14 09:00:00' }] } }) }
-    if (url.includes('/outline-records')) return { ok: true, status: 200, json: async () => ({ code: 200, data: { list: [{ requestId: 9, quotaCost: 1, status: 'success', createdAt: '2026-10-16 09:00:00' }] } }) }
+    if (url.includes('/write-records')) return { ok: true, status: 200, json: async () => ({ code: 200, data: { list: [{ recordId: 1, writeType: 'polish', title: '润色测试', inputPrompt: '原句', outputContent: '润色后', tokensUsed: 320, status: 'success', createdAt: '2026-10-15 10:00:00' }, { recordId: 2, writeType: 'write', title: '续写测试', inputPrompt: '提示词', outputContent: '正文', tokensUsed: 150, createdAt: '2026-10-14 09:00:00' }] } }) }
+    if (url.includes('/outline-records')) return { ok: true, status: 200, json: async () => ({ code: 200, data: { list: [{ requestId: 9, quotaCost: 500, status: 'success', createdAt: '2026-10-16 09:00:00' }] } }) }
     throw new Error('unexpected url ' + url)
   }
   const records = await api.listAiRecords()
   assert.equal(records.length, 3)
   assert.equal(records[0].type, 'outline')
-  assert.equal(records[0].quotaUsed, 1)
+  assert.equal(records[0].tokens, 500)
   assert.equal(records[0].output, '')
   assert.equal(records[1].type, 'polish')
   assert.equal(records[1].input, '原句')
   assert.equal(records[1].output, '润色后')
+  assert.equal(records[1].tokens, 320)
   assert.equal(records[2].type, 'write')
-  assert.equal(records[2].quotaUsed, null)
+  assert.equal(records[2].tokens, 150)
 })
 test('outline object renders as readable labelled text, never raw JSON', () => {
   const outline = { title: '测试纪元', logline: '一句话故事', characters: [{ name: '林澈', role: '主角' }], acts: [{ name: '第一幕', summary: '开局', beats: ['觉醒', '反转'] }] }
@@ -196,24 +196,24 @@ test('generateStream outline returns text delta and raises on error events witho
   const okStream = new ReadableStream({
     start(controller) {
       controller.enqueue(new TextEncoder().encode('event:message\ndata:{"delta":"{\\"title\\":\\"测试\\"}"}\n\n'))
-      controller.enqueue(new TextEncoder().encode('event:message\ndata:{"done":true,"quotaUsed":1,"requestNo":"AIR20261021"}\n\n'))
+      controller.enqueue(new TextEncoder().encode('event:message\ndata:{"done":true,"quotaUsed":850,"requestNo":"AIR20261021"}\n\n'))
       controller.close()
     },
   })
   globalThis.fetch = async () => ({ ok: true, status: 200, body: okStream })
   const result = await api.generateStream('outline', { inspiration: '都市' }, () => {})
   assert.ok(result.outline.includes('"title"'))
-  assert.equal(result.quotaUsed, 1)
+  assert.equal(result.quotaUsed, 850)
   assert.equal(result.requestNo, 'AIR20261021')
 
   const errStream = new ReadableStream({
     start(controller) {
-      controller.enqueue(new TextEncoder().encode('event:error\ndata:{"code":400,"message":"AI次数不足，当前可用: 0 次"}\n\n'))
+      controller.enqueue(new TextEncoder().encode('event:error\ndata:{"code":400,"message":"积分不足，当前余额: 0 分"}\n\n'))
       controller.close()
     },
   })
   globalThis.fetch = async () => ({ ok: true, status: 200, body: errStream })
-  await assert.rejects(api.generateStream('write', { prompt: 'x' }, () => {}), /AI次数不足/)
+  await assert.rejects(api.generateStream('write', { prompt: 'x' }, () => {}), /积分不足/)
 })
 test('generateStream reports non-ok HTTP as an error before reading the stream', async () => {
   globalThis.fetch = async () => ({ ok: false, status: 503, json: async () => ({ code: 503, message: 'AI 服务暂不可用' }) })

@@ -166,17 +166,18 @@ function parseSseBlock(block) {
 const listWriteRecords = async () => asList(await data('/api/v1/content/ai/write-records'))
 const listOutlineRecords = async () => asList(await data('/api/v1/content/ai/outline-records'))
 // 生成记录 = 写作/润色 + 大纲记录合并，按时间倒序；write/polish 带输入输出，outline 仅请求元信息。
+// 【去次数化】消耗统一为实际 token：写作记录取 tokens_used，大纲记录取 quota_cost（后端已存真实 token）。
 export const listAiRecords = async () => {
   const [writes, outlines] = await Promise.all([listWriteRecords(), listOutlineRecords()])
   const items = []
-  for (const w of writes) items.push({ recordId: w.recordId, type: w.writeType === 'polish' ? 'polish' : 'write', title: w.title || '独立创作', input: w.inputPrompt || '', output: w.outputContent || '', quotaUsed: null, status: w.status, createdAt: w.createdAt })
-  for (const o of outlines) items.push({ recordId: o.requestId, type: 'outline', title: 'AI 大纲请求', input: '', output: '', quotaUsed: o.quotaCost ?? null, status: o.status, createdAt: o.createdAt })
+  for (const w of writes) items.push({ recordId: w.recordId, type: w.writeType === 'polish' ? 'polish' : 'write', title: w.title || '独立创作', input: w.inputPrompt || '', output: w.outputContent || '', tokens: w.tokensUsed ?? null, status: w.status, createdAt: w.createdAt })
+  for (const o of outlines) items.push({ recordId: o.requestId, type: 'outline', title: 'AI 大纲请求', input: '', output: '', tokens: o.quotaCost ?? null, status: o.status, createdAt: o.createdAt })
   return items.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
 }
-// AI 次数余额（App 端同口径：availableQuota 可用次数）。
+// 积分余额（AI 创作按 token 消耗直接扣积分，前端展示剩余积分）。
 export const getAiQuota = async userId => {
-  const result = await data(`/api/v1/ai/quota/balance?userId=${encodeURIComponent(userId)}`)
-  return { available: Number(result.availableQuota) || 0, records: result.records || [] }
+  const result = await data(`/api/v1/welfare/points/balance?userId=${encodeURIComponent(userId)}`)
+  return { available: Number(result.balance) || 0 }
 }
 export const listMessages = async () => asList(await data('/api/v1/messages?pageSize=100')).map(item => ({ ...item, isRead: item.read, content: item.summary, createTime: item.createdAt }))
 export const getMessage = id => data(`/api/v1/messages/${encodeURIComponent(id)}`)
