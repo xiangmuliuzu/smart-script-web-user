@@ -11,7 +11,6 @@
           <button class="nav-icon" aria-label="会话" @click="openPanel('cooperation', 'session')"><span class="ico"><el-icon><ChatRound /></el-icon></span><span class="lbl">会话</span></button>
           <button class="nav-icon" aria-label="订单" @click="openPanel('cooperation', 'order')"><span class="ico"><el-icon><Tickets /></el-icon></span><span class="lbl">订单</span></button>
           <button class="nav-icon" aria-label="合同" @click="openPanel('cooperation', 'contract')"><span class="ico"><el-icon><Document /></el-icon></span><span class="lbl">合同</span></button>
-          <button class="nav-icon" aria-label="版权与收益" @click="openPanel('rights', 'apply')"><span class="ico"><el-icon><Collection /></el-icon></span><span class="lbl">版权与收益</span></button>
           <button class="nav-icon" aria-label="消息" @click="openPanel('messages')"><span class="ico"><el-icon><Bell /></el-icon><span v-if="unread" class="badge">{{ unread > 99 ? '99+' : unread }}</span></span><span class="lbl">消息</span></button>
           <button class="nav-icon" aria-label="平台客服" @click="openPanel('chat')"><span class="ico"><el-icon><ChatDotRound /></el-icon><span v-if="chatUnread" class="badge">{{ chatUnread > 99 ? '99+' : chatUnread }}</span></span><span class="lbl">平台客服</span></button>
           <el-dropdown trigger="click" @command="accountCommand">
@@ -33,7 +32,7 @@
 import { computed, nextTick, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Bell, ChatDotRound, ChatLineSquare, ChatRound, Collection, Document, Tickets, ArrowDown } from '@element-plus/icons-vue'
+import { Bell, ChatDotRound, ChatLineSquare, ChatRound, Document, Tickets, ArrowDown } from '@element-plus/icons-vue'
 import { getInfo, isAuthFailure, logout } from '../auth.js'
 import { portalKey } from '../utils/portal.js'
 import { avatarUrl } from '../utils/avatarUrl.js'

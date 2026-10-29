@@ -21,7 +21,8 @@
             <b>{{ item.sealName || '未命名印章' }}</b>
             <span class="status-tag" :class="'tone-' + reviewTone(item.reviewStatus)">{{ reviewStatusLabel(item.reviewStatus) }}</span>
           </div>
-          <p class="cost">印章状态：{{ sealStatusLabel(item.sealStatus) }} · 申请于 {{ dateText(item.createTime) }}</p>
+          <p class="cost">印章状态：{{ sealStatusLabel(item.sealStatus) }}</p>
+          <p class="cost">申请时间：{{ dateText(item.createTime) }}</p>
           <p v-if="item.reviewStatus === 'rejected' && item.rejectReason" class="note bad seal-reject">{{ item.rejectReason }}</p>
         </div>
         <button class="btn quiet sm" type="button" @click.stop="openDetail(item.sealId)">查看</button>

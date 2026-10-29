@@ -29,44 +29,18 @@
       empty-text="暂无版权资产。审核通过并已发布的作品会出现在这里。"
     />
 
-    <div v-if="!pending && !loadError && list.length" class="tbl">
-      <table>
-        <thead>
-          <tr>
-            <th>作品</th>
-            <th style="width:110px">题材</th>
-            <th style="width:100px">上架状态</th>
-            <th style="width:140px">创建时间</th>
-            <th style="width:220px"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="item in list" :key="item.workId">
-            <td>
-              <b>{{ item.title || ('作品#' + item.workId) }}</b>
-              <p class="cost">{{ workTypeLabel(item.workType) }} · #{{ item.workId }}</p>
-            </td>
-            <td class="num">{{ item.genreName || '—' }}</td>
-            <td>
-              <span class="status-tag" :class="'tone-' + shelfStatusTone(item.status)">{{ shelfStatusLabel(item.status) }}</span>
-            </td>
-            <td class="num">{{ dateText(item.createTime) }}</td>
-            <td class="ops">
-              <button class="btn quiet sm" type="button" @click="openDetail(item.workId)">详情</button>
-              <button class="btn quiet sm" type="button" @click="openHistory(item)">授权历史</button>
-              <button
-                v-if="canToggleShelf(item)"
-                class="btn sm"
-                type="button"
-                :disabled="busyWorkId !== null"
-                @click="toggleShelf(item)"
-              >
-                {{ item.status === 'on_shelf' ? '下架' : '上架' }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div v-if="!pending && !loadError && list.length" class="worklist">
+      <CopyrightWorkCard v-for="item in list" :key="item.workId" :title="item.title || ('作品#' + item.workId)" :cover="worksForCovers.find(w => w.workId === item.workId)?.cover" :status="shelfStatusLabel(item.status)">
+        <p class="cost">作品类型：{{ workTypeLabel(item.workType) }}</p>
+        <p class="cost">题材：{{ item.genreName || '未分类' }}</p>
+        <p class="cost">作品编号：{{ item.workId }}</p>
+        <p class="cost">创建时间：{{ dateText(item.createTime) }}</p>
+        <template #actions>
+          <button class="btn quiet sm" type="button" @click="openDetail(item.workId)">详情</button>
+          <button class="btn quiet sm" type="button" @click="openHistory(item)">授权历史</button>
+          <button v-if="canToggleShelf(item)" class="btn sm" type="button" :disabled="busyWorkId !== null" @click="toggleShelf(item)">{{ item.status === 'on_shelf' ? '下架' : '上架' }}</button>
+        </template>
+      </CopyrightWorkCard>
     </div>
 
     <div v-if="!pending && !loadError && total > pageSize" class="pager">
@@ -156,6 +130,7 @@ import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PortalLayer from '../../../components/PortalLayer.vue'
 import LoadState from '../../../components/LoadState.vue'
+import CopyrightWorkCard from './CopyrightWorkCard.vue'
 import { usePortal } from '../../../utils/portal.js'
 import { dateText } from '../../../utils/creator.js'
 import {
@@ -166,6 +141,7 @@ import {
 } from '../../../utils/copyright.js'
 
 const { api, handleError } = usePortal()
+defineProps({ worksForCovers: { type: Array, default: () => [] } })
 
 const list = ref([])
 const total = ref(0)

@@ -28,41 +28,19 @@
       empty-text="暂无交割记录。需走完交易流程并完成付款后，才会在此生成交割单。"
     />
 
-    <div v-if="!pending && !loadError && list.length" class="tbl">
-      <table>
-        <thead>
-          <tr>
-            <th>作品 / 交割单</th>
-            <th style="width:110px">金额</th>
-            <th style="width:160px">状态</th>
-            <th style="width:140px">创建时间</th>
-            <th style="width:130px"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="item in list" :key="item.deliveryId">
-            <td>
-              <b>{{ item.workTitle || ('作品#' + item.workId) }}</b>
-              <p class="cost">{{ item.deliveryNo || ('交割#' + item.deliveryId) }} · {{ deliveryLicenseLabel(item.licenseType) }}</p>
-              <p class="cost">买方：{{ item.buyerName || item.buyerId }} · 卖方：{{ item.sellerName || item.sellerId }}</p>
-            </td>
-            <td class="num">{{ moneyYuan(item.amount) }}</td>
-            <td>
-              <span class="status-tag" :class="'tone-' + deliveryStatusTone(item.status)">{{ deliveryStatusLabel(item.status) }}</span>
-              <p v-if="deliveryStatusDescription(item.status)" class="status-desc">{{ deliveryStatusDescription(item.status) }}</p>
-            </td>
-            <td class="num">{{ dateText(item.createTime) }}</td>
-            <td class="ops">
-              <button
-                class="btn sm"
-                :class="actionOf(item).primary ? '' : 'quiet'"
-                type="button"
-                @click="openDetail(item.deliveryId)"
-              >{{ actionOf(item).label }}</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div v-if="!pending && !loadError && list.length" class="worklist">
+      <CopyrightWorkCard v-for="item in list" :key="item.deliveryId" :title="item.workTitle || ('作品#' + item.workId)" :cover="worksForCovers.find(w => w.workId === item.workId)?.cover" :status="deliveryStatusLabel(item.status)">
+        <p class="cost">交割单号：{{ item.deliveryNo || ('#' + item.deliveryId) }}</p>
+        <p class="cost">授权类型：{{ deliveryLicenseLabel(item.licenseType) }}</p>
+        <p class="cost">金额：{{ moneyYuan(item.amount) }}</p>
+        <p class="cost">买方：{{ item.buyerName || item.buyerId || '—' }}</p>
+        <p class="cost">卖方：{{ item.sellerName || item.sellerId || '—' }}</p>
+        <p class="cost">创建时间：{{ dateText(item.createTime) }}</p>
+        <p v-if="deliveryStatusDescription(item.status)" class="status-desc">{{ deliveryStatusDescription(item.status) }}</p>
+        <template #actions>
+          <button class="btn sm" :class="actionOf(item).primary ? '' : 'quiet'" type="button" @click="openDetail(item.deliveryId)">{{ actionOf(item).label }}</button>
+        </template>
+      </CopyrightWorkCard>
     </div>
 
     <div v-if="!pending && !loadError && total > pageSize" class="pager">
@@ -168,6 +146,7 @@ import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PortalLayer from '../../../components/PortalLayer.vue'
 import LoadState from '../../../components/LoadState.vue'
+import CopyrightWorkCard from './CopyrightWorkCard.vue'
 import { usePortal } from '../../../utils/portal.js'
 import { dateText, money } from '../../../utils/creator.js'
 import { avatarUrl } from '../../../utils/avatarUrl.js'
@@ -182,6 +161,7 @@ import {
 } from '../../../utils/copyright.js'
 
 const { api, user, handleError } = usePortal()
+defineProps({ worksForCovers: { type: Array, default: () => [] } })
 
 const list = ref([])
 const total = ref(0)

@@ -11,28 +11,16 @@
 
     <LoadState :pending="pending" :error="loadError" :retry="load" :empty="!pending && !loadError && !list.length" empty-text="暂无电子证书，版权登记完成后会显示在这里" />
 
-    <div v-if="!pending && !loadError && list.length" class="certs">
-      <article v-for="item in list" :key="item.certId" class="cert" @click="openDetail(item.certId)">
-        <h3>{{ item.workName || ('作品#' + item.workId) }}</h3>
-        <p class="no">{{ item.certNo || '证书编号待生成' }}</p>
-        <dl>
-          <div>
-            <dt>著作权人</dt>
-            <dd>{{ item.userName || '—' }}</dd>
-          </div>
-          <div>
-            <dt>登记日期</dt>
-            <dd>{{ dateText(item.certTime || item.applyTime).slice(0, 10) }}</dd>
-          </div>
-        </dl>
-        <p class="cert-status">
-          <span class="status-tag" :class="'tone-' + certStatusTone(item.status)">{{ certStatusLabel(item.status) }}</span>
-        </p>
-        <div class="ops" @click.stop>
-          <button class="btn sm" type="button" @click="openDetail(item.certId)">查看</button>
+    <div v-if="!pending && !loadError && list.length" class="worklist">
+      <CopyrightWorkCard v-for="item in list" :key="item.certId" :title="item.workName || ('作品#' + item.workId)" :cover="worksForCovers.find(w => w.workId === item.workId)?.cover" :status="certStatusLabel(item.status)">
+        <p class="cost">证书编号：{{ item.certNo || '待生成' }}</p>
+        <p class="cost">著作权人：{{ item.userName || '—' }}</p>
+        <p class="cost">登记日期：{{ dateText(item.certTime || item.applyTime).slice(0, 10) }}</p>
+        <template #actions>
+          <button class="btn sm" type="button" @click="openDetail(item.certId)">查看证书</button>
           <button v-if="isCertIssued(item)" class="btn quiet sm" type="button" :disabled="busy" @click="doDownload(item)">下载证书</button>
-        </div>
-      </article>
+        </template>
+      </CopyrightWorkCard>
     </div>
 
     <PortalLayer v-model="detailVisible" title="电子证书详情" modal big>
@@ -70,6 +58,7 @@ import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import PortalLayer from '../../../components/PortalLayer.vue'
 import LoadState from '../../../components/LoadState.vue'
+import CopyrightWorkCard from './CopyrightWorkCard.vue'
 import { usePortal } from '../../../utils/portal.js'
 import { dateText } from '../../../utils/creator.js'
 import { mediaUrl } from '../../../utils/avatarUrl.js'
@@ -79,6 +68,7 @@ import {
 } from '../../../utils/copyright.js'
 
 const { api, handleError } = usePortal()
+defineProps({ worksForCovers: { type: Array, default: () => [] } })
 
 const list = ref([])
 const total = ref(0)

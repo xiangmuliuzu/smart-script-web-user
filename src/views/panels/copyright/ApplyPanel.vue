@@ -18,40 +18,22 @@
       <button class="btn sm" :disabled="busy" @click="openCreate">立即申请</button>
     </LoadState>
 
-    <div v-if="!pending && !loadError && list.length" class="tbl">
-      <table>
-        <thead>
-          <tr>
-            <th>作品</th>
-            <th style="width:140px">申请编号</th>
-            <th style="width:130px">提交时间</th>
-            <th style="width:120px">当前进度</th>
-            <th style="width:120px"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="item in list" :key="item.applyId">
-            <td>
-              <b>{{ item.workName || ('作品#' + item.workId) }}</b>
-              <p class="cost">{{ workTypeLabel(item.workType) }}{{ item.centerName ? ' · ' + item.centerName : '' }}</p>
-            </td>
-            <td class="num">{{ item.applyNo || '—' }}</td>
-            <td class="num">{{ dateText(item.submitTime || item.createTime) }}</td>
-            <td>
-              <span class="status-tag" :class="'tone-' + applyStatusTone(item.status)">{{ applyStatusLabel(item.status) }}</span>
-              <p v-if="item.status === 'rejected' && item.rejectReason" class="cost reject-tip">{{ item.rejectReason }}</p>
-            </td>
-            <td class="ops">
-              <button class="btn quiet sm" type="button" @click="openDetail(item.applyId)">查看</button>
-              <button v-if="canResubmit(item)" class="btn sm" type="button" @click="openResubmit(item)">重新提交</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div v-if="!pending && !loadError && list.length" class="worklist">
+      <CopyrightWorkCard v-for="item in list" :key="item.applyId" :title="item.workName || ('作品#' + item.workId)" :cover="item.workCoverUrl || worksForCovers.find(w => w.workId === item.workId)?.cover" :status="applyStatusLabel(item.status)">
+        <p class="cost">作品类型：{{ workTypeLabel(item.workType) }}</p>
+        <p v-if="item.centerName" class="cost">版权中心：{{ item.centerName }}</p>
+        <p class="cost">申请编号：{{ item.applyNo || '—' }}</p>
+        <p class="cost">提交时间：{{ dateText(item.submitTime || item.createTime) }}</p>
+        <p v-if="item.status === 'rejected' && item.rejectReason" class="cost reject-tip">{{ item.rejectReason }}</p>
+        <template #actions>
+          <button class="btn quiet sm" type="button" @click="openDetail(item.applyId)">查看申请</button>
+          <button v-if="canResubmit(item)" class="btn sm" type="button" @click="openResubmit(item)">重新提交</button>
+        </template>
+      </CopyrightWorkCard>
     </div>
 
     <!-- 发起 / 重新提交 -->
-    <PortalLayer v-model="formVisible" :title="resubmitId ? '重新提交申请' : '发起版权申请'" modal big :before-close="closeForm">
+    <PortalLayer v-model="formVisible" :title="resubmitId ? '重新提交申请' : '发起版权申请'" modal big size="min(700px, 94vw)" :before-close="closeForm">
       <form class="apply-form" @submit.prevent="submitForm">
         <div v-if="!resubmitId" class="field">
           <span class="field-label">选择作品</span>
@@ -179,6 +161,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PortalLayer from '../../../components/PortalLayer.vue'
 import LoadState from '../../../components/LoadState.vue'
+import CopyrightWorkCard from './CopyrightWorkCard.vue'
 import { usePortal } from '../../../utils/portal.js'
 import { dateText, validateFile } from '../../../utils/creator.js'
 import { mediaUrl, decodeTextBuffer } from '../../../utils/avatarUrl.js'
@@ -191,6 +174,7 @@ import {
 } from '../../../utils/copyright.js'
 
 const emit = defineEmits(['open-cert'])
+defineProps({ worksForCovers: { type: Array, default: () => [] } })
 const { api, handleError } = usePortal()
 
 const list = ref([])
@@ -592,7 +576,7 @@ onMounted(load)
 .tone-bad { background: #fef0f0; color: #f56c6c }
 .tone-off { background: #f4f4f5; color: #909399 }
 
-.apply-form { display: grid; gap: 18px; max-width: 640px }
+.apply-form { display: grid; gap: 18px; width: 100%; max-width: 640px; margin: 0 auto }
 .apply-form .field { display: flex; flex-direction: column; gap: 8px; margin: 0 }
 .apply-form .field-label { font-size: 13px; color: var(--ink-2, #666) }
 .apply-form .field > input:not([type='file']),

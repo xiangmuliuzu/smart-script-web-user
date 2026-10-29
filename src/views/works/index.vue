@@ -1,7 +1,8 @@
 <template>
   <div class="workspace-layout">
-    <section class="workspace-main" aria-label="我的作品">
-      <div class="sec-head sec-head-lg"><div><h2>我的作品</h2><span class="count">{{ summary }}</span></div><button class="more" :aria-expanded="filterOpen" @click="filterOpen = !filterOpen">筛选 / 搜索</button></div>
+    <section class="workspace-main" :aria-label="section === 'works' ? '我的作品' : '版权与收益'">
+      <div class="sec-head sec-head-lg"><div><div class="workspace-switch"><h2><button type="button" :aria-pressed="section === 'works'" @click="section = 'works'">我的作品</button></h2><h2><button type="button" :aria-pressed="section === 'rights'" @click="section = 'rights'">版权与收益</button></h2></div><span v-if="section === 'works'" class="count">{{ summary }}</span></div><button v-if="section === 'works'" class="more" :aria-expanded="filterOpen" @click="filterOpen = !filterOpen">筛选 / 搜索</button></div>
+      <template v-if="section === 'works'">
       <div v-if="!canCreate" class="note info capability-note">创作者能力尚未开通，开通后即可上传作品与使用 AI 创作。<button class="text-button" @click="openPanel('account', 'profile')">查看个人资料 →</button></div>
       <form v-if="filterOpen" class="filters" @submit.prevent>
         <label class="field">搜索作品<input v-model="keyword" placeholder="输入书名或简介" type="search" aria-label="搜索作品" /></label>
@@ -17,6 +18,8 @@
         </button>
       </div>
       <LoadState v-if="!pending && !error" :empty="!filtered.length" :empty-text="keyword || status ? '没有找到符合条件的作品' : '你的故事，从第一部作品开始。'" />
+      </template>
+      <RightsPanel v-else embedded :works="works" />
     </section>
     <aside class="desk-workspace" aria-label="工作台">
       <div class="aside-head"><h2>工作台</h2><span class="aside-note">{{ orderPending || orderError ? '订单待办' : todos.length + ' 项待办' }}</span></div>
@@ -37,8 +40,10 @@ import { avatarUrl } from '../../utils/avatarUrl.js'
 import { stateOf, words, dateText, money } from '../../utils/creator.js'
 import { loadTodoOrders, orderStatusLabel, orderSteps, orderStepIndex } from '../../utils/orderTodo.js'
 import LoadState from '../../components/LoadState.vue'
+import RightsPanel from '../panels/Rights.vue'
 const { api, canCreate, basePath, goWork, openPanel, handleError } = usePortal()
 const router = useRouter()
+const section = ref('works')
 const works = ref([])
 const failedCovers = ref({})
 const pending = ref(true)
@@ -69,6 +74,11 @@ onMounted(() => { load(); loadTodo() })
 defineExpose({ loadTodo })
 </script>
 <style scoped>
+.workspace-switch { display: flex; flex-wrap: wrap; align-items: baseline; gap: 22px; }
+.workspace-switch h2 { margin: 0; }
+.workspace-switch button { border: 0; padding: 0; background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
+.workspace-switch button[aria-pressed="true"] { color: var(--ink); }
+.workspace-switch button:focus-visible { outline: 2px solid var(--indigo); outline-offset: 3px; }
 .todo-list { max-height: min(320px, 35vh); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--rule-2) transparent; }
 .todo-list:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
 .activity-list summary { display: flex; align-items: center; justify-content: space-between; cursor: pointer; list-style: none; }
