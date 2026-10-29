@@ -1,6 +1,5 @@
 <template>
-  <PortalLayer v-model="visible" title="交易管理" wide>
-    <PortalTabs v-model="tab" :items="tabs" drawer label="合作类型" />
+  <PortalLayer v-model="visible" :title="panelTitle" wide>
     <div class="panel-content">
       <!-- ═══ 询盘 Tab ═══ -->
       <template v-if="tab === 'inquiry'">
@@ -151,7 +150,6 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PortalLayer from '../../components/PortalLayer.vue'
-import PortalTabs from '../../components/PortalTabs.vue'
 import LoadState from '../../components/LoadState.vue'
 import ContractPanel from '../../components/trade/ContractPanel.vue'
 import ContractSignDialog from '../../components/trade/ContractSignDialog.vue'
@@ -165,7 +163,7 @@ const emit = defineEmits(['update:modelValue'])
 const { api, user, handleError } = usePortal()
 const visible = computed({ get: () => props.modelValue, set: v => emit('update:modelValue', v) })
 const tab = ref(props.initialTab || 'inquiry')
-const tabs = [{ value: 'inquiry', label: '询盘' }, { value: 'session', label: '会话' }, { value: 'order', label: '订单' }, { value: 'contract', label: '合同' }]
+const panelTitle = computed(() => ({ inquiry: '询盘', session: '会话', order: '订单', contract: '合同' })[tab.value] || '询盘')
 const contractPanelRef = ref(null)
 const userId = computed(() => Number(user.value?.userId))
 
@@ -528,6 +526,7 @@ watch(tab, v => {
   else if (v === 'order') loadOrders()
 })
 watch(() => props.initialTab, v => { if (v) tab.value = v })
+watch(() => props.modelValue, v => { if (v) tab.value = props.initialTab || 'inquiry' })
 onMounted(() => {
   if (tab.value === 'session') { templateVisible.value = true; loadTradeSessions() }
   else if (tab.value === 'order') loadOrders()
