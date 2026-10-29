@@ -20,17 +20,17 @@
           </el-dropdown>
         </div>
       </header>
-      <main class="portal-main" :class="{ 'portal-main-editor': route.path.endsWith('/create') }"><router-view :key="route.path" /></main>
+      <main class="portal-main" :class="{ 'portal-main-editor': route.path.endsWith('/create') }"><router-view v-slot="{ Component }"><component :is="Component" :key="route.path" ref="workspace" /></router-view></main>
       <MessagesPanel v-if="panel === 'messages'" v-model="panelVisible" />
       <PlatformChatPanel v-if="panel === 'chat'" v-model="panelVisible" />
-      <CooperationPanel v-if="panel === 'cooperation'" v-model="panelVisible" :initial-tab="panelTab" />
+      <CooperationPanel v-if="panel === 'cooperation'" v-model="panelVisible" :initial-tab="panelTab" :order-search="panelOrderSearch" />
       <RightsPanel v-if="panel === 'rights'" v-model="panelVisible" :initial-tab="panelTab" />
       <AccountPanel v-if="panel === 'account'" v-model="panelVisible" :initial-tab="panelTab" />
     </template>
   </div>
 </template>
 <script setup>
-import { computed, onMounted, provide, ref, shallowRef } from 'vue'
+import { computed, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Bell, ChatDotRound, ChatLineSquare, ChatRound, Collection, Document, Tickets, ArrowDown } from '@element-plus/icons-vue'
@@ -55,11 +55,14 @@ const chatUnread = ref(0)
 const realNameStatus = ref('')
 const panel = ref('')
 const panelTab = ref('')
+const panelOrderSearch = ref('')
 const panelVisible = ref(false)
+const workspace = ref(null)
 const displayName = computed(() => user.value?.nickname || user.value?.userName || '用户')
 const canCreate = computed(() => user.value?.authorCapability === true)
 const basePath = '/works'
-function openPanel(name, tab) { panelVisible.value = false; panel.value = name; panelTab.value = tab; panelVisible.value = true }
+function openPanel(name, tab, orderSearch = '') { panelVisible.value = false; panel.value = name; panelTab.value = tab; panelOrderSearch.value = orderSearch; panelVisible.value = true }
+watch(panelVisible, visible => { if (!visible && panel.value === 'cooperation') workspace.value?.loadTodo?.() })
 function goWorks() { panelVisible.value = false; return router.push(basePath) }
 function goWork(id) { panelVisible.value = false; return router.push(`${basePath}/${id}`) }
 async function handleError(failure) {

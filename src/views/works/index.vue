@@ -19,10 +19,11 @@
       <LoadState v-if="!pending && !error" :empty="!filtered.length" :empty-text="keyword || status ? '没有找到符合条件的作品' : '你的故事，从第一部作品开始。'" />
     </section>
     <aside class="desk-workspace" aria-label="工作台">
-      <div class="aside-head"><h2>工作台</h2><span class="aside-note">{{ todos.length }} 项待办</span></div>
-      <div class="aside-block"><h3>待办<span class="count">{{ todos.length }}</span></h3>
-        <button v-for="work in todos" :key="work.workId" class="todo-item" :data-tone="work.status === 'reviewing' ? 'wait' : 'bad'" @click="goWork(work.workId)"><b>{{ work.title }} · {{ work.status === 'reviewing' ? '内容审核中' : '需要修改' }}</b><span>{{ work.reviewSummary || (work.status === 'reviewing' ? '审核完成后将通过站内消息通知你' : '查看审核意见，修改后可重新提交') }}</span></button>
-        <p v-if="!pending && !todos.length" class="cost">{{ error ? '作品加载后显示待办' : '暂无待办，专心写下一个故事。' }}</p>
+      <div class="aside-head"><h2>工作台</h2><span class="aside-note">{{ orderPending || orderError ? '订单待办' : todos.length + ' 项待办' }}</span></div>
+      <div class="aside-block"><h3>待办<span v-if="!orderPending && !orderError" class="count">{{ todos.length }}</span></h3>
+        <LoadState :pending="orderPending" :error="orderError" :retry="loadTodo" loading-text="正在加载订单…" />
+        <template v-if="!orderError"><button v-for="order in todos" :key="order.orderId" class="todo-item order-todo" @click="openPanel('cooperation', 'order', order.orderNo || order.workTitle || '')"><span class="todo-order-head"><b>《{{ order.workTitle || '订单#' + order.orderId }}》</b><em>{{ orderStatusLabel(order.status) }}</em></span><span>订单号：{{ order.orderNo || '#' + order.orderId }} · {{ money(Number(order.amount || 0) / 100) }}</span><span class="todo-progress"><span v-for="(step, i) in orderSteps" :key="step" :class="{ active: orderStepIndex(order.status) >= i }">{{ step }}</span></span></button></template>
+        <p v-if="!orderPending && !orderError && !todos.length" class="cost">暂无待处理订单。</p>
       </div>
       <details class="aside-block activity-list"><summary><h3>最近动态</h3></summary><ul class="aside-log"><li v-for="work in recent" :key="work.workId"><time>{{ dateText(work.updateTime || work.createTime) }}</time>{{ work.title }} · {{ stateOf(work.status).label }}</li></ul><p v-if="!pending && !recent.length" class="cost">暂无最近动态</p></details>
     </aside>
@@ -33,7 +34,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePortal } from '../../utils/portal.js'
 import { avatarUrl } from '../../utils/avatarUrl.js'
-import { stateOf, words, dateText } from '../../utils/creator.js'
+import { stateOf, words, dateText, money } from '../../utils/creator.js'
+import { loadTodoOrders, orderStatusLabel, orderSteps, orderStepIndex } from '../../utils/orderTodo.js'
 import LoadState from '../../components/LoadState.vue'
 const { api, canCreate, basePath, goWork, openPanel, handleError } = usePortal()
 const router = useRouter()
@@ -46,7 +48,9 @@ const keyword = ref('')
 const status = ref('')
 const workType = value => ({ short_drama: '短剧', novel: '小说', script: '剧本' })[value] || '短剧'
 const filtered = computed(() => works.value.filter(w => (!keyword.value.trim() || (w.title + ' ' + (w.summary || '')).includes(keyword.value.trim())) && (!status.value || w.status === status.value || (status.value === 'revision' && w.status === 'rejected'))))
-const todos = computed(() => works.value.filter(w => ['reviewing', 'revision', 'rejected'].includes(w.status)))
+const todos = ref([])
+const orderPending = ref(true)
+const orderError = ref('')
 const recent = computed(() => [...works.value].sort((a, b) => String(b.updateTime || b.createTime || '').localeCompare(String(a.updateTime || a.createTime || ''))).slice(0, 4))
 const summary = computed(() => `${works.value.length} 部 · 草稿 ${works.value.filter(w => w.status === 'draft').length} · 审核中 ${works.value.filter(w => w.status === 'reviewing').length} · 待修改 ${works.value.filter(w => ['revision', 'rejected'].includes(w.status)).length} · 已发布 ${works.value.filter(w => w.status === 'published').length}`)
 async function load() {
@@ -55,7 +59,14 @@ async function load() {
   catch (failure) { error.value = failure.message || '作品加载失败'; await handleError(failure) }
   finally { pending.value = false }
 }
-onMounted(load)
+async function loadTodo() {
+  orderPending.value = true; orderError.value = ''
+  try { todos.value = await loadTodoOrders(api.value, 'seller') }
+  catch (failure) { orderError.value = failure.message || '订单加载失败'; await handleError(failure) }
+  finally { orderPending.value = false }
+}
+onMounted(() => { load(); loadTodo() })
+defineExpose({ loadTodo })
 </script>
 <style scoped>
 .activity-list summary { display: flex; align-items: center; justify-content: space-between; cursor: pointer; list-style: none; }
@@ -64,4 +75,10 @@ onMounted(load)
 .activity-list summary::after { content: '⌄'; color: var(--ink-3); font-size: 16px; }
 .activity-list[open] summary::after { transform: rotate(180deg); }
 .activity-list summary:focus-visible { outline: 2px solid var(--indigo); outline-offset: 3px; }
+.order-todo .todo-order-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; margin: 0; }
+.order-todo .todo-order-head b { min-width: 0; overflow-wrap: anywhere; }
+.order-todo .todo-order-head em { flex: none; border-radius: 10px; padding: 2px 7px; background: #ecf5ff; color: #409eff; font-size: 12px; font-style: normal; }
+.order-todo .todo-progress { display: flex; gap: 3px; margin-top: 10px; }
+.order-todo .todo-progress span { flex: 1; margin: 0; border-top: 2px solid #e4e7ed; padding-top: 4px; text-align: center; font-size: 10px; color: #909399; }
+.order-todo .todo-progress span.active { border-color: #409eff; color: #409eff; }
 </style>

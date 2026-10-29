@@ -157,8 +157,9 @@ import TradeTemplatePanel from '../../components/trade/TradeTemplatePanel.vue'
 import { usePortal } from '../../utils/portal.js'
 import { avatarUrl, contractHtml } from '../../utils/avatarUrl.js'
 import { dateText, money, asList } from '../../utils/creator.js'
+import { orderStatusLabel } from '../../utils/orderTodo.js'
 
-const props = defineProps({ modelValue: Boolean, initialTab: String })
+const props = defineProps({ modelValue: Boolean, initialTab: String, orderSearch: { type: String, default: '' } })
 const emit = defineEmits(['update:modelValue'])
 const { api, user, handleError } = usePortal()
 const visible = computed({ get: () => props.modelValue, set: v => emit('update:modelValue', v) })
@@ -172,7 +173,6 @@ const moneyFromFen = fen => money(Number(fen || 0) / 100)
 const licenseLabel = t => ({ exclusive: '独家授权', non_exclusive: '非独家授权', adaptation: '改编授权' })[t] || t || '未指定'
 const inquiryStatusLabel = s => ({ pending: '待处理', quoted: '议价中', deal: '已达成', rejected: '已拒绝', closed: '已关闭' })[s] || s
 const quoteStatusLabel = s => ({ pending: '待买方响应', pending_seller: '待卖方响应', accepted: '已接受', rejected: '已拒绝', expired: '已过期' })[s] || s
-const orderStatusLabel = s => ({ confirmed: '待签署', paying: '付款中', cancelled: '已取消', escrow_pending: '已托管', delivering: '交割中', completed: '已完成', refunded: '已退款' })[s] || s
 const isSellerOf = r => Number(r?.sellerId) === userId.value
 const isBuyerOfOrder = o => Number(o?.buyerId) === userId.value
 const isTerminalOrder = o => ['cancelled', 'refunded'].includes(o?.status)
@@ -526,8 +526,14 @@ watch(tab, v => {
   else if (v === 'order') loadOrders()
 })
 watch(() => props.initialTab, v => { if (v) tab.value = v })
-watch(() => props.modelValue, v => { if (v) tab.value = props.initialTab || 'inquiry' })
+function applyOrderSearch(value) {
+  if (value) { orderRole.value = 'seller'; orderStatus.value = ''; orderPageNum.value = 1 }
+  orderKeyword.value = value
+}
+watch(() => props.orderSearch, applyOrderSearch)
+watch(() => props.modelValue, v => { if (v) { tab.value = props.initialTab || 'inquiry'; applyOrderSearch(props.orderSearch) } })
 onMounted(() => {
+  applyOrderSearch(props.orderSearch)
   if (tab.value === 'session') { templateVisible.value = true; loadTradeSessions() }
   else if (tab.value === 'order') loadOrders()
   else if (tab.value === 'inquiry') loadInquiries()
