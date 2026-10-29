@@ -1,6 +1,6 @@
 <template>
   <div class="script-editor" :class="{ 'script-editor-compact': compact }">
-    <div class="document-toolbar-frame">
+    <div v-show="!readOnly" class="document-toolbar-frame">
       <button type="button" class="toolbar-scroll-arrow" aria-label="向左滚动工具栏" :disabled="atStart" @click="scrollTools(-1)">‹</button>
     <div ref="toolbar" class="document-toolbar" role="toolbar" aria-label="文档编辑工具" tabindex="0" @scroll="updateScroll" @mousedown.capture="positionPickers" @keydown.capture="toolbarKey">
       <div class="document-tools-row">
@@ -34,7 +34,7 @@
       <button type="button" class="toolbar-scroll-arrow" aria-label="向右滚动工具栏" :disabled="atEnd" @click="scrollTools(1)">›</button>
     </div>
     <div class="script-paper">
-      <input v-if="!hideTitle" class="episode-title" aria-label="分集标题" :value="title" maxlength="100" :disabled="disabled" placeholder="输入分集标题" @input="$emit('update:title', $event.target.value)" />
+      <input v-if="!hideTitle" class="episode-title" aria-label="分集标题" :value="title" maxlength="100" :disabled="disabled" :readonly="readOnly" placeholder="输入分集标题" @input="$emit('update:title', $event.target.value)" />
       <div ref="editor" class="rich-document" />
     </div>
   </div>
@@ -53,7 +53,7 @@ Size.whitelist = ['12px', '14px', '18px', '20px', '24px', '28px', '32px']
 Quill.register(Font, true); Quill.register(Size, true)
 const { StyleAttributor, Scope } = Quill.import('parchment')
 Quill.register(new StyleAttributor('lineheight', 'line-height', { scope: Scope.BLOCK, whitelist: ['1.5', '2', '2.5'] }), true)
-const props = defineProps({ modelValue: { type: String, default: '' }, title: String, disabled: Boolean, hideTitle: Boolean, compact: Boolean, label: { type: String, default: '分集正文' } })
+const props = defineProps({ modelValue: { type: String, default: '' }, title: String, disabled: Boolean, readOnly: Boolean, hideTitle: Boolean, compact: Boolean, label: { type: String, default: '分集正文' } })
 const emit = defineEmits(['update:modelValue', 'update:title'])
 const editor = ref(null)
 const toolbar = ref(null)
@@ -101,19 +101,20 @@ function change() {
 }
 function setDisabled(value) {
   quill.enable(!value)
+  quill.root.setAttribute('aria-readonly', String(value))
   toolbar.value.querySelectorAll('button,select,.ql-picker').forEach(control => {
     if (control.matches('button,select')) control.disabled = value
     control.setAttribute('aria-disabled', String(value))
   })
 }
 function insert(text) {
-  if (!quill || props.disabled) return
+  if (!quill || props.disabled || props.readOnly) return
   const range = quill.getSelection() || { index: quill.getLength() - 1, length: 0 }
   const prefix = range.index > 0 && quill.getText(range.index - 1, 1) !== '\n' ? '\n' : ''
   quill.history.cutoff(); quill.deleteText(range.index, range.length, 'user'); quill.insertText(range.index, prefix + text, 'user'); quill.setSelection(range.index + prefix.length + text.length, 0, 'user'); quill.history.cutoff()
 }
 function appendText(text) {
-  if (!quill || props.disabled) return
+  if (!quill || props.disabled || props.readOnly) return
   const index = quill.getLength() - 1
   quill.history.cutoff(); quill.insertText(index, (index ? '\n\n' : '') + text, 'user'); quill.setSelection(quill.getLength() - 1, 0); quill.history.cutoff()
 }
@@ -121,7 +122,7 @@ defineExpose({ appendText })
 onMounted(() => {
   quill = new Quill(editor.value, { theme: 'snow', placeholder: '在这里写下第一幕。也可以导入剧本，或让 AI 帮你展开灵感。', formats: ['font', 'size', 'bold', 'italic', 'underline', 'strike', 'color', 'background', 'header', 'align', 'list', 'indent', 'blockquote', 'lineheight'], modules: { toolbar: toolbar.value, history: { delay: 700, maxStack: 100, userOnly: true } } })
   quill.root.setAttribute('role', 'textbox'); quill.root.setAttribute('aria-label', props.label); quill.root.setAttribute('aria-multiline', 'true')
-  load(props.modelValue); quill.history.clear(); quill.on('text-change', change); setDisabled(props.disabled)
+  load(props.modelValue); quill.history.clear(); quill.on('text-change', change); setDisabled(props.disabled || props.readOnly)
   // Quill 的字体选择器使用可见标签；赋予键盘焦点和可访问名称。
   toolbar.value.querySelectorAll('.ql-picker').forEach(picker => {
     const label = picker.querySelector('.ql-picker-label')
@@ -133,6 +134,6 @@ watch(() => props.modelValue, value => {
   if (!quill || value === lastEmitted) return
   load(value, 'api')
 })
-watch(() => props.disabled, value => { if (quill) setDisabled(value) })
+watch(() => [props.disabled, props.readOnly], ([disabled, readOnly]) => { if (quill) { setDisabled(disabled || readOnly); if (!readOnly) updateScroll() } })
 onBeforeUnmount(() => { resizeObserver?.disconnect(); quill?.off('text-change', change) })
 </script>
