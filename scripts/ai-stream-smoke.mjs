@@ -31,7 +31,7 @@ try {
   page.on('pageerror', error => errors.push(error.message))
   await page.goto('http://127.0.0.1:' + server.httpServer.address().port + '/user/works/create')
   for (const [tab, field, button] of [
-    ['AI 大纲', '你的要求', '生成大纲'],
+    ['AI 剧本', '你的要求', '生成剧本大纲'],
     ['AI 续写', '场景要求', '生成正文'],
     ['AI 润色', '要润色的原文', '开始润色'],
   ]) {

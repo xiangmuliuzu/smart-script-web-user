@@ -16,13 +16,14 @@ export async function mockCreatorApi(context, apiPrefix = '/dev-api') {
   const messages = [{ messageId: 1, title: '审核通知', read: false, summary: '请查看作品审核结果', createdAt: '2026-10-14 09:00' }]
   const profile = { nickname: user.nickname, avatar: '', bio: '', phoneMasked: '152****5578' }
   const feedback = [], records = [], chat = []
+  const skills = [{ id: 1, skillName: '悬疑烧脑导演', fileName: '悬疑烧脑导演.skill.md' }, { id: 2, skillName: '甜宠爆款导演', fileName: '甜宠爆款导演.skill.md' }]
   const calls = []
   const chapterResponse = chapter => ({ ...chapter, content: documentText(chapter.content), formattedContent: isFormattedDocument(chapter.content) ? chapter.content : null })
   await context.route('**' + apiPrefix + '/**', async route => {
     const request = route.request(), method = request.method(), path = new URL(request.url()).pathname.slice(apiPrefix.length)
-    calls.push({ path, method })
     const upload = path.endsWith('/upload') || path.endsWith('/avatar')
     const body = ['GET', 'HEAD'].includes(method) || upload ? null : request.postDataJSON()
+    calls.push({ path, method, body })
     let result = { code: 200, data: null }
     const workMatch = path.match(/^\/api\/v1\/users\/me\/works\/(\d+)(.*)$/)
     if (path.endsWith('/captchaImage')) result = { code: 200, captchaEnabled: false }
@@ -52,8 +53,11 @@ export async function mockCreatorApi(context, apiPrefix = '/dev-api') {
       } else result = { code: 404, message: '未配置测试接口：' + path }
       if (work) { work.episodeCount = list.length; work.wordCount = list.reduce((sum, chapter) => sum + chapter.wordCount, 0) }
     } else if (path.endsWith('/versions')) result.data = []
+    else if (path.endsWith('/ai/skills')) result.data = skills
     else if (path.includes('/content/ai/') && path.endsWith('/stream')) {
-      return route.fulfill({ contentType: 'text/event-stream', body: 'data: ' + JSON.stringify({ delta: '第一集 · 深夜频率\n雨夜的咖啡馆，一次迟来的重逢。' }) + '\n\ndata: {"done":true,"quotaUsed":1}\n\n' })
+      const type = path.split('/').at(-2)
+      const delta = type === 'storyboard' ? '镜1｜景别：特写｜运镜：固定｜时长：4秒｜画面内容：雨夜便利店暖黄灯光孤立在冷蓝雨夜中。' : '第一集 · 深夜频率\n雨夜的咖啡馆，一次迟来的重逢。'
+      return route.fulfill({ contentType: 'text/event-stream', body: 'data: ' + JSON.stringify({ delta }) + '\n\ndata: {"done":true,"quotaUsed":1}\n\n' })
     }
     else if (path.includes('/content/ai/')) {
       const type = path.split('/').at(-1)

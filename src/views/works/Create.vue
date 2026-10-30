@@ -60,7 +60,7 @@ const sameChapter = (a, b) => a && b && a.chapterTitle === b.chapterTitle && a.c
 const chapters = ref([newChapter(1)])
 const characters = ref('')
 const noteBackups = ref([])
-const newAiState = () => ({ tab: 'outline', outlineIncomplete: false, form: { workId: '', genre: '', episodes: 12, prompt: '', content: '', style: '增强画面感', chapterTitle: '' }, results: { outline: '', write: '', polish: '' } })
+const newAiState = () => ({ tab: 'outline', outlineIncomplete: false, form: { workId: '', genre: '', episodes: 12, prompt: '', content: '', style: '增强画面感', chapterTitle: '', skillId: '', script: '', sbStyle: '电影感' }, results: { outline: '', write: '', polish: '', storyboard: '' } })
 const aiState = reactive(newAiState())
 const workspaceRevision = ref(0)
 const activeChapter = ref(0)

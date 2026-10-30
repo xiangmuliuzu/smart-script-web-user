@@ -16,6 +16,7 @@
     "test:creation": "node scripts/creation-smoke.mjs",
     "test:chapter-workspace": "node scripts/chapter-workspace-smoke.mjs",
     "test:ai-stream": "node scripts/ai-stream-smoke.mjs",
+    "test:ai-skill": "node scripts/ai-skill-smoke.mjs",
     "test:work-deletion": "node scripts/work-deletion-smoke.mjs",
     "test:paths": "node scripts/server-paths-smoke.mjs",
     "gate": "npm run test && npm run build"

@@ -81,6 +81,9 @@ export const deleteSeal = id => data(sealPath(id), { method: 'DELETE' })
 // AI 生成耗时可能超过默认 30s（大纲尤甚，需等待模型完整输出），单独放长到 120s。
 export const generate = (type, form) => data('/api/v1/content/ai/' + type, { method: 'POST', body: form, timeout: 120000 })
 
+// 导演(skill) 列表（E 模块，供「导演(skill)选择」下拉）
+export const listAiSkills = async () => asList(await data('/api/v1/content/ai/skills'))
+
 // ──── AI 流式生成（SSE，逐块回调 delta）────
 // 协议与后端 AppAiController 一致：data:{"delta":"..."} 逐块下发，
 // data:{"done":true,...} 结束；event:error + data:{"code","message"} 失败。
@@ -171,7 +174,7 @@ const listOutlineRecords = async () => asList(await data('/api/v1/content/ai/out
 export const listAiRecords = async () => {
   const [writes, outlines] = await Promise.all([listWriteRecords(), listOutlineRecords()])
   const items = []
-  for (const w of writes) items.push({ recordId: w.recordId, type: w.writeType === 'polish' ? 'polish' : 'write', title: w.title || '独立创作', input: w.inputPrompt || '', output: w.outputContent || '', tokens: w.tokensUsed ?? null, status: w.status, createdAt: w.createdAt })
+  for (const w of writes) items.push({ recordId: w.recordId, type: w.writeType === 'polish' ? 'polish' : w.writeType === 'storyboard' ? 'storyboard' : 'write', title: w.title || '独立创作', input: w.inputPrompt || '', output: w.outputContent || '', tokens: w.tokensUsed ?? null, status: w.status, createdAt: w.createdAt })
   for (const o of outlines) items.push({ recordId: o.requestId, type: 'outline', title: 'AI 大纲请求', input: '', output: '', tokens: o.quotaCost ?? null, status: o.status, createdAt: o.createdAt })
   return items.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
 }
