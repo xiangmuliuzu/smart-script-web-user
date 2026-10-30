@@ -3,7 +3,7 @@
     <PortalTabs v-model="tab" :items="tabs" :drawer="embedded" label="AI 创作工具" />
     <div v-if="tab !== 'log'" class="compose">
       <form class="compose-form" @submit.prevent="generate"><h3>{{ tabHeading }}</h3>
-        <label class="field">导演(skill)<select aria-label="导演(skill)" v-model="form.skillId" :disabled="generating"><option value="">默认导演</option><option v-for="skill in skills" :key="skill.id" :value="skill.id">{{ skill.skillName }}</option></select></label>
+        <label class="field">导演(skill)<select aria-label="导演(skill)" v-model="form.skillId" :disabled="generating"><option value="">默认导演</option><option v-for="skill in visibleSkills" :key="skill.id" :value="skill.id">{{ skill.skillName }}</option></select></label>
         <label v-if="!embedded" class="field">作品<select aria-label="作品" v-model="form.workId" :disabled="generating"><option value="">选择作品（选填）</option><option v-for="work in works" :key="work.workId" :value="work.workId" :disabled="work.status === 'reviewing'">{{ work.title }}（{{ stateOf(work.status).label }}）</option></select></label>
         <template v-if="tab === 'outline'"><div class="ai-outline-meta"><label class="field">题材<input v-model="form.genre" placeholder="例如：都市情感" /></label><label class="field">集数<input v-model="form.episodes" type="number" min="1" max="200" /></label></div><label class="field">你的要求<textarea v-model="form.prompt" placeholder="人物、故事线、希望埋下的反转…" /></label></template>
         <template v-else-if="tab === 'write'"><label class="field">章节标题<input v-model="form.chapterTitle" placeholder="例如：第一集 · 深夜频率" /></label><label class="field">场景要求<textarea v-model="form.prompt" placeholder="地点、时间、人物与剧情走向…" /></label></template>
@@ -48,6 +48,13 @@ const form = props.workspaceState?.form || reactive({ workId: '', genre: '', epi
 const results = props.workspaceState?.results || reactive({ outline: '', write: '', polish: '', storyboard: '' })
 const skills = ref([])
 const skillError = ref('')
+// 导演(skill)按用途过滤：分镜 tab 只列 storyboard 类 skill，剧本/写作/润色只列 write 类。
+const visibleSkills = computed(() => {
+  const isStoryboard = tab.value === 'storyboard'
+  return (skills.value || []).filter(s => isStoryboard
+    ? s.skillType === 'storyboard'
+    : s.skillType !== 'storyboard')
+})
 const lastGeneratedLabel = computed(() => {
   if (results.outline?.trim()) return 'AI 剧本大纲'
   if (results.write?.trim()) return 'AI 正文'
@@ -158,7 +165,12 @@ async function loadRecords() {
   catch (failure) { recordError.value = failure.message; await handleError(failure) }
   finally { recordLoading.value = false }
 }
-watch(tab, value => { error.value = ''; loadQuota(); if (value === 'log') loadRecords() })
+watch(tab, value => {
+  error.value = ''
+  loadQuota()
+  if (value === 'log') loadRecords()
+  else if (form.skillId && !visibleSkills.value.some(s => String(s.id) === String(form.skillId))) form.skillId = ''
+})
 watch(() => props.insertDisabled, (disabled, previous) => { if (previous && !disabled) loadQuota() })
 watch(() => props.workId, value => { if (props.embedded) form.workId = value || '' }, { immediate: true })
 watch(user, value => { if (value?.userId) loadQuota() }, { immediate: true })
