@@ -178,17 +178,16 @@ test('quota tip only appears when balance hits zero and steers PC users to the p
   assert.ok(quotaTip(0).includes('手机 App'))
   assert.ok(quotaTip(-1).includes('福利中心'))
 })
-test('ai records merge write/polish and outline records, tagged by type and newest first', async () => {
+test('ai records read write-records uniformly; outline typed as outline, newest first', async () => {
   globalThis.fetch = async url => {
-    if (url.includes('/write-records')) return { ok: true, status: 200, json: async () => ({ code: 200, data: { list: [{ recordId: 1, writeType: 'polish', title: '润色测试', inputPrompt: '原句', outputContent: '润色后', tokensUsed: 320, status: 'success', createdAt: '2026-10-15 10:00:00' }, { recordId: 2, writeType: 'write', title: '续写测试', inputPrompt: '提示词', outputContent: '正文', tokensUsed: 150, createdAt: '2026-10-14 09:00:00' }] } }) }
-    if (url.includes('/outline-records')) return { ok: true, status: 200, json: async () => ({ code: 200, data: { list: [{ requestId: 9, quotaCost: 500, status: 'success', createdAt: '2026-10-16 09:00:00' }] } }) }
+    if (url.includes('/write-records')) return { ok: true, status: 200, json: async () => ({ code: 200, data: { list: [{ recordId: 9, writeType: 'outline', title: '灵感：剑修', inputPrompt: '灵感：剑修', outputContent: '书名：冷剑藏春', tokensUsed: 500, status: 'success', createdAt: '2026-10-16 09:00:00' }, { recordId: 1, writeType: 'polish', title: '润色测试', inputPrompt: '原句', outputContent: '润色后', tokensUsed: 320, status: 'success', createdAt: '2026-10-15 10:00:00' }, { recordId: 2, writeType: 'write', title: '续写测试', inputPrompt: '提示词', outputContent: '正文', tokensUsed: 150, createdAt: '2026-10-14 09:00:00' }] } }) }
     throw new Error('unexpected url ' + url)
   }
   const records = await api.listAiRecords()
   assert.equal(records.length, 3)
   assert.equal(records[0].type, 'outline')
   assert.equal(records[0].tokens, 500)
-  assert.equal(records[0].output, '')
+  assert.equal(records[0].output, '书名：冷剑藏春')
   assert.equal(records[1].type, 'polish')
   assert.equal(records[1].input, '原句')
   assert.equal(records[1].output, '润色后')

@@ -168,14 +168,23 @@ function parseSseBlock(block) {
   }
 }
 const listWriteRecords = async () => asList(await data('/api/v1/content/ai/write-records'))
-const listOutlineRecords = async () => asList(await data('/api/v1/content/ai/outline-records'))
-// 生成记录 = 写作/润色 + 大纲记录合并，按时间倒序；write/polish 带输入输出，outline 仅请求元信息。
-// 【去次数化】消耗统一为实际 token：写作记录取 tokens_used，大纲记录取 quota_cost（后端已存真实 token）。
+// 生成记录统一读 write-records（write/outline/script/storyboard/polish 全量，
+// 与 App 端一致），按时间倒序；outline/script 同样带输入输出。
+// 不再合并 outline-records：后端每次生成会双写 sys_ai_request 与 write 记录，
+// 合并会导致同一生成重复展示且类型错乱。
+// 【去次数化】消耗统一为实际 token（tokens_used）。
 export const listAiRecords = async () => {
-  const [writes, outlines] = await Promise.all([listWriteRecords(), listOutlineRecords()])
-  const items = []
-  for (const w of writes) items.push({ recordId: w.recordId, type: w.writeType === 'polish' ? 'polish' : w.writeType === 'storyboard' ? 'storyboard' : 'write', title: w.title || '独立创作', input: w.inputPrompt || '', output: w.outputContent || '', tokens: w.tokensUsed ?? null, status: w.status, createdAt: w.createdAt })
-  for (const o of outlines) items.push({ recordId: o.requestId, type: 'outline', title: 'AI 大纲请求', input: '', output: '', tokens: o.quotaCost ?? null, status: o.status, createdAt: o.createdAt })
+  const writes = await listWriteRecords()
+  const items = writes.map(w => ({
+    recordId: w.recordId,
+    type: w.writeType === 'outline' ? 'outline' : w.writeType === 'storyboard' ? 'storyboard' : w.writeType === 'polish' ? 'polish' : 'write',
+    title: w.title || '独立创作',
+    input: w.inputPrompt || '',
+    output: w.outputContent || '',
+    tokens: w.tokensUsed ?? null,
+    status: w.status,
+    createdAt: w.createdAt,
+  }))
   return items.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
 }
 // 积分余额（AI 创作按 token 消耗直接扣积分，前端展示剩余积分）。
