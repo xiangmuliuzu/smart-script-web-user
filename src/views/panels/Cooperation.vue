@@ -147,11 +147,20 @@
       </div>
     </PortalLayer>
     <ContractSignDialog v-model="orderSignVisible" :contract="orderContract" :user-id="userId" @signed="reloadOrderContract" />
+    <el-dialog v-model="paymentVisible" title="支付宝沙箱支付" width="360px" append-to-body>
+      <div style="text-align:center">
+        <p>测试支付，不会产生真实资金。请使用支付宝沙箱钱包扫码。</p>
+        <img v-if="paymentQr" :src="paymentQr" alt="支付宝沙箱支付二维码" width="220" height="220" />
+        <p v-if="paymentMessage">{{ paymentMessage }}</p>
+        <button type="button" class="btn" :disabled="paymentChecking" @click="checkSandboxPayment">{{ paymentChecking ? '查询中…' : '查询支付结果' }}</button>
+      </div>
+    </el-dialog>
   </PortalLayer>
 </template>
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import QRCode from 'qrcode'
 import PortalLayer from '../../components/PortalLayer.vue'
 import LoadState from '../../components/LoadState.vue'
 import ContractPanel from '../../components/trade/ContractPanel.vue'
@@ -463,8 +472,33 @@ async function loadOrders() {
   finally { orderPending.value = false }
 }
 
+const paymentVisible = ref(false)
+const paymentQr = ref('')
+const paymentOrder = ref(null)
+const paymentChecking = ref(false)
+const paymentMessage = ref('')
+
+/** 支付宝沙箱：取二维码扫码支付，再由服务端向支付宝查单确认（与 App / 企业端一致）。 */
 async function doPayOrder(o) {
-  try { await ElMessageBox.confirm('确认已付款后订单进入交割，卖方将交付作品。确定付款吗？', '确认付款', { type: 'warning' }); await api.value.payOrder(o.orderId); ElMessage.success('付款成功，订单进入交割'); o.status = 'delivering'; await loadOrders() } catch (e) { if (e !== 'cancel') await handleError(e) }
+  try {
+    const result = await api.value.payOrder(o.orderId)
+    if (!result?.sandbox || !result.qrCode) throw new Error('获取沙箱支付二维码失败')
+    paymentQr.value = await QRCode.toDataURL(result.qrCode, { width: 220, margin: 2 })
+    paymentOrder.value = o
+    paymentMessage.value = ''
+    paymentVisible.value = true
+  } catch (e) { await handleError(e) }
+}
+
+async function checkSandboxPayment() {
+  if (paymentChecking.value || !paymentOrder.value) return
+  paymentChecking.value = true
+  try {
+    const result = await api.value.confirmSandboxPayment(paymentOrder.value.orderId)
+    if (result?.paid) { paymentVisible.value = false; ElMessage.success('沙箱支付已确认，订单进入交割'); await loadOrders() }
+    else paymentMessage.value = '尚未查询到支付成功，请完成支付后重试'
+  } catch (e) { paymentMessage.value = e.message || '查询失败，请稍后重试' }
+  finally { paymentChecking.value = false }
 }
 
 /** 交割中：与 App 一致，进入交割详情（卖方上传 / 买方确认），不再直接调 completeOrder。 */
