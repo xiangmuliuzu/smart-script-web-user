@@ -84,6 +84,9 @@ export const generate = (type, form) => data('/api/v1/content/ai/' + type, { met
 // 导演(skill) 列表（E 模块，供「导演(skill)选择」下拉）
 export const listAiSkills = async () => asList(await data('/api/v1/content/ai/skills'))
 
+// AI 渠道模型列表（E 模块，供「模型选择」下拉；返回 [{channelId,channelName,provider,models:[],defaultModel}]，无 apiKey）
+export const listAiModels = async () => asList(await data('/api/v1/content/ai/models'))
+
 // ──── AI 流式生成（SSE，逐块回调 delta）────
 // 协议与后端 AppAiController 一致：data:{"delta":"..."} 逐块下发，
 // data:{"done":true,...} 结束；event:error + data:{"code","message"} 失败。

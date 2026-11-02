@@ -4,6 +4,7 @@
     <div v-if="tab !== 'log'" class="compose">
       <form class="compose-form" @submit.prevent="generate"><h3>{{ tabHeading }}</h3>
         <label class="field">导演(skill)<select aria-label="导演(skill)" v-model="form.skillId" :disabled="generating"><option value="">默认导演</option><option v-for="skill in visibleSkills" :key="skill.id" :value="skill.id">{{ skill.skillName }}</option></select></label>
+        <label class="field">模型<select aria-label="模型" v-model="form.model" :disabled="generating"><option value="">默认模型</option><option v-for="opt in modelOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option></select></label>
         <label v-if="!embedded" class="field">作品<select aria-label="作品" v-model="form.workId" :disabled="generating"><option value="">选择作品（选填）</option><option v-for="work in works" :key="work.workId" :value="work.workId" :disabled="work.status === 'reviewing'">{{ work.title }}（{{ stateOf(work.status).label }}）</option></select></label>
         <template v-if="tab === 'outline'"><div class="ai-outline-meta"><label class="field">题材<input v-model="form.genre" placeholder="例如：都市情感" /></label><label class="field">集数<input v-model="form.episodes" type="number" min="1" max="200" /></label></div><label class="field">你的要求<textarea v-model="form.prompt" placeholder="人物、故事线、希望埋下的反转…" /></label></template>
         <template v-else-if="tab === 'write'"><label class="field">章节标题<input v-model="form.chapterTitle" placeholder="例如：第一集 · 深夜频率" /></label><label class="field">场景要求<textarea v-model="form.prompt" placeholder="地点、时间、人物与剧情走向…" /></label></template>
@@ -44,10 +45,23 @@ const tab = props.workspaceState ? toRef(props.workspaceState, 'tab') : ref('out
 const tabs = [{ value: 'outline', label: 'AI 剧本' }, { value: 'write', label: props.embedded ? 'AI 续写' : 'AI 写正文' }, { value: 'polish', label: 'AI 润色' }, { value: 'storyboard', label: 'AI 分镜' }, { value: 'log', label: '生成记录' }]
 const typeLabels = { outline: 'AI 剧本', write: props.embedded ? 'AI 续写' : 'AI 写正文', polish: 'AI 润色', storyboard: 'AI 分镜' }
 const tabHeading = computed(() => tab.value === 'outline' ? '生成剧本大纲' : tab.value === 'write' ? '生成正文' : tab.value === 'storyboard' ? '生成分镜' : '润色片段')
-const form = props.workspaceState?.form || reactive({ workId: '', genre: '', episodes: 12, prompt: '', content: '', style: '增强画面感', chapterTitle: '', skillId: '', script: '', sbStyle: '电影感' })
+const form = props.workspaceState?.form || reactive({ workId: '', genre: '', episodes: 12, prompt: '', content: '', style: '增强画面感', chapterTitle: '', skillId: '', model: '', script: '', sbStyle: '电影感' })
 const results = props.workspaceState?.results || reactive({ outline: '', write: '', polish: '', storyboard: '' })
 const skills = ref([])
 const skillError = ref('')
+// 模型列表（渠道聚合）：[{channelId, channelName, provider, models:[], defaultModel}]
+const modelChannels = ref([])
+const modelError = ref('')
+// 扁平模型下拉：同一模型可能出现在多个渠道，label 带渠道名前缀以便区分；value 为模型名。
+const modelOptions = computed(() => {
+  const options = []
+  for (const channel of modelChannels.value || []) {
+    for (const m of channel.models || []) {
+      options.push({ value: m, label: `${channel.channelName} · ${m}${m === channel.defaultModel ? '（默认）' : ''}` })
+    }
+  }
+  return options
+})
 // 导演(skill)按用途过滤：分镜 tab 只列 storyboard 类 skill，剧本/写作/润色只列 write 类。
 const visibleSkills = computed(() => {
   const isStoryboard = tab.value === 'storyboard'
@@ -69,6 +83,12 @@ async function loadSkills() {
   skillError.value = ''
   try { skills.value = await api.value.listAiSkills() }
   catch (failure) { skillError.value = failure.message; await handleError(failure) }
+}
+async function loadModels() {
+  if (!api.value?.listAiModels) return
+  modelError.value = ''
+  try { modelChannels.value = await api.value.listAiModels() }
+  catch (failure) { modelError.value = failure.message; await handleError(failure) }
 }
 const outlineIncomplete = props.workspaceState ? toRef(props.workspaceState, 'outlineIncomplete') : ref(false)
 const result = computed(() => results[tab.value] || '')
@@ -117,7 +137,8 @@ async function generate() {
   if (type === 'outline') outlineIncomplete.value = true
   try {
     const skillId = form.skillId || undefined
-    const body = type === 'outline' ? { inspiration: `${form.prompt}\n请提供 ${form.episodes} 个分集，每集单独一行标题，格式为“第1集：章节名称”，下一行写该集剧情概要。`, genre: form.genre, style: `共 ${form.episodes} 集`, workId: form.workId || undefined, skillId } : type === 'polish' ? { content: documentText(form.content), style: form.style, skillId } : type === 'storyboard' ? { script: documentText(form.script), style: form.sbStyle, workId: form.workId || undefined, skillId } : { prompt: `${form.chapterTitle}\n${props.embedded && props.currentContent ? '已有正文：\n' + documentText(props.currentContent) + '\n续写要求：\n' : ''}${form.prompt}`, workId: form.workId || undefined, type: 'script', skillId }
+    const model = form.model || undefined
+    const body = type === 'outline' ? { inspiration: `${form.prompt}\n请提供 ${form.episodes} 个分集，每集单独一行标题，格式为“第1集：章节名称”，下一行写该集剧情概要。`, genre: form.genre, style: `共 ${form.episodes} 集`, workId: form.workId || undefined, skillId, model } : type === 'polish' ? { content: documentText(form.content), style: form.style, skillId, model } : type === 'storyboard' ? { script: documentText(form.script), style: form.sbStyle, workId: form.workId || undefined, skillId, model } : { prompt: `${form.chapterTitle}\n${props.embedded && props.currentContent ? '已有正文：\n' + documentText(props.currentContent) + '\n续写要求：\n' : ''}${form.prompt}`, workId: form.workId || undefined, type: 'script', skillId, model }
     // 流式生成：delta 逐块追加，实现打字机式实时输出。
     if (api.value.generateStream) {
       const response = await api.value.generateStream(type, body, delta => { results[type] += delta })
@@ -181,6 +202,7 @@ function refreshQuotaWhenVisible() {
 onMounted(() => {
   loadQuota()
   loadSkills()
+  loadModels()
   document.addEventListener('visibilitychange', refreshQuotaWhenVisible)
   window.addEventListener('focus', refreshQuotaWhenVisible)
 })
