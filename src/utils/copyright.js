@@ -97,7 +97,7 @@ export const deliveryLicenseLabel = type => ({
 /** 交割状态说明（列表/详情副文案）。 */
 export function deliveryStatusDescription(status) {
   switch (status) {
-    case 'pending_upload': return '买方已付款，等待卖方上传版权证书等交割材料'
+    case 'pending_upload': return '买方已付款，等待卖方上传作品源文件等交割材料'
     case 'pending_confirm': return '卖方已提交材料，等待买方确认收货'
     case 'completed': return '买方已确认收货，交割完成'
     case 'cancelled': return '交割已取消'

@@ -89,7 +89,7 @@
 
         <section v-if="canUpload" class="block">
           <h4>上传交割材料</h4>
-          <p class="hint">须至少包含 1 个「版权证书」。先选类型再选文件，确认无误后提交。</p>
+          <p class="hint">必须上传作品源文件，其他文件请按实际情况上传。先选类型再选文件，确认无误后提交。</p>
           <div class="upload-chips">
             <button
               v-for="type in DELIVERY_FILE_TYPES"
@@ -333,8 +333,8 @@ async function submitUpload() {
     ElMessage.warning('请至少上传 1 个文件')
     return
   }
-  if (!pendingFiles.value.some(f => f.fileType === 'cert')) {
-    ElMessage.warning('必须上传版权证书文件')
+  if (!pendingFiles.value.some(f => f.fileType === 'source')) {
+    ElMessage.warning('必须上传作品源文件')
     return
   }
   busy.value = true
