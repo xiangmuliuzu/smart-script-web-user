@@ -243,7 +243,7 @@ onMounted(load)
 .tone-wait { background: #fdf6ec; color: #e6a23c }
 .tone-ok { background: #f0f9eb; color: #67c23a }
 .tone-bad { background: #fef0f0; color: #f56c6c }
-.tone-off { background: #f4f4f5; color: #909399 }
+.tone-off { background: var(--paper-3); color: var(--ink-3) }
 
 .cert-detail-hero { display: grid; grid-template-columns: 64px 1fr; gap: 14px; align-items: center; margin-bottom: 14px }
 .cert-badge {

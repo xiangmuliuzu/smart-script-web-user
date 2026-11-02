@@ -609,12 +609,12 @@ onUnmounted(() => { stopChatPoll() })
 /* ── 询盘手风琴 ── */
 .inquiry-card { border: 1px solid #ebeef5; border-radius: 6px; margin-bottom: 8px; overflow: hidden; transition: box-shadow .15s }
 .inquiry-card:hover { box-shadow: 0 1px 4px rgba(0,0,0,.06) }
-.inquiry-card.expanded { border-color: #409eff }
+.inquiry-card.expanded { border-color: var(--indigo) }
 .inquiry-header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; transition: background .12s }
 .inquiry-header:hover { background: #f5f7fa }
-.expand-icon { font-size: 12px; color: #909399; width: 14px; flex-shrink: 0 }
+.expand-icon { font-size: 12px; color: var(--ink-3); width: 14px; flex-shrink: 0 }
 .inq-title { display: flex; align-items: center; gap: 6px; flex-shrink: 0 }
-.inq-summary { flex: 1; font-size: 13px; color: #909399; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.inq-summary { flex: 1; font-size: 13px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .inquiry-body { padding: 12px 16px; border-top: 1px solid #ebeef5; background: #fafbfc }
 
 /* ── 会话列表 ── */
@@ -624,12 +624,12 @@ onUnmounted(() => { stopChatPoll() })
 .session-search-input { width: 100%; box-sizing: border-box }
 .session-item { padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #f0f0f0; transition: background .12s }
 .session-item:hover { background: #f0f2f5 }
-.session-item.active { background: #ecf5ff; border-left: 3px solid #409eff }
+.session-item.active { background: var(--indigo-wash); border-left: 3px solid var(--indigo) }
 .session-top { display: flex; align-items: center; justify-content: space-between; gap: 4px }
 .session-top b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .unread-badge { background: #f56c6c; color: #fff; font-size: 10px; padding: 1px 5px; border-radius: 8px; min-width: 16px; text-align: center }
 .session-peer { font-size: 12px; margin: 2px 0 }
-.session-last { font-size: 12px; color: #909399; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 2px 0 0 }
+.session-last { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 2px 0 0 }
 .session-chat-panel { flex: 1; display: flex; flex-direction: column; padding: 0; overflow: hidden }
 .session-chat-panel .chat-messages { flex: 1; margin: 0; border: none; border-radius: 0; height: auto }
 .session-chat-panel .chat-input-row { margin: 0; padding: 8px; border-top: 1px solid #ebeef5 }
@@ -637,7 +637,7 @@ onUnmounted(() => { stopChatPoll() })
 /* ── 原有样式 ── */
 .msg { cursor: pointer; transition: background .15s }
 .msg:hover { background: #f5f7fa }
-.msg.active { background: #ecf5ff; border-left: 3px solid #409eff }
+.msg.active { background: var(--indigo-wash); border-left: 3px solid var(--indigo) }
 
 /* ── 订单平铺卡片：左封面右信息，常态展示全部内容 ── */
 .order-card { display: flex; gap: 12px; border: 1px solid #ebeef5; border-radius: 6px; padding: 12px; margin-bottom: 10px; background: #fff; transition: box-shadow .15s }
@@ -648,10 +648,10 @@ onUnmounted(() => { stopChatPoll() })
 .order-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px }
 .order-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
 .order-top b { font-size: 14px }
-.order-meta { font-size: 12.5px; color: #606266; margin: 0 }
+.order-meta { font-size: 12.5px; color: var(--ink-2); margin: 0 }
 .order-body .order-progress { margin: 8px 0 0 }
 .order-foot { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 6px; gap: 8px }
-.order-foot .cost { font-size: 12px; color: #909399 }
+.order-foot .cost { font-size: 12px; color: var(--ink-3) }
 .foot-actions { display: flex; gap: 8px; align-items: center }
 .foot-actions a { text-decoration: none }
 
@@ -663,13 +663,13 @@ onUnmounted(() => { stopChatPoll() })
 
 .order-progress { display: flex; align-items: center; gap: 0; margin: 16px 0 8px; padding: 0 4px }
 .progress-step { display: flex; flex-direction: column; align-items: center; flex: 1; position: relative }
-.progress-step:not(:last-child)::after { content: ''; position: absolute; top: 7px; left: 50%; width: 100%; height: 2px; background: #e4e7ed; z-index: 0 }
-.progress-step.active:not(:last-child)::after { background: #409eff }
-.progress-dot { width: 14px; height: 14px; border-radius: 50%; background: #e4e7ed; border: 2px solid #fff; z-index: 1; transition: background .2s }
-.progress-step.active .progress-dot { background: #409eff }
-.progress-step.current .progress-dot { background: #409eff; box-shadow: 0 0 0 3px rgba(64,158,255,.2) }
-.progress-label { font-size: 12px; color: #909399; margin-top: 4px }
-.progress-step.active .progress-label { color: #409eff; font-weight: 500 }
+.progress-step:not(:last-child)::after { content: ''; position: absolute; top: 7px; left: 50%; width: 100%; height: 2px; background: var(--rule); z-index: 0 }
+.progress-step.active:not(:last-child)::after { background: var(--indigo) }
+.progress-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--rule); border: 2px solid #fff; z-index: 1; transition: background .2s }
+.progress-step.active .progress-dot { background: var(--indigo) }
+.progress-step.current .progress-dot { background: var(--cinnabar); box-shadow: 0 0 0 3px var(--cinnabar-w) }
+.progress-label { font-size: 12px; color: var(--ink-3); margin-top: 4px }
+.progress-step.active .progress-label { color: var(--indigo); font-weight: 500 }
 
 .filter-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap }
 .filter-select { padding: 4px 8px; border: 1px solid #dcdfe6; border-radius: 4px; font-size: 13px; background: #fff }
@@ -682,8 +682,8 @@ onUnmounted(() => { stopChatPoll() })
 .section-title { font-size: 14px; font-weight: 600; margin: 16px 0 8px; color: #303133 }
 
 .terminal-bar { background: #fef0f0; color: #f56c6c; border-radius: 4px; padding: 8px 12px; font-size: 13px; margin-top: 8px }
-.progress-step.terminated .progress-dot { background: #e4e7ed }
-.progress-step.terminated .progress-label { color: #c0c4cc; text-decoration: line-through }
+.progress-step.terminated .progress-dot { background: var(--rule) }
+.progress-step.terminated .progress-label { color: var(--ink-3); text-decoration: line-through }
 .negotiation-bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #f0f9eb; border-radius: 6px; margin: 8px 0 }
 .neg-amount { font-size: 18px; font-weight: 700; color: #303133 }
 .neg-source { flex: 1 }
@@ -691,21 +691,21 @@ onUnmounted(() => { stopChatPoll() })
 .chat-bubble { display: flex; flex-direction: column; margin-bottom: 10px; max-width: 75% }
 .chat-bubble.me { margin-left: auto; align-items: flex-end }
 .chat-bubble.them { margin-right: auto; align-items: flex-start }
-.bubble-name { font-size: 11px; color: #909399; margin-bottom: 2px }
+.bubble-name { font-size: 11px; color: var(--ink-3); margin-bottom: 2px }
 .bubble-body { display: inline-block; padding: 8px 12px; border-radius: 10px; font-size: 13px; line-height: 1.5; word-break: break-word }
-.chat-bubble.me .bubble-body { background: #409eff; color: #fff; border-bottom-right-radius: 2px }
+.chat-bubble.me .bubble-body { background: var(--indigo); color: #fff; border-bottom-right-radius: 2px }
 .chat-bubble.them .bubble-body { background: #fff; color: #303133; border: 1px solid #ebeef5; border-bottom-left-radius: 2px }
 .bubble-body time { display: block; font-size: 10px; opacity: .5; margin-top: 4px }
 .chat-bubble.me .bubble-body time { color: rgba(255,255,255,.7) }
 .quote-sys-msg { text-align: center; padding: 6px 16px; margin: 6px auto; border-radius: 10px; font-size: 12px; max-width: 80%; line-height: 1.5 }
-.qsys-报价 { background: #ecf5ff; color: #409eff }
+.qsys-报价 { background: var(--ochre-w); color: var(--ochre) }
 .qsys-议价 { background: #fdf6ec; color: #e6a23c }
 .qsys-接受 { background: #f0f9eb; color: #67c23a }
 .qsys-拒绝 { background: #fef0f0; color: #f56c6c }
 .quote-input-card { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 8px 12px; background: #fff; border: 1px solid #ebeef5; border-radius: 6px; margin: 8px 0 }
-.yen-sign { font-size: 16px; font-weight: 600; color: #606266 }
+.yen-sign { font-size: 16px; font-weight: 600; color: var(--ink-2) }
 .amount-input { border: none; text-align: center; font-size: 16px; font-weight: 600; width: 120px; outline: none; background: transparent }
-.amount-input::placeholder { color: #c0c4cc }
+.amount-input::placeholder { color: var(--ink-3) }
 
 /* ── 全局细滚动条 ── */
 ::-webkit-scrollbar { width: 4px; height: 4px }
@@ -714,26 +714,27 @@ onUnmounted(() => { stopChatPoll() })
 ::-webkit-scrollbar-thumb:hover { background: #b0b0b0 }
 .chat-input-row { display: flex; gap: 8px; align-items: center; margin-top: 4px }
 /* 左下角圆角"定型文"开关按钮 + 自由文本输入 + 圆角发送按钮 */
-.template-toggle-btn { flex: none; align-self: flex-end; min-width: 84px; height: 38px; padding: 0 16px; border: 1px solid #dcdfe6; border-radius: 999px; background: #fff; color: #606266; font-size: 13px; cursor: pointer; transition: border-color .15s, color .15s, background .15s; user-select: none }
-.template-toggle-btn:hover { border-color: #c0c4cc }
-.template-toggle-btn.active { border-color: #409eff; color: #409eff; background: rgba(64, 158, 255, .08) }
+.template-toggle-btn { flex: none; align-self: flex-end; min-width: 84px; height: 38px; padding: 0 16px; border: 1px solid #dcdfe6; border-radius: 999px; background: #fff; color: var(--ink-2); font-size: 13px; cursor: pointer; transition: border-color .15s, color .15s, background .15s; user-select: none }
+.template-toggle-btn:hover { border-color: var(--ink-3) }
+.template-toggle-btn.active { border-color: var(--indigo); color: var(--indigo); background: rgba(44, 74, 82, .08) }
 .chat-textarea { flex: 1; min-height: 38px; max-height: 120px; padding: 8px 12px; border: 1px solid #dcdfe6; border-radius: 8px; font-size: 13px; font-family: inherit; line-height: 1.5; resize: none; outline: none; transition: border-color .15s, box-shadow .15s }
-.chat-textarea:focus { border-color: #409eff; box-shadow: 0 0 0 2px rgba(64, 158, 255, .12) }
-.send-btn { flex: none; align-self: flex-end; height: 38px; padding: 0 18px; border: none; border-radius: 999px; background: #409eff; color: #fff; font-size: 13px; cursor: pointer; transition: background .15s, opacity .15s }
-.send-btn:hover { background: #66b1ff }
-.send-btn:disabled { background: #a0cfff; cursor: not-allowed }
+.chat-textarea:focus { border-color: var(--indigo); box-shadow: 0 0 0 2px rgba(44, 74, 82, .12) }
+.send-btn { flex: none; align-self: flex-end; height: 38px; padding: 0 18px; border: none; border-radius: 999px; background: var(--indigo); color: #fff; font-size: 13px; cursor: pointer; transition: background .15s, opacity .15s }
+.send-btn:hover { background: var(--indigo-dim) }
+.send-btn:disabled { background: var(--rule-2); cursor: not-allowed }
 .status-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 500 }
 .tag-pending { background: #fdf6ec; color: #e6a23c }
-.tag-pending_seller { background: #ecf5ff; color: #409eff }
+.tag-pending_seller { background: var(--cinnabar-w); color: var(--cinnabar) }
 .tag-accepted, .tag-completed { background: #f0f9eb; color: #67c23a }
 .tag-rejected, .tag-cancelled { background: #fef0f0; color: #f56c6c }
-.tag-closed { background: #f4f4f5; color: #909399 }
-.tag-confirmed, .tag-deal { background: #ecf5ff; color: #409eff }
+.tag-closed { background: var(--paper-3); color: var(--ink-3) }
+.tag-confirmed { background: var(--cinnabar-w); color: var(--cinnabar) }
+.tag-deal { background: var(--indigo-wash); color: var(--indigo) }
 .tag-escrow_pending { background: #fdf6ec; color: #e6a23c }
 .tag-quoted { background: #fdf6ec; color: #e6a23c }
-.tag-delivering { background: #ecf5ff; color: #409eff }
+.tag-delivering { background: var(--ochre-w); color: var(--ochre) }
 .tag-refunded { background: #fef0f0; color: #f56c6c }
-.tag-expired { background: #f4f4f5; color: #909399 }
+.tag-expired { background: var(--paper-3); color: var(--ink-3) }
 </style>
 
 <style>

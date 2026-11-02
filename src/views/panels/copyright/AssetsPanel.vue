@@ -354,7 +354,7 @@ onMounted(load)
 
 .status-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 500 }
 .tone-ok { background: #f0f9eb; color: #67c23a }
-.tone-off { background: #f4f4f5; color: #909399 }
+.tone-off { background: var(--paper-3); color: var(--ink-3) }
 
 .detail-hero { margin-bottom: 12px }
 .detail-hero h3 { margin: 0 0 8px }

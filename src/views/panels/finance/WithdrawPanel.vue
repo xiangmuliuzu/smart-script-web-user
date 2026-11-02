@@ -291,7 +291,7 @@ onMounted(async () => {
 .tone-wait { background: #fdf6ec; color: #e6a23c }
 .tone-ok { background: #f0f9eb; color: #67c23a }
 .tone-bad { background: #fef0f0; color: #f56c6c }
-.tone-off { background: #f4f4f5; color: #909399 }
+.tone-off { background: var(--paper-3); color: var(--ink-3) }
 .pager { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 14px }
 .pager-info { font-size: 12.5px; color: var(--ink-3, #999) }
 </style>

@@ -13,7 +13,7 @@
       <div v-if="!pending && !error" class="worklist">
         <button class="workitem new-work" :disabled="!canCreate" @click="router.push(basePath + '/create')"><span class="work-cover"><span class="plus" aria-hidden="true">＋</span></span><span class="work-copy"><span class="work-title"><h3>创作与上传</h3><span class="work-kind">新建作品</span></span><span class="work-synopsis">从一个新故事开始，或上传你已经完成的剧本。创建后可以继续补充简介、章节和版权信息。</span><span class="work-foot"><span class="work-meta">点击此处进入创作页面</span><span class="btn sm">开始创作</span></span></span></button>
         <button v-for="work in filtered" :key="work.workId" class="workitem" :data-reviewing="work.status === 'reviewing'" @click="goWork(work.workId)">
-          <span class="work-cover"><img v-if="avatarUrl(work.cover) && failedCovers[work.workId] !== work.cover" :src="avatarUrl(work.cover)" alt="" @error="failedCovers[work.workId] = work.cover" /><span v-else class="glyph">{{ work.title?.slice(0, 1) }}</span><span class="stamp" :data-s="stateOf(work.status).stamp">{{ stateOf(work.status).label }}</span></span>
+          <span class="work-cover" :class="{ 'script-cover': !hasCover(work) }"><img v-if="hasCover(work)" :src="avatarUrl(work.cover)" alt="" @error="failedCovers[work.workId] = work.cover" /><template v-else><span class="script-slip">{{ work.title }}</span><span class="bg-glyph" aria-hidden="true">{{ work.title?.slice(0, 1) }}</span></template><span class="stamp" :data-s="stateOf(work.status).stamp">{{ stateOf(work.status).label }}</span></span>
           <span class="work-copy"><span class="work-title"><h3>{{ work.title }}</h3><span class="work-kind">{{ workType(work.workType) }} · {{ work.genreName || '未分类' }}</span></span><span class="work-synopsis">{{ work.summary || '故事还在酝酿中，继续写下你的下一章。' }}</span><span class="work-foot"><span class="work-meta">{{ work.episodeCount != null ? work.episodeCount + ' 章 · ' : '' }}{{ words(work.wordCount) }} · 更新于 {{ dateText(work.updateTime || work.createTime).slice(5) }}</span><span class="btn sm" :class="{ quiet: !['revision', 'rejected'].includes(work.status) }">{{ stateOf(work.status).action }}</span></span></span>
         </button>
       </div>
@@ -25,7 +25,7 @@
       <div class="aside-head"><h2>工作台</h2><span class="aside-note">{{ orderPending || orderError ? '订单待办' : todos.length + ' 项待办' }}</span></div>
       <div class="aside-block"><h3>待办<span v-if="!orderPending && !orderError" class="count">{{ todos.length }}</span></h3>
         <LoadState :pending="orderPending" :error="orderError" :retry="loadTodo" loading-text="正在加载订单…" />
-        <div v-if="!orderError && todos.length" class="todo-list" role="region" aria-label="订单待办列表" tabindex="0"><button v-for="order in todos" :key="order.orderId" class="todo-item order-todo" @click="openPanel('cooperation', 'order', order.orderNo || order.workTitle || '')"><span class="todo-order-head"><b>《{{ order.workTitle || '订单#' + order.orderId }}》</b><em>{{ orderStatusLabel(order.status) }}</em></span><span>订单号：{{ order.orderNo || '#' + order.orderId }} · {{ money(Number(order.amount || 0) / 100) }}</span><span class="todo-progress"><span v-for="(step, i) in orderSteps" :key="step" :class="{ active: orderStepIndex(order.status) >= i }">{{ step }}</span></span></button></div>
+        <div v-if="!orderError && todos.length" class="todo-list" role="region" aria-label="订单待办列表" tabindex="0"><button v-for="order in todos" :key="order.orderId" class="todo-item order-todo" :data-tone="orderTone(order.status)" @click="openPanel('cooperation', 'order', order.orderNo || order.workTitle || '')"><span class="todo-order-head"><b>《{{ order.workTitle || '订单#' + order.orderId }}》</b><em>{{ orderStatusLabel(order.status) }}</em></span><span>订单号：{{ order.orderNo || '#' + order.orderId }} · {{ money(Number(order.amount || 0) / 100) }}</span><span class="todo-progress"><span v-for="(step, i) in orderSteps" :key="step" :class="stepClass(order, i)">{{ step }}</span></span></button></div>
         <p v-if="!orderPending && !orderError && !todos.length" class="cost">暂无待处理订单。</p>
       </div>
       <details class="aside-block activity-list"><summary><h3>最近动态</h3></summary><ul class="aside-log"><li v-for="work in recent" :key="work.workId"><time>{{ dateText(work.updateTime || work.createTime) }}</time>{{ work.title }} · {{ stateOf(work.status).label }}</li></ul><p v-if="!pending && !recent.length" class="cost">暂无最近动态</p></details>
@@ -52,6 +52,9 @@ const filterOpen = ref(false)
 const keyword = ref('')
 const status = ref('')
 const workType = value => ({ short_drama: '短剧', novel: '小说', script: '剧本' })[value] || '短剧'
+const hasCover = work => Boolean(avatarUrl(work.cover) && failedCovers.value[work.workId] !== work.cover)
+const orderTone = status => status === 'delivering' ? 'ochre' : status === 'completed' ? 'indigo' : 'cinnabar'
+const stepClass = (order, index) => { const current = orderStepIndex(order.status); return index < current ? 'done' : index === current ? 'current' : '' }
 const filtered = computed(() => works.value.filter(w => (!keyword.value.trim() || (w.title + ' ' + (w.summary || '')).includes(keyword.value.trim())) && (!status.value || w.status === status.value || (status.value === 'revision' && w.status === 'rejected'))))
 const todos = ref([])
 const orderPending = ref(true)
@@ -76,8 +79,9 @@ defineExpose({ loadTodo })
 <style scoped>
 .workspace-switch { display: flex; flex-wrap: wrap; align-items: baseline; gap: 22px; }
 .workspace-switch h2 { margin: 0; }
-.workspace-switch button { border: 0; padding: 0; background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
+.workspace-switch button { position: relative; border: 0; padding: 0 0 4px; background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
 .workspace-switch button[aria-pressed="true"] { color: var(--ink); }
+.workspace-switch button[aria-pressed="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--cinnabar); }
 .workspace-switch button:focus-visible { outline: 2px solid var(--indigo); outline-offset: 3px; }
 .todo-list { max-height: min(320px, 35vh); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--rule-2) transparent; }
 .todo-list:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
@@ -89,8 +93,13 @@ defineExpose({ loadTodo })
 .activity-list summary:focus-visible { outline: 2px solid var(--indigo); outline-offset: 3px; }
 .order-todo .todo-order-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; margin: 0; }
 .order-todo .todo-order-head b { min-width: 0; overflow-wrap: anywhere; }
-.order-todo .todo-order-head em { flex: none; border-radius: 10px; padding: 2px 7px; background: #ecf5ff; color: #409eff; font-size: 12px; font-style: normal; }
+.order-todo .todo-order-head em { flex: none; border-radius: 2px; padding: 2px 7px; background: var(--indigo-wash); color: var(--indigo); border: 1px solid rgba(44, 74, 82, .25); font-size: 12px; font-style: normal; }
+.order-todo[data-tone="cinnabar"] .todo-order-head em { background: var(--cinnabar-w); color: var(--cinnabar); border-color: rgba(176, 58, 46, .25); }
+.order-todo[data-tone="ochre"] .todo-order-head em { background: var(--ochre-w); color: var(--ochre); border-color: rgba(168, 119, 41, .28); }
 .order-todo .todo-progress { display: flex; gap: 3px; margin-top: 10px; }
-.order-todo .todo-progress span { flex: 1; margin: 0; border-top: 2px solid #e4e7ed; padding-top: 4px; text-align: center; font-size: 10px; color: #909399; }
-.order-todo .todo-progress span.active { border-color: #409eff; color: #409eff; }
+.order-todo .todo-progress span { flex: 1; margin: 0; border-top: 2px solid var(--rule); padding-top: 4px; text-align: center; font-size: 10px; color: var(--ink-3); }
+.order-todo .todo-progress span.done { border-top-color: var(--indigo-dim); color: var(--indigo); }
+.order-todo .todo-progress span.current { border-top-color: var(--cinnabar); color: var(--cinnabar); font-weight: 600; }
+.order-todo[data-tone="ochre"] .todo-progress span.current { border-top-color: var(--ochre); color: var(--ochre); }
+.order-todo[data-tone="indigo"] .todo-progress span.current { border-top-color: var(--indigo); color: var(--indigo); }
 </style>

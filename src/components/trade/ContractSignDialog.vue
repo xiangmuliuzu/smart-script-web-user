@@ -257,10 +257,10 @@ function close() {
 .sign-pad { width: 100%; height: 140px; background: #fff; border: 1px dashed #dcdfe6; border-radius: 6px; touch-action: none; cursor: crosshair }
 .seal-list { display: flex; gap: 10px; flex-wrap: wrap }
 .seal-item { width: 92px; border: 1px solid #ebeef5; border-radius: 6px; padding: 6px; text-align: center; cursor: pointer; background: #fff; transition: border-color .15s }
-.seal-item:hover { border-color: #409eff }
-.seal-item.active { border-color: #409eff; box-shadow: 0 0 0 2px rgba(64, 158, 255, .15) }
+.seal-item:hover { border-color: var(--indigo) }
+.seal-item.active { border-color: var(--cinnabar); box-shadow: 0 0 0 2px var(--cinnabar-w) }
 .seal-item img { width: 56px; height: 56px; object-fit: contain; display: block; margin: 0 auto 4px }
-.seal-item span { font-size: 12px; color: #606266; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.seal-item span { font-size: 12px; color: var(--ink-2); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .sign-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px }
 .sign-actions .cost { font-size: 12px }
 </style>

@@ -161,17 +161,17 @@ async function syncQuote(amountFen) {
 .template-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px 0 }
 .template-head b { font-size: 13px }
 .template-tabs { display: flex; gap: 16px; padding: 0 12px; border-bottom: 1px solid #ebeef5 }
-.template-tab { border: 0; background: transparent; padding: 8px 0; font-size: 13px; color: #606266; cursor: pointer; border-bottom: 2px solid transparent }
-.template-tab.active { color: #409eff; font-weight: 600; border-bottom-color: #409eff }
+.template-tab { border: 0; background: transparent; padding: 8px 0; font-size: 13px; color: var(--ink-2); cursor: pointer; border-bottom: 2px solid transparent }
+.template-tab.active { color: var(--indigo); font-weight: 600; border-bottom-color: var(--indigo) }
 .template-body { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 12px }
 .template-empty { text-align: center; padding: 16px 0; font-size: 12px }
 .template-item { background: #fff; border: 1px solid #ebeef5; border-radius: 6px; margin-bottom: 6px; overflow: hidden }
-.template-item.expanded { border-color: #409eff }
+.template-item.expanded { border-color: var(--indigo) }
 .template-text { padding: 9px 12px; font-size: 13px; line-height: 1.5; color: #303133; cursor: pointer; word-break: break-word }
 .template-item:not(.expanded) .template-text:hover { background: #f5f7fa }
-.price-slot { color: #409eff; font-weight: 500; padding: 0 4px; border-bottom: 1px solid #409eff; margin: 0 2px }
+.price-slot { color: var(--ochre); font-weight: 500; padding: 0 4px; border-bottom: 1px solid var(--ochre); margin: 0 2px }
 .price-row { display: flex; align-items: center; gap: 8px; padding: 0 12px 10px }
-.price-row .yen-sign { font-size: 16px; font-weight: 600; color: #409eff }
+.price-row .yen-sign { font-size: 16px; font-weight: 600; color: var(--ochre) }
 .price-input { flex: 1; padding: 5px 10px; border: 1px solid #dcdfe6; border-radius: 4px; font-size: 14px; outline: none }
-.price-input:focus { border-color: #409eff }
+.price-input:focus { border-color: var(--indigo) }
 </style>

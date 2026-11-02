@@ -21,7 +21,7 @@ a { color: var(--indigo); }
 button.workitem { text-align: left; padding: 0; width: 100%; font: inherit; color: inherit; }
 .workitem > .work-copy, .workitem .work-synopsis { display: block; }
 .workitem > .work-copy { display: flex; }
-.workitem .stamp { width: 46px; white-space: normal; line-height: 1.4; padding: 6px 9px; }
+.workitem .stamp { width: 46px; white-space: normal; line-height: 1.2; padding: 4px; }
 .work-cover img, .wh-cover img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
 .wh-cover { position: relative; aspect-ratio: 210 / 297; overflow: hidden; }
 .workitem .work-title h3 { overflow-wrap: anywhere; }

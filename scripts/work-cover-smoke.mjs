@@ -22,7 +22,7 @@ try {
   assert.equal(await image.getAttribute('src'), '/dev-api/profile/upload/cover.png')
   await page.waitForFunction(() => document.querySelector('.workitem img')?.naturalWidth > 0)
   const missing = page.locator('.workitem').filter({ hasText: '长夜将明' })
-  await missing.locator('.glyph').waitFor()
+  await missing.locator('.script-slip').waitFor(); assert.equal(await missing.locator('.bg-glyph').count(), 1)
   await card.click()
   const detailImage = page.locator('.wh-cover img')
   await detailImage.waitFor()
@@ -34,6 +34,6 @@ try {
   await dialog.getByRole('button', { name: '取消', exact: true }).click()
   await page.getByRole('button', { name: '返回我的作品' }).click()
   await page.locator('.workitem').filter({ hasText: '长夜将明' }).click()
-  await page.locator('.wh-cover .glyph').waitFor()
+  await page.locator('.wh-cover .script-slip').waitFor(); assert.equal(await page.locator('.wh-cover .bg-glyph').count(), 1)
   console.log('PASS work covers load in list, detail and settings; broken covers fall back')
 } finally { await browser.close() }

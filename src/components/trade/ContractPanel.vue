@@ -348,12 +348,12 @@ function openSignById(contract) {
 .contract-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
 .contract-top b { font-size: 14px }
 .mine-role { font-size: 12px }
-.contract-meta { font-size: 12.5px; color: #606266; margin: 0 }
+.contract-meta { font-size: 12.5px; color: var(--ink-2); margin: 0 }
 .sign-line { display: flex; gap: 12px }
 .sign-done { color: #67c23a; font-weight: 500 }
 .sign-todo { color: #e6a23c }
 .contract-foot { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 6px; gap: 8px }
-.contract-foot .cost { font-size: 12px; color: #909399 }
+.contract-foot .cost { font-size: 12px; color: var(--ink-3) }
 .foot-actions { display: flex; gap: 8px; align-items: center }
 .foot-actions a { text-decoration: none }
 .preview-wrap { min-height: 200px }
@@ -367,13 +367,13 @@ function openSignById(contract) {
 .pagination-bar { display: flex; gap: 8px; align-items: center; justify-content: center; padding: 8px 0; margin-top: 4px }
 .edit-wrap { display: flex; flex-direction: column; gap: 12px; min-height: 200px }
 .edit-row { display: flex; flex-direction: column; gap: 6px }
-.edit-label { font-size: 13px; color: #606266 }
+.edit-label { font-size: 13px; color: var(--ink-2) }
 .edit-textarea { width: 100%; min-height: 320px; padding: 10px 12px; border: 1px solid #dcdfe6; border-radius: 6px; font-size: 13px; line-height: 1.7; font-family: inherit; resize: vertical; outline: none; box-sizing: border-box }
-.edit-textarea:focus { border-color: #409eff; box-shadow: 0 0 0 2px rgba(64, 158, 255, .12) }
+.edit-textarea:focus { border-color: var(--indigo); box-shadow: 0 0 0 2px rgba(44, 74, 82, .12) }
 .edit-note { font-size: 12px; margin: 0 }
 .edit-actions { display: flex; justify-content: flex-end; gap: 8px }
 .status-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 500 }
 .tag-pending { background: #fdf6ec; color: #e6a23c }
-.tag-partial_signed { background: #ecf5ff; color: #409eff }
+.tag-partial_signed { background: var(--cinnabar-w); color: var(--cinnabar) }
 .tag-completed { background: #f0f9eb; color: #67c23a }
 </style>

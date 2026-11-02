@@ -512,3 +512,47 @@
   .create-grid{ grid-template-columns:1fr; gap:26px 0; }
   .create-upload{ border-left:0; padding-left:0; border-top:1px solid var(--rule); padding-top:22px; }
 }
+
+            /* ===== 顶栏入口三分组：交易链路｜资产凭证｜沟通通知 ===== */
+            .topbar-right{ gap:4px; }
+            .nav-group{ display:flex; align-items:center; gap:2px; padding:0 8px; border-right:1px solid var(--rule); }
+            .nav-group:last-of-type{ border-right:0; }
+            .nav-group .nav-icon{ padding:3px 9px; }
+            @media (max-width:900px){ .nav-group{ padding:0 4px; } .nav-group .nav-icon{ padding:3px 6px; } }
+
+            /* ===== 线装台本封面：左侧装订压痕 + 竖排题签 + 底纹大字 ===== */
+            .workitem .work-cover.script-cover,
+            .wh-cover.script-cover{
+              position:relative; overflow:hidden;
+              background:linear-gradient(155deg,#EAE5D9 0%,#DDD6C6 100%);
+              box-shadow:inset 10px 0 0 rgba(27,26,24,.03), inset 11px 0 0 rgba(27,26,24,.12);
+            }
+            .workitem .work-cover.script-cover::before,
+            .wh-cover.script-cover::before{
+              content:""; position:absolute; left:11px; top:0; bottom:0; width:1px;
+              background:repeating-linear-gradient(to bottom,transparent 0,transparent 22px,rgba(27,26,24,.28) 22px,rgba(27,26,24,.28) 30px);
+            }
+            .script-slip{
+              position:relative; z-index:1; padding:12px 7px; max-height:76%; max-width:calc(100% - 36px); overflow:hidden;
+              writing-mode:vertical-rl; font-family:var(--serif); font-size:14px; font-weight:600; letter-spacing:.16em; line-height:1.4;
+              color:var(--ink); background:var(--paper-2); border:1px solid var(--rule-2); box-shadow:0 2px 6px rgba(27,26,24,.06);
+            }
+            .script-slip::after{ content:""; position:absolute; inset:2px; border:1px solid rgba(176,58,46,.22); pointer-events:none; }
+            .script-cover .bg-glyph{
+              position:absolute; right:-8px; bottom:-14px; font-family:var(--serif); font-size:76px; font-weight:700;
+              color:rgba(27,26,24,.055); line-height:1; pointer-events:none; user-select:none;
+            }
+            .workitem .work-cover.script-cover .script-slip{ font-size:13px; }
+            .workitem .work-cover.script-cover .bg-glyph{ font-size:68px; }
+            .wh-cover.script-cover .script-slip{ font-size:10.5px; padding:8px 4px; letter-spacing:.12em; max-height:82%; max-width:calc(100% - 22px); }
+            .wh-cover.script-cover .bg-glyph{ font-size:38px; right:-4px; bottom:-6px; }
+            .wh-cover.script-cover::before{ left:8px; }
+
+            /* ===== 印泥方章：双线内框 + 微倾角 + 宣纸毛玻璃底 ===== */
+            .stamp{
+              background:rgba(252,251,248,.94); backdrop-filter:blur(4px); border-radius:1px;
+              outline:1px solid currentColor; outline-offset:-4px; transform:rotate(-2.5deg);
+              box-shadow:0 2px 6px rgba(27,26,24,.08);
+            }
+            .workitem .work-cover .stamp, .wh-cover .stamp{ background:rgba(252,251,248,.94); }
+            .stamp[data-s="draft"]{ color:var(--indigo); }

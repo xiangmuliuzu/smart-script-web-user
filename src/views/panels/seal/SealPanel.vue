@@ -477,7 +477,7 @@ onUnmounted(clearLocalPreview)
 .tone-wait { background: #fdf6ec; color: #e6a23c }
 .tone-ok { background: #f0f9eb; color: #67c23a }
 .tone-bad { background: #fef0f0; color: #f56c6c }
-.tone-off { background: #f4f4f5; color: #909399 }
+.tone-off { background: var(--paper-3); color: var(--ink-3) }
 
 .seal-form { display: grid; gap: 18px; max-width: 640px }
 .seal-form .field { display: flex; flex-direction: column; gap: 8px; margin: 0 }

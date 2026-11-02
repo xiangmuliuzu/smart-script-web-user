@@ -34,17 +34,21 @@
       <button type="button" class="toolbar-scroll-arrow" aria-label="向右滚动工具栏" :disabled="atEnd" @click="scrollTools(1)">›</button>
     </div>
     <div class="script-paper">
+      <div class="manuscript-meta">
+        <span class="scene-heading" :class="{ 'is-empty': !sceneHeading }">{{ sceneHeading || '场次未标注' }}</span>
+        <span class="manuscript-count" aria-live="polite">{{ liveWords.toLocaleString() }} 字</span>
+      </div>
       <input v-if="!hideTitle" class="episode-title" aria-label="分集标题" :value="title" maxlength="100" :disabled="disabled" :readonly="readOnly" placeholder="输入分集标题" @input="$emit('update:title', $event.target.value)" />
       <div ref="editor" class="rich-document" />
     </div>
   </div>
 </template>
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Quill from 'quill'
 import DOMPurify from 'dompurify'
 import 'quill/dist/quill.snow.css'
-import { isFormattedDocument, documentPrefix } from '../utils/document.js'
+import { isFormattedDocument, documentPrefix, documentText } from '../utils/document.js'
 
 const Font = Quill.import('attributors/class/font')
 Font.whitelist = ['songti', 'heiti', 'kaiti', 'fangsong', 'arial', 'times']
@@ -55,6 +59,13 @@ const { StyleAttributor, Scope } = Quill.import('parchment')
 Quill.register(new StyleAttributor('lineheight', 'line-height', { scope: Scope.BLOCK, whitelist: ['1.5', '2', '2.5'] }), true)
 const props = defineProps({ modelValue: { type: String, default: '' }, title: String, disabled: Boolean, readOnly: Boolean, hideTitle: Boolean, compact: Boolean, label: { type: String, default: '分集正文' } })
 const emit = defineEmits(['update:modelValue', 'update:title'])
+const plainText = computed(() => documentText(props.modelValue))
+const liveWords = computed(() => plainText.value.replace(/\s/g, '').length)
+// 场次头：正文里第一条「1-1 …」或「第 X 集/场/幕」作为稿纸顶部的场次高亮标签。
+const sceneHeading = computed(() => {
+  const line = plainText.value.split(/\r?\n/).map(text => text.trim()).find(text => /^\d+\s*[-－—]\s*\d+/.test(text) || /^第\s*\d+\s*[集场幕]/.test(text))
+  return line ? line.slice(0, 40) : ''
+})
 const editor = ref(null)
 const toolbar = ref(null)
 const atStart = ref(true)

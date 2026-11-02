@@ -170,20 +170,20 @@ defineExpose({ getPlacements })
 <style scoped>
 .placement-pad { display: flex; flex-direction: column; gap: 8px }
 .pad-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px }
-.page-indicator { color: #606266 }
-.pad-tip { color: #909399; font-size: 12px }
-.pad-stage { position: relative; border: 1px solid #ebeef5; border-radius: 6px; background: #f4f4f5; overflow: hidden; min-height: 200px; touch-action: none }
+.page-indicator { color: var(--ink-2) }
+.pad-tip { color: var(--ink-3); font-size: 12px }
+.pad-stage { position: relative; border: 1px solid #ebeef5; border-radius: 6px; background: var(--paper-3); overflow: hidden; min-height: 200px; touch-action: none }
 .page-img { display: block; width: 100%; height: auto; user-select: none }
 .stamp { position: absolute; cursor: move; border: 1px dashed transparent; border-radius: 4px; box-sizing: border-box }
-.stamp.active { border-color: #409eff }
+.stamp.active { border-color: var(--cinnabar) }
 .stamp img { display: block; width: 100%; height: auto; pointer-events: none; user-select: none }
-.stamp-tag { position: absolute; left: 0; top: -16px; font-size: 10px; color: #409eff; background: #fff; padding: 0 4px; border-radius: 3px; pointer-events: none; white-space: nowrap }
-.resize-handle { position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px; border-radius: 50%; background: #409eff; border: 2px solid #fff; cursor: nwse-resize }
-.pad-empty { position: absolute; inset: 0; display: grid; place-items: center; color: #909399; font-size: 13px; text-align: center; padding: 0 20px }
+.stamp-tag { position: absolute; left: 0; top: -16px; font-size: 10px; color: var(--cinnabar); background: #fff; padding: 0 4px; border-radius: 3px; pointer-events: none; white-space: nowrap }
+.resize-handle { position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px; border-radius: 50%; background: var(--indigo); border: 2px solid #fff; cursor: nwse-resize }
+.pad-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink-3); font-size: 13px; text-align: center; padding: 0 20px }
 .pad-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px }
-.pad-foot .cost { font-size: 12px; color: #909399 }
+.pad-foot .cost { font-size: 12px; color: var(--ink-3) }
 .btn.sm.ghost { padding: 3px 10px; font-size: 12px; border: 1px solid #dcdfe6; background: #fff; border-radius: 4px; cursor: pointer }
 .btn.sm.ghost:disabled { opacity: .5; cursor: not-allowed }
-.btn.sm { padding: 4px 14px; font-size: 13px; border: 0; background: #409eff; color: #fff; border-radius: 4px; cursor: pointer }
+.btn.sm { padding: 4px 14px; font-size: 13px; border: 0; background: var(--indigo); color: #fff; border-radius: 4px; cursor: pointer }
 .btn.sm:disabled { opacity: .6; cursor: not-allowed }
 </style>

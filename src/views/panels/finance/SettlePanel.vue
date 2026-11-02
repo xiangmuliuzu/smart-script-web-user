@@ -407,7 +407,7 @@ onMounted(async () => {
 .tone-wait { background: #fdf6ec; color: #e6a23c }
 .tone-ok { background: #f0f9eb; color: #67c23a }
 .tone-bad { background: #fef0f0; color: #f56c6c }
-.tone-off { background: #f4f4f5; color: #909399 }
+.tone-off { background: var(--paper-3); color: var(--ink-3) }
 .detail-hero { margin-bottom: 12px }
 .detail-hero h3 { margin: 0 0 4px; font-size: 26px }
 .detail-rows { margin-top: 8px }

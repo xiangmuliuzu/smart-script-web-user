@@ -131,7 +131,7 @@ try {
     await page.getByLabel('人物便签', { exact: true }).fill('林深：咖啡馆店主，与苏浅重逢。')
     const downloaded = page.waitForEvent('download'); await page.getByRole('button', { name: '导出人物便签', exact: true }).click(); assert.match((await downloaded).suggestedFilename(), /人物便签.txt$/)
     await page.getByRole('button', { name: '✦ AI 助手', exact: true }).click()
-    await page.getByRole('dialog', { name: 'AI 创作助手', exact: true }).locator('.ai-result').waitFor()
+    await page.getByRole('dialog', { name: 'AI 编剧助手', exact: true }).locator('.ai-result').waitFor()
     await page.getByRole('button', { name: 'Close this dialog', exact: true }).click()
   })
   await check('restoring a formatted draft strips executable markup and keeps safe formatting', async () => {
