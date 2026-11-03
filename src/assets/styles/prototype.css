@@ -554,5 +554,5 @@
               outline:1px solid currentColor; outline-offset:-4px; transform:rotate(-2.5deg);
               box-shadow:0 2px 6px rgba(27,26,24,.08);
             }
-            .workitem .work-cover .stamp, .wh-cover .stamp{ background:rgba(252,251,248,.94); }
+            .workitem .work-cover .stamp, .wh-cover .stamp{ background:rgba(252,251,248,.94); z-index:2; }
             .stamp[data-s="draft"]{ color:var(--indigo); }

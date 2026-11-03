@@ -13,10 +13,6 @@
             <button class="nav-icon" aria-label="订单" @click="openPanel('cooperation', 'order')"><span class="ico"><el-icon><Tickets /></el-icon></span><span class="lbl">订单</span></button>
             <button class="nav-icon" aria-label="合同" @click="openPanel('cooperation', 'contract')"><span class="ico"><el-icon><Document /></el-icon></span><span class="lbl">合同</span></button>
           </div>
-          <div class="nav-group" role="group" aria-label="资产凭证">
-            <button class="nav-icon" aria-label="版权" @click="openPanel('rights', 'certs')"><span class="ico"><el-icon><Medal /></el-icon></span><span class="lbl">版权</span></button>
-            <button class="nav-icon" aria-label="印章" @click="openPanel('rights', 'seal')"><span class="ico"><el-icon><Stamp /></el-icon></span><span class="lbl">印章</span></button>
-          </div>
           <div class="nav-group" role="group" aria-label="沟通通知">
             <button class="nav-icon" aria-label="消息" @click="openPanel('messages')"><span class="ico"><el-icon><Bell /></el-icon><span v-if="unread" class="badge">{{ unread > 99 ? '99+' : unread }}</span></span><span class="lbl">消息</span></button>
             <button class="nav-icon" aria-label="平台客服" @click="openPanel('chat')"><span class="ico"><el-icon><ChatDotRound /></el-icon><span v-if="chatUnread" class="badge">{{ chatUnread > 99 ? '99+' : chatUnread }}</span></span><span class="lbl">平台客服</span></button>
@@ -40,7 +36,7 @@
 import { computed, nextTick, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Bell, ChatDotRound, ChatLineSquare, ChatRound, Document, Medal, Stamp, Tickets, ArrowDown } from '@element-plus/icons-vue'
+import { Bell, ChatDotRound, ChatLineSquare, ChatRound, Document, Tickets, ArrowDown } from '@element-plus/icons-vue'
 import { getInfo, isAuthFailure, logout } from '../auth.js'
 import { portalKey } from '../utils/portal.js'
 import { avatarUrl } from '../utils/avatarUrl.js'
