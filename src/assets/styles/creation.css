@@ -50,7 +50,7 @@
 .view-mode button:focus-visible { outline: 2px solid var(--indigo); outline-offset: -2px; }
 .chapter-trial-setting { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 12px; font-size: 13px; flex: none; }
 .chapter-trial-setting small { color: var(--ink-3); }
-.script-editor { display: flex; flex-direction: column; flex: 1 0 auto; min-height: 480px; width: 100%; max-width: 900px; margin: 0 auto; }
+.script-editor { display: flex; flex-direction: column; flex: 1 0 auto; min-height: 480px; width: 100%; max-width: 1120px; margin: 0 auto; }
 .document-toolbar-frame { display: flex; align-items: stretch; min-width: 0; background: white; border: 1px solid #d9ddda; border-radius: 6px; position: sticky; top: 0; z-index: 3; }
 .document-toolbar.ql-toolbar.ql-snow { display: flex; align-items: center; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; border: 0; background: white; padding: 8px 6px; font-family: var(--sans); }
 .document-toolbar::-webkit-scrollbar { display: none; }
@@ -98,7 +98,7 @@
 .script-editor-compact .script-paper { min-height: 300px; padding: 24px; margin-top: 10px; }
 .script-editor-compact .rich-document, .script-editor-compact .ql-editor { min-height: 260px; }
 .tool-divider { height: 18px; width: 1px; background: var(--rule); margin: 0 4px; }
-.script-paper { width: 100%; max-width: 900px; margin: 14px auto 0; padding: clamp(28px, 3.7vw, 70px); background: white; border: 1px solid #d9ddda; border-radius: 7px 7px 0 0; box-shadow: 0 3px 12px #1b1a1804; display: flex; flex-direction: column; flex: 1 0 auto; min-height: 430px; }
+.script-paper { width: 100%; max-width: 1120px; margin: 14px auto 0; padding: clamp(28px, 3.7vw, 70px); background: white; border: 1px solid #d9ddda; border-radius: 7px 7px 0 0; box-shadow: 0 3px 12px #1b1a1804; display: flex; flex-direction: column; flex: 1 0 auto; min-height: 430px; }
 .script-paper .episode-title { font-family: var(--sans); font-weight: 600; font-size: 23px; line-height: 1.5; padding: 0 0 22px; border: 0; background: transparent; border-radius: 0; width: 100%; color: var(--ink); }
 .script-paper .script-body, .notes-paper textarea { resize: none; border: 0; border-radius: 0; box-shadow: none; padding: 0; background: white; font-family: var(--sans); font-size: 16px; line-height: 2; flex: 1; min-height: 330px; color: var(--ink); }
 .script-paper .script-body:focus, .script-paper .episode-title:focus, .notes-paper textarea:focus { outline: none; box-shadow: none; }
