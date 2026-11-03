@@ -556,3 +556,11 @@
             }
             .workitem .work-cover .stamp, .wh-cover .stamp{ background:rgba(252,251,248,.94); z-index:2; }
             .stamp[data-s="draft"]{ color:var(--indigo); }
+
+            /* ===== 作品卡片窄列：内容单行截断，避免按钮换行撑高卡片 ===== */
+            .workitem .work-title{ flex-wrap:nowrap; min-width:0; }
+            .workitem .work-title h3{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+            .workitem .work-title .work-kind{ flex:none; white-space:nowrap; }
+            .workitem .work-foot{ flex-wrap:nowrap; min-width:0; }
+            .workitem .work-foot .work-meta{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+            .workitem .work-foot .btn{ flex:none; white-space:nowrap; }
