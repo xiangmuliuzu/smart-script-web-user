@@ -4,7 +4,7 @@
     <template v-else-if="user && api">
       <header class="topbar">
         <button class="brand" @click="goWorks"><b>剧云策</b><span>创作者中心</span></button>
-        <nav class="nav" aria-label="主导航"><button aria-current="page" @click="goWorks">工作台</button></nav>
+        <nav class="nav" aria-label="主导航"><button :aria-current="onWorks ? 'page' : undefined" @click="goWorks">工作台</button><button :aria-current="onDemand ? 'page' : undefined" @click="goDemand">任务广场</button></nav>
         <div class="topbar-right">
           <button v-if="realNameStatus && realNameStatus !== 'APPROVED'" class="chip verify-chip" @click="openPanel('account', 'profile')">⚠ 实名认证{{ realNameStatus === 'PENDING' ? '审核中' : '未完成' }}</button>
           <div class="nav-group" role="group" aria-label="交易链路">
@@ -26,7 +26,7 @@
       <main class="portal-main" :class="{ 'portal-main-editor': route.path.endsWith('/create') }"><router-view v-slot="{ Component }"><component :is="Component" :key="route.path" ref="workspace" /></router-view></main>
       <MessagesPanel v-if="panel === 'messages'" v-model="panelVisible" />
       <PlatformChatPanel v-if="panel === 'chat'" v-model="panelVisible" />
-      <CooperationPanel v-if="panel === 'cooperation'" v-model="panelVisible" :initial-tab="panelTab" :order-search="panelOrderSearch" />
+      <CooperationPanel v-if="panel === 'cooperation'" v-model="panelVisible" :initial-tab="panelTab" :order-search="panelOrderSearch" :initial-keyword="panelKeyword" />
       <RightsPanel v-if="panel === 'rights'" ref="rightsPanelRef" v-model="panelVisible" :initial-tab="panelTab" />
       <AccountPanel v-if="panel === 'account'" v-model="panelVisible" :initial-tab="panelTab" />
     </template>
@@ -59,13 +59,17 @@ const realNameStatus = ref('')
 const panel = ref('')
 const panelTab = ref('')
 const panelOrderSearch = ref('')
+const panelKeyword = ref('')
 const panelVisible = ref(false)
 const workspace = ref(null)
 const rightsPanelRef = ref(null)
 const displayName = computed(() => user.value?.nickname || user.value?.userName || '用户')
 const canCreate = computed(() => user.value?.authorCapability === true)
 const basePath = '/works'
-function openPanel(name, tab, orderSearch = '') { panelVisible.value = false; panel.value = name; panelTab.value = tab; panelOrderSearch.value = orderSearch; panelVisible.value = true }
+// 任务广场已提升为与工作台平级的顶级页签（/demand），不再走合作抽屉的 demand tab。
+const onWorks = computed(() => route.path === '/works' || route.path.startsWith('/works/'))
+const onDemand = computed(() => route.path === '/demand' || route.path.startsWith('/demand/'))
+function openPanel(name, tab, keyword = '') { panelVisible.value = false; panel.value = name; panelTab.value = tab; panelOrderSearch.value = (tab === 'order') ? keyword : ''; panelKeyword.value = (tab === 'inquiry') ? keyword : ''; panelVisible.value = true }
 watch(panelVisible, visible => { if (!visible && panel.value === 'cooperation') workspace.value?.loadTodo?.() })
 async function openDeliveryByOrder(orderId) {
   if (!orderId) return
@@ -76,6 +80,8 @@ async function openDeliveryByOrder(orderId) {
 }
 function goWorks() { panelVisible.value = false; return router.push(basePath) }
 function goWork(id) { panelVisible.value = false; return router.push(`${basePath}/${id}`) }
+function goDemand() { panelVisible.value = false; return router.push('/demand') }
+function goDemandDetail(id) { panelVisible.value = false; return router.push(`/demand/${id}`) }
 async function handleError(failure) {
   if (isAuthFailure(failure)) { await router.replace({ path: '/login', query: { redirect: route.fullPath, ...(failure.reason === 'creator-required' ? { reason: 'creator-required' } : {}) } }); return }
   ElMessage.error(failure.message || '网络暂时不可用，请重试')
@@ -103,7 +109,7 @@ async function accountCommand(command) {
   catch { ElMessage.warning('服务端退出未成功，已清理本地登录状态') }
   finally { user.value = null; panelVisible.value = false; await router.replace('/login'); leaving.value = false }
 }
-provide(portalKey, { api, user, canCreate, basePath, openPanel, openDeliveryByOrder, goWork, goWorks, handleError, refreshUnread })
+provide(portalKey, { api, user, canCreate, basePath, openPanel, openDeliveryByOrder, goWork, goWorks, goDemand, goDemandDetail, handleError, refreshUnread })
 async function refreshRealName() { try { realNameStatus.value = (await api.value.getRealName())?.status || '' } catch (failure) { if (isAuthFailure(failure)) await handleError(failure) } }
 onMounted(load)
 </script>

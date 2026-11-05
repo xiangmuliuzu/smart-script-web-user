@@ -295,3 +295,33 @@ export const applyWithdraw = form => data(financeBase + '/withdraw/apply', { met
 export const listWithdraws = (params = {}) =>
   data(financeBase + '/withdraw/list' + qs({ pageNum: 1, pageSize: 20, ...params }))
 
+// ──── 任务广场（需求悬赏）：创作者侧只读广场 + 接单 + 交付 + 投稿，发布/托管/验收归企业端 ────
+const demandBase = '/api/v1/trade/demand'
+const demandPath = id => demandBase + '/' + encodeURIComponent(id)
+// 金额口径：入参 budget 与 budgetMin/budgetMax 为分，stages[].amount 为元，出参一律为分（展示时 /100）。
+export async function listDemands({ status, genreId, keyword, mine, sortBy, order, budgetMin, budgetMax, episodesMin, pageNum = 1, pageSize = 20 } = {}) {
+  const result = await data(demandBase + '/list' + qs({ status, genreId, keyword, mine, sortBy, order, budgetMin, budgetMax, episodesMin, pageNum, pageSize }))
+  return { total: Number(result?.total || 0), list: asList(result) }
+}
+// 广场统计：availableCount / prizePoolFen(分) / todayNewCount / genreCounts:[{genreId,count}]，公开可接单口径
+export const demandStats = () => data(demandBase + '/stats')
+export const getDemand = id => data(demandPath(id))
+export const submitToDemand = (demandId, body) => data(demandPath(demandId) + '/submit', { method: 'POST', body })
+export const mySubmissions = () => data(demandBase + '/my-submissions')
+// 验收轮次（出参 amount 为分）；可交付作品=本人且非已上架售卖
+export const demandStages = demandId => data(demandPath(demandId) + '/stages')
+export const deliverableWorks = () => data(demandBase + '/deliverable-works')
+// 创作者提交本轮交付物：{ workId 必填, deliverableDesc, deliverableUrl }
+export const deliverStage = (demandId, stageId, body) => data(`${demandPath(demandId)}/stage/${encodeURIComponent(stageId)}/deliver`, { method: 'POST', body })
+// 延时：创作者只能发起申请与查看记录，决定权在发布者
+export const requestStageExtend = (demandId, stageId, body) => data(`${demandPath(demandId)}/stage/${encodeURIComponent(stageId)}/extend/request`, { method: 'POST', body })
+export const stageExtendHistory = (demandId, stageId) => data(`${demandPath(demandId)}/stage/${encodeURIComponent(stageId)}/extend/history`)
+export const demandExtendHistory = demandId => data(demandPath(demandId) + '/extend/history')
+// 接单真实链路：付押金 → 查单确认（confirm 返回 {paid, claimed, reason}，落败时 paid 可能为真而 claimed 为假）。
+// claim 仅兜底，后端要求押金已 held，未付直接调必 400。
+export const payDeposit = demandId => data(demandPath(demandId) + '/pay/deposit', { method: 'POST' })
+export const confirmDeposit = demandId => data(demandPath(demandId) + '/pay/deposit/confirm', { method: 'POST' })
+export const claimDemand = demandId => data(demandPath(demandId) + '/claim', { method: 'POST' })
+// 任务会话（创作者发起不带 targetUserId），返回会话 VO；后续收发与聊天列表沿用合作抽屉的会话能力
+export const demandChatSession = demandId => data(demandPath(demandId) + '/chat/session', { method: 'POST' })
+

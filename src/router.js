@@ -6,12 +6,20 @@ const workChildren = [
   { path: 'create', component: () => import('./views/works/Create.vue'), meta: { title: '创作上传' } },
   { path: ':id(\\d+)', component: () => import('./views/works/Detail.vue'), meta: { title: '作品详情' } }
 ]
+// 任务广场与工作台平级：同一 layout 下另起一条顶级路由，创作端只接单/投稿，不含发布入口。
+const demandChildren = [
+  { path: '', component: () => import('./views/demand/Square.vue'), meta: { title: '任务广场' } },
+  { path: 'mine', component: () => import('./views/demand/MyTasks.vue'), meta: { title: '我的任务' } },
+  { path: 'submissions', component: () => import('./views/demand/MySubmissions.vue'), meta: { title: '我的投稿' } },
+  { path: ':id(\\d+)', component: () => import('./views/demand/Detail.vue'), meta: { title: '任务详情' } }
+]
 const router = createRouter({ history: createWebHistory(import.meta.env.BASE_URL), scrollBehavior: () => ({ top: 0 }), routes: [
   { path: '/', redirect: '/works' },
   { path: '/login', component: () => import('./views/Login.vue') },
   { path: '/session', redirect: '/works' },
   { path: '/session-check', component: () => import('./views/Session.vue') },
   { path: '/works', component: () => import('./layout/index.vue'), children: workChildren },
+  { path: '/demand', component: () => import('./layout/index.vue'), children: demandChildren },
   { path: '/:pathMatch(.*)*', redirect: '/works' }
 ] })
 router.beforeEach(to => {

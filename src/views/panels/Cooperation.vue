@@ -53,11 +53,12 @@
           </div>
           <div class="session-chat-panel">
             <template v-if="chatSessionId">
-              <div class="negotiation-bar">
+              <div class="negotiation-bar" :class="'neg-bar-' + negTone">
                 <span class="neg-amount">{{ negAmountYuan }}</span>
                 <span class="neg-source cost">{{ negSource }}</span>
                 <button v-if="canAcceptLatest" class="btn sm" @click="doAcceptLatestQuote">接受</button>
                 <span v-else-if="latestQuote && ['pending','pending_seller'].includes(latestQuote.status)" class="cost" style="font-size:12px">等待对方确认</span>
+                <span v-else-if="quoteAccepted" class="neg-deal">✓ 已成交</span>
               </div>
               <div class="chat-messages" ref="chatBodyEl">
                 <LoadState :pending="chatLoading" />
@@ -135,6 +136,8 @@
         </div>
         <div v-if="orderTotal > PAGE_SIZE" class="pagination-bar"><button class="btn sm ghost" :disabled="orderPageNum <= 1" @click="orderPageNum--; loadOrders()">上一页</button><span class="cost">第 {{ orderPageNum }} 页 / 共 {{ Math.ceil(orderTotal / PAGE_SIZE) }} 页</span><button class="btn sm ghost" :disabled="orderPageNum * PAGE_SIZE >= orderTotal" @click="orderPageNum++; loadOrders()">下一页</button></div>
       </template>
+
+      <!-- 任务广场已提升为顶级页签 /demand（广场/我的任务/我的投稿/详情），不再在本抽屉内展示 -->
     </div>
     <PortalLayer v-model="orderContractVisible" :title="orderContractTitle" modal big>
       <div v-loading="orderContractLoading" class="preview-wrap">
@@ -171,7 +174,7 @@ import { avatarUrl, contractHtml } from '../../utils/avatarUrl.js'
 import { dateText, money, asList } from '../../utils/creator.js'
 import { orderStatusLabel } from '../../utils/orderTodo.js'
 
-const props = defineProps({ modelValue: Boolean, initialTab: String, orderSearch: { type: String, default: '' } })
+const props = defineProps({ modelValue: Boolean, initialTab: String, orderSearch: { type: String, default: '' }, initialKeyword: { type: String, default: '' } })
 const emit = defineEmits(['update:modelValue'])
 const { api, user, handleError, openDeliveryByOrder } = usePortal()
 const visible = computed({ get: () => props.modelValue, set: v => emit('update:modelValue', v) })
@@ -203,7 +206,7 @@ const inquiryPending = ref(false)
 const inquiryError = ref('')
 const inquiryRole = ref('seller')
 const inquiryStatus = ref('')
-const inquiryKeyword = ref('')
+const inquiryKeyword = ref(props.initialKeyword || '')
 const inquiryPageNum = ref(1)
 const inquiryTotal = ref(0)
 const PAGE_SIZE = 10
@@ -328,6 +331,16 @@ const latestQuoteFromOther = computed(() => {
   return !isMine && (latestQuote.value.status === 'pending' || latestQuote.value.status === 'pending_seller')
 })
 const canAcceptLatest = computed(() => latestQuoteFromOther.value)
+// 报价已被接受：议价栏对齐 APP 成交态（金额变绿 + 已成交徽标）
+const quoteAccepted = computed(() => latestQuote.value?.status === 'accepted')
+// 议价栏色调跟随最新报价：与聊天记录报价/议价气泡四态同色
+const negTone = computed(() => {
+  const q = latestQuote.value
+  if (!q) return 'budget'
+  if (q.status === 'accepted') return 'accepted'
+  if (q.status === 'rejected') return 'rejected'
+  return q.quoterRole === 'seller' ? 'seller' : 'buyer'
+})
 
 function isQuoteSysMsg(msg) {
   if (!msg.isSystem && msg.msgType !== 'SYSTEM') return false
@@ -436,7 +449,7 @@ const orderPending = ref(false)
 const orderError = ref('')
 const orderRole = ref('seller')
 const orderStatus = ref('')
-const orderKeyword = ref('')
+const orderKeyword = ref(props.initialKeyword || '')
 const orderPageNum = ref(1)
 const orderTotal = ref(0)
 
@@ -687,6 +700,16 @@ onUnmounted(() => { stopChatPoll() })
 .negotiation-bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #f0f9eb; border-radius: 6px; margin: 8px 0 }
 .neg-amount { font-size: 18px; font-weight: 700; color: #303133 }
 .neg-source { flex: 1 }
+/* 议价栏色调与报价气泡四态同色：卖方报价蓝 / 买方议价橙 / 成交绿 / 拒绝红，无报价（预算）灰 */
+.neg-bar-seller { background: #ecf5ff }
+.neg-bar-seller .neg-amount, .neg-bar-seller .neg-source { color: #409eff }
+.neg-bar-buyer { background: #fdf6ec }
+.neg-bar-buyer .neg-amount, .neg-bar-buyer .neg-source { color: #e6a23c }
+.neg-bar-accepted { background: #e1f3d8; box-shadow: 0 0 0 1px #b3e19d inset }
+.neg-bar-accepted .neg-amount { color: #67c23a }
+.neg-bar-rejected { background: #fef0f0 }
+.neg-bar-rejected .neg-amount, .neg-bar-rejected .neg-source { color: #f56c6c }
+.neg-deal { font-size: 12px; font-weight: 500; color: #67c23a }
 .chat-messages { overflow-y: auto; border: 1px solid #ebeef5; border-radius: 6px; padding: 12px; margin: 8px 0; background: #fafafa; flex: 1 }
 .chat-bubble { display: flex; flex-direction: column; margin-bottom: 10px; max-width: 75% }
 .chat-bubble.me { margin-left: auto; align-items: flex-end }

@@ -11,7 +11,9 @@ export function safeRedirect(raw) {
   try {
     const url = new URL(raw, 'https://portal.invalid')
     if (!raw.startsWith('/') || raw.startsWith('//') || url.origin !== 'https://portal.invalid') return '/session'
-    const implemented = ['/session', '/session-check', '/works', '/works/create'].includes(url.pathname) || /^\/works\/[1-9]\d*$/.test(url.pathname)
+    // 新增顶级页签必须同步登记，否则登录后的回跳会被安全回落吞掉（任务广场 /demand 系列）。
+    const implemented = ['/session', '/session-check', '/works', '/works/create', '/demand', '/demand/mine', '/demand/submissions'].includes(url.pathname)
+      || /^\/works\/[1-9]\d*$/.test(url.pathname) || /^\/demand\/[1-9]\d*$/.test(url.pathname)
     return implemented ? url.pathname + url.search + url.hash : '/session'
   } catch { return '/session' }
 }
