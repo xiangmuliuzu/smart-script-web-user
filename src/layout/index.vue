@@ -40,6 +40,7 @@ import { Bell, ChatDotRound, ChatLineSquare, ChatRound, Document, Tickets, Arrow
 import { getInfo, isAuthFailure, logout } from '../auth.js'
 import { portalKey } from '../utils/portal.js'
 import { avatarUrl } from '../utils/avatarUrl.js'
+import { friendlyErrorMessage } from '../utils/friendly-error.js'
 import LoadState from '../components/LoadState.vue'
 import MessagesPanel from '../views/panels/Messages.vue'
 import PlatformChatPanel from '../views/panels/PlatformChat.vue'
@@ -84,7 +85,7 @@ function goDemand() { panelVisible.value = false; return router.push('/demand') 
 function goDemandDetail(id) { panelVisible.value = false; return router.push(`/demand/${id}`) }
 async function handleError(failure) {
   if (isAuthFailure(failure)) { await router.replace({ path: '/login', query: { redirect: route.fullPath, ...(failure.reason === 'creator-required' ? { reason: 'creator-required' } : {}) } }); return }
-  ElMessage.error(failure.message || '网络暂时不可用，请重试')
+  ElMessage.error(friendlyErrorMessage({ status: failure?.status, code: failure?.code, message: failure?.message }))
 }
 async function refreshUnread() {
   try { unread.value = Number(await api.value.unreadCount()) || 0 }

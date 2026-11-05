@@ -210,13 +210,13 @@ async function openPreview(url, title) {
   if (kind === 'text') {
     try {
       const response = await fetch(mediaUrl(url))
-      if (!response.ok) throw new Error('文本加载失败（' + response.status + '）')
+      if (!response.ok) throw new Error('文本加载失败，请稍后再试')
       const contentType = response.headers.get('content-type') || ''
       const buffer = await response.arrayBuffer()
       // 后端失败时偶发 HTTP 200 + JSON 401 体
       if (contentType.includes('application/json')) {
         const jsonText = new TextDecoder('utf-8').decode(buffer)
-        if (jsonText.includes('"code"')) throw new Error('材料地址无效或无权限，请重新上传后重试')
+        if (jsonText.includes('"code"')) throw new Error('材料暂时无法访问，请稍后重试')
       }
       previewText.value = decodeTextBuffer(buffer)
       previewError.value = ''
@@ -243,11 +243,11 @@ async function downloadMaterial(url, name) {
   if (!url) return
   try {
     const response = await fetch(mediaUrl(url))
-    if (!response.ok) throw new Error('下载失败（' + response.status + '）')
+    if (!response.ok) throw new Error('下载失败，请稍后再试')
     const contentType = response.headers.get('content-type') || ''
     const buffer = await response.arrayBuffer()
     if (contentType.includes('application/json') || (buffer.byteLength < 200 && new TextDecoder('utf-8').decode(buffer).includes('"code"'))) {
-      throw new Error('文件无法下载，请确认后端已重启并支持中文文件名')
+      throw new Error('文件暂时无法下载，请稍后再试')
     }
     const blob = new Blob([buffer], { type: contentType || 'application/octet-stream' })
     const objectUrl = URL.createObjectURL(blob)

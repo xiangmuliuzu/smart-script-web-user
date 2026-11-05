@@ -175,7 +175,7 @@ test('email password reset uses a separate verification scene', async () => {
 
 test('registration refuses to submit when the agreement versions cannot be loaded', async () => {
   reply({ code: 200, data: { agreements: [{ type: 'USER_AGREEMENT', version: '1.0.0' }] } })
-  await assert.rejects(register({ phone: '13500000000', code: '123456', password: 'test-only-secret1' }), /协议版本获取失败/)
+  await assert.rejects(register({ phone: '13500000000', code: '123456', password: 'test-only-secret1' }), /协议加载失败/)
   assert.equal(getToken(), '')
 })
 

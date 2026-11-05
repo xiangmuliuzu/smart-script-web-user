@@ -1,4 +1,5 @@
 import { request, getToken } from '../auth.js'
+import { friendlyErrorMessage } from '../utils/friendly-error.js'
 import { asList } from '../utils/creator.js'
 
 // 沿用若依 request，认证响应保持顶层结构，业务接口在这里读取 data。
@@ -108,7 +109,7 @@ export async function generateStream(type, form, onDelta) {
     })
     if (!response.ok || !response.body) {
       const result = await response.json().catch(() => null)
-      const error = new Error(result?.msg || result?.message || `生成失败（HTTP ${response.status}）`)
+      const error = new Error(friendlyErrorMessage({ status: response.status, message: result?.msg || result?.message, fallback: 'AI 生成失败，请稍后重试' }))
       error.status = response.status
       error.code = result?.code
       throw error
@@ -161,7 +162,7 @@ function parseSseBlock(block) {
   let payload
   try { payload = JSON.parse(dataLines.join('\n')) } catch { return {} }
   if (payload.error || (typeof payload.code === 'number' && payload.message)) {
-    const error = new Error(payload.message || (typeof payload.error === 'string' ? payload.error : 'AI 生成失败，请稍后重试'))
+    const error = new Error(friendlyErrorMessage({ message: payload.message || (typeof payload.error === 'string' ? payload.error : null), fallback: 'AI 生成失败，请稍后重试' }))
     error.code = payload.code
     throw error
   }

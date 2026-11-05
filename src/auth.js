@@ -1,4 +1,5 @@
 import { portal } from './portal.js'
+import { friendlyErrorMessage, networkErrorMessage } from './utils/friendly-error.js'
 
 const BASE_API = import.meta.env?.VITE_APP_BASE_API || '/dev-api'
 export const getToken = () => localStorage.getItem(portal.tokenKey) || ''
@@ -37,10 +38,20 @@ export async function request(path, { method = 'GET', body, authenticated = true
   const multipart = typeof FormData !== 'undefined' && body instanceof FormData
   if (body !== undefined && !multipart) headers['Content-Type'] = 'application/json'
   if (token) headers.Authorization = 'Bearer ' + token
-  const response = await fetch(BASE_API + path, { method, headers, body: body === undefined ? undefined : multipart ? body : JSON.stringify(body), signal: AbortSignal.timeout(timeout) })
-  const result = await response.json().catch(() => null)
+  let response
+  let result
+  try {
+    response = await fetch(BASE_API + path, { method, headers, body: body === undefined ? undefined : multipart ? body : JSON.stringify(body), signal: AbortSignal.timeout(timeout) })
+    result = await response.json().catch(() => null)
+  } catch (failure) {
+    throw new Error(networkErrorMessage(failure))
+  }
   if (!response.ok || ![200, 0].includes(result?.code)) {
-    const error = new Error(result?.msg || result?.message || '请求失败，请稍后重试')
+    const error = new Error(friendlyErrorMessage({
+      status: response.status,
+      code: result?.code,
+      message: result?.msg || result?.message
+    }))
     error.status = response.status
     error.code = result?.code
     if (authenticated && getToken() === token && isAuthFailure(error)) clearSession()
@@ -58,7 +69,7 @@ export async function getAgreements() {
   const result = await request('/api/v1/auth/agreements', { authenticated: false })
   // 后端 AjaxResult.success(map) 会把协议放进 data.agreements，兼容两种形态。
   const list = Array.isArray(result.agreements) ? result.agreements : Array.isArray(result.data?.agreements) ? result.data.agreements : []
-  if (list.length < 2) throw new Error('协议版本获取失败，请稍后重试')
+  if (list.length < 2) throw new Error('协议加载失败，请稍后重试')
   return list
 }
 
@@ -99,14 +110,14 @@ export async function resetPassword({ phone, code, newPassword }) {
 
 export async function getCaptcha() {
   const result = await request('/api/v1/auth/captchaImage', { authenticated: false })
-  if (result.captchaEnabled !== false && !(result.img && result.uuid)) throw new Error('验证码加载失败，请重试')
+  if (result.captchaEnabled !== false && !(result.img && result.uuid)) throw new Error('验证码加载失败，请稍后重试')
   return result
 }
 export async function login(body) {
   clearSession()
   const result = await request('/api/v1/auth/login', { method: 'POST', body, authenticated: false })
   assertUser(result.user)
-  if (typeof result.token !== 'string' || !result.token) throw new Error('登录响应缺少令牌，请重试')
+  if (typeof result.token !== 'string' || !result.token) throw new Error('登录失败，请稍后重试')
   localStorage.setItem(portal.tokenKey, result.token)
   return result.user
 }
