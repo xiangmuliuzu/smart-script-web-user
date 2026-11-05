@@ -130,7 +130,8 @@ function appendOutline(lines, node, depth, parentKey) {
 }
 export const wordCount = text => documentText(text).replace(/\s/g, '').length
 export const words = value => Number(value || 0) >= 10000 ? (Number(value) / 10000).toFixed(1) + ' 万字' : Number(value || 0).toLocaleString('zh-CN') + ' 字'
-export const money = value => '¥' + Number(value || 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 })
+// 入参为「元」（与 utils/demand.js 里入参为「分」的 money 口径不同）；小数位与收益域 fenText 对齐，固定两位
+export const money = value => '¥' + Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 export function dateText(value) {
   if (!value) return '—'
   if (typeof value === 'number' || /T.*(?:Z|[+-]\d{2}:?\d{2})$/.test(String(value))) {

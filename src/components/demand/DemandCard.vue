@@ -15,9 +15,10 @@
       <template v-if="tagList.length"> · 标签 {{ tagList.join(' / ') }}</template>
     </p>
     <!-- 广场口径下后端只放已托管的可接单任务；接过的单要显示资金与当前轮进度 -->
+    <!-- 两笔钱各带主语：预算托管=发布者缴的款，履约押金=自己缴的保证金 -->
     <p v-if="mode === 'mine'" class="cost dc-meta">
-      托管：{{ escrowStatusLabel(demand.escrowStatus) }}（{{ money(demand.escrowAmount) }}）
-      · 押金：{{ depositStatusLabel(demand.depositStatus) }}（{{ money(demand.depositAmount) }}）
+      预算托管：{{ escrowStatusLabel(demand.escrowStatus) }}（{{ money(demand.escrowAmount) }}）
+      · 履约押金：{{ depositStatusLabel(demand.depositStatus) }}（{{ money(demand.depositAmount) }}）
     </p>
     <p v-if="mode === 'mine' && demand.acceptedAt" class="cost dc-meta">接单于 {{ timeText(demand.acceptedAt) }}</p>
     <p v-if="mode === 'mine' && demand.dueAt" class="cost dc-meta">

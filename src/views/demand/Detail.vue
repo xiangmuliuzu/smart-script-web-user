@@ -12,7 +12,8 @@
             <span v-for="tag in tagList" :key="tag" class="chip-lite">{{ tag }}</span>
           </div>
         </div>
-        <div class="dd-money"><b>{{ money(demand.budget) }}</b><span>任务预算（全额已托管）</span></div>
+        <!-- 预算旁边的托管说明必须取真实状态：写死「全额已托管」会在 pending_payment / 已退回时变成假话 -->
+        <div class="dd-money"><b>{{ money(demand.budget) }}</b><span>任务预算 · {{ escrowStatusLabel(demand.escrowStatus) }}</span></div>
       </header>
 
       <dl class="dd-info">

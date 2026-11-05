@@ -1,5 +1,6 @@
 /* ─── 任务广场（需求悬赏）枚举与格式化：状态字典一律以后端常量为源，不得自行编造 ─── */
 /* 后端源：smartscript-trade SysDemand / SysDemandStage / SysDemandExtendApply 常量 */
+import { fenText } from './finance.js'
 
 // 任务主状态（DEMAND_STATUS_*）：open 征集中、in_progress 已接单进行中、selected 已选定（走中标询盘）、
 // completed 全部轮次验收通过、closed 发布者关闭、failed 活动轮超时终止
@@ -11,8 +12,10 @@ export const demandStatusOptions = Object.entries(DEMAND_STATUS_LABELS).map(([va
 const ESCROW_LABELS = { none: '未托管', pending_payment: '待付托管', escrowed: '已托管', released: '已放款', refunded_to_publisher: '已退回发布者' }
 export const escrowStatusLabel = s => ESCROW_LABELS[s] || s || '-'
 
-// 押金资金状态（DEPOSIT_*）：held 由「付押金→查单确认」写入，即接单成功
-const DEPOSIT_LABELS = { none: '未缴', held: '已托管', refunded: '已退还', forfeited: '已没收' }
+// 押金资金状态（DEPOSIT_*）：held 由「付押金→查单确认」写入，即接单成功。
+// 押金与托管是两笔不同的钱：押金(deposit)是创作者缴的履约保证金，不是发布者托管的预算款(escrow)，
+// 文案不能复用「已托管」，否则卡片上「托管：已托管 · 押金：已托管」完全分不开。
+const DEPOSIT_LABELS = { none: '未缴', held: '在押', refunded: '已退还', forfeited: '已没收' }
 export const depositStatusLabel = s => DEPOSIT_LABELS[s] || s || '-'
 
 // 投稿状态（SUBMISSION_STATUS_*）
@@ -73,12 +76,11 @@ export const extendTone = (status, applyType) => {
   return 'off'
 }
 
-/* 金额：后端出参一律为分（/list、/{id}、/stages、/stats 的 prizePoolFen），展示时除以 100 */
+/* 金额：后端出参一律为分（/list、/{id}、/stages、/stats 的 prizePoolFen），展示时除以 100。
+   格式化复用收益域同一个 fenText（tests/finance.test.js 已锁定 ¥64,000.00 这种两位小数），
+   本文件不再自行决定补不补零，避免同一页面出现 ¥600 与 ¥600.00 两种位数。 */
 export const fenToYuan = fen => (Number(fen) || 0) / 100
-export function money(fen) {
-  const yuan = fenToYuan(fen)
-  return '¥' + yuan.toLocaleString('zh-CN', { minimumFractionDigits: yuan % 1 ? 2 : 0, maximumFractionDigits: 2 })
-}
+export const money = fen => fenText(Number(fen) || 0)
 
 const pad = n => String(n).padStart(2, '0')
 // 后端 JSON 已格式化到秒（yyyy-MM-dd HH:mm:ss），iOS Safari 不能直接 new Date(带 - 的字符串)，统一按本地时间解析
