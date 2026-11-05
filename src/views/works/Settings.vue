@@ -18,7 +18,6 @@
         </section>
         <section class="settings-fields" aria-label="作品信息">
           <label class="field">书名<input v-model="form.title" maxlength="100" placeholder="请输入作品名称" /></label>
-          <label class="field">分类<select v-model="form.genreId" aria-label="分类"><option value="">请选择分类</option><option v-for="category in categories" :key="category.categoryId" :value="category.categoryId">{{ category.categoryName }}</option></select></label>
           <label class="field">简介<textarea v-model="form.summary" placeholder="介绍你的故事、人物或看点" /></label>
           <div class="settings-pricing">
             <label class="field">定价（元）<input v-model.trim="form.price" type="text" inputmode="decimal" placeholder="请输入定价" /></label>
@@ -28,18 +27,17 @@
         </section>
       </div>
       <div class="settings-errors">
-        <p v-if="categoryError" class="note bad" role="alert">{{ categoryError }}<button type="button" class="text-button" @click="loadCategories">重试</button></p>
         <p v-if="error" class="note bad" role="alert">{{ error }}</p>
       </div>
       <div class="settings-footer">
         <button type="button" class="btn quiet" :disabled="saving || uploading" @click="beforeClose(() => visible = false)">取消</button>
-        <button class="btn" :disabled="saving || uploading || !!categoryError">{{ saving ? '保存中…' : '保存设置' }}</button>
+        <button class="btn" :disabled="saving || uploading">{{ saving ? '保存中…' : '保存设置' }}</button>
       </div>
     </form>
   </PortalLayer>
 </template>
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { usePortal } from '../../utils/portal.js'
 import { canEdit, validateFile, validateWork } from '../../utils/creator.js'
@@ -49,16 +47,13 @@ const props = defineProps({ modelValue: Boolean, work: Object })
 const emit = defineEmits(['update:modelValue', 'saved'])
 const { api, user, handleError } = usePortal()
 const visible = computed({ get: () => props.modelValue, set: value => emit('update:modelValue', value) })
-const form = reactive({ title: props.work.title, genreId: props.work.genreId, summary: props.work.summary || '', cover: props.work.cover || '', price: props.work.price == null ? '' : String(props.work.price), tradeType: props.work.tradeType || '' })
+const form = reactive({ title: props.work.title, summary: props.work.summary || '', cover: props.work.cover || '', price: props.work.price == null ? '' : String(props.work.price), tradeType: props.work.tradeType || '' })
 const original = JSON.stringify(form)
 const tradeTypes = ['exclusive', 'non_exclusive', 'adaptation']
-const categories = ref([])
 const error = ref('')
-const categoryError = ref('')
 const saving = ref(false)
 const uploading = ref(false)
 const coverFailed = ref(false)
-async function loadCategories() { categoryError.value = ''; try { categories.value = await api.value.listCategories() } catch (failure) { categoryError.value = failure.message; await handleError(failure) } }
 async function beforeClose(done) {
   if (saving.value || uploading.value) return
   if (JSON.stringify(form) !== original) { try { await ElMessageBox.confirm('作品设置尚未保存，确定离开？', '未保存的修改', { confirmButtonText: '放弃修改', cancelButtonText: '继续编辑' }) } catch { return } }
@@ -83,7 +78,6 @@ async function save() {
   catch (failure) { error.value = failure.message; await handleError(failure) }
   finally { saving.value = false }
 }
-onMounted(loadCategories)
 </script>
 
 <style scoped>

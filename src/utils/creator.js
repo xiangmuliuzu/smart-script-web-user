@@ -144,7 +144,6 @@ export function dateText(value) {
 export function validateWork(form) {
   if (!form.title?.trim()) return '请输入书名'
   if (form.title.trim().length > 100) return '书名最多 100 字'
-  if (!(Number(form.genreId) > 0)) return '请选择分类'
   return ''
 }
 export function validateChapter(form) {

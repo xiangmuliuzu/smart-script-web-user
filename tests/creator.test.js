@@ -101,9 +101,12 @@ test('redirect permits implemented work routes and rejects path tricks', () => {
   for (const path of ['/works', '/works/create', '/works/12?tab=chapter#review']) assert.equal(safeRedirect(path), path)
   for (const path of ['//evil.test/works', '/works/../login', '/works/abc', '/works/0', '/works/%2f%2fevil.test', '/preview', '/works\\12']) assert.equal(safeRedirect(path), '/session')
 })
+test('work API no longer exposes the removed flat category endpoint', () => {
+  assert.equal(api.listCategories, undefined)
+})
 test('work, chapter and import validation rejects blank or oversized input', () => {
-  assert.equal(validateWork({ title: '故事', genreId: 1 }), '')
-  for (const form of [{ title: ' ', genreId: 1 }, { title: 'a'.repeat(101), genreId: 1 }, { title: '故事', genreId: 0 }]) assert.ok(validateWork(form))
+  assert.equal(validateWork({ title: '故事' }), '')
+  for (const form of [{ title: ' ' }, { title: 'a'.repeat(101) }]) assert.ok(validateWork(form))
   assert.equal(validateChapter({ chapterTitle: '第一幕', content: '夜色里，她推开了门。' }), '')
   assert.ok(validateChapter({ chapterTitle: '第一幕', content: '  ' }))
   assert.equal(wordCount(' 雨 夜\n的 车 '), 4)
@@ -115,8 +118,8 @@ test('work, chapter and import validation rejects blank or oversized input', () 
 test('business API uses current-user routes, mapped fields and the existing Bearer token', async () => {
   const calls = []
   globalThis.fetch = async (url, options) => { calls.push({ url, ...options }); return { ok: true, status: 200, json: async () => ({ code: 200, data: { workId: 17 } }) } }
-  await api.createWork({ title: ' 故事 ', genreId: '3', summary: '简介', scriptUrl: '/file/docx', scriptName: '故事.docx', scriptSize: 100 })
-  assert.deepEqual(JSON.parse(calls[0].body), { title: '故事', categoryId: 3, description: '简介', scriptUrl: '/file/docx', scriptName: '故事.docx', scriptSize: 100 })
+  await api.createWork({ title: ' 故事 ', summary: '简介', scriptUrl: '/file/docx', scriptName: '故事.docx', scriptSize: 100 })
+  assert.deepEqual(JSON.parse(calls[0].body), { title: '故事', description: '简介', scriptUrl: '/file/docx', scriptName: '故事.docx', scriptSize: 100 })
   await api.saveChapter(17, { chapterTitle: ' 新章 ', content: '内容' })
   await api.saveChapter(17, { chapterId: 8, chapterTitle: ' 修改 ', content: '新内容' })
   await api.deleteChapter(17, 8)

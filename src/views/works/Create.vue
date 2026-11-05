@@ -5,18 +5,17 @@
       <button class="creation-back" aria-label="返回我的作品" @click="goWorks">← <span>返回</span></button>
       <input v-model="form.title" class="creation-title" aria-label="作品名称" maxlength="100" placeholder="未命名剧本（点击输入）" :disabled="busy || !editable" :readonly="readOnly" />
       <div class="creation-selectors">
-        <select v-model="form.genreId" class="creation-category" aria-label="分类" :disabled="busy || !editable || readOnly || !!categoryError"><option value="">选择分类</option><option v-for="category in categories" :key="category.categoryId" :value="category.categoryId">{{ category.categoryName }}</option></select>
         <select class="creation-work-select" aria-label="选择作品" :value="route.query.workId || createdId || ''" :disabled="busy || !!worksError" @change="switchWork"><option value="">新建作品</option><option v-if="createdId && !works.some(work => work.workId === createdId)" :value="createdId">{{ form.title || '未命名作品' }}</option><option v-for="work in works" :key="work.workId" :value="work.workId">{{ work.workId === createdId ? form.title || work.title : work.title }}</option></select>
       </div>
       <span class="creation-save-state" role="status" :class="{ bad: storageFailed }">{{ generatingChapters ? draftStatus : busy ? (importing ? '正在导入…' : '正在保存…') : draftStatus }}</span>
       <div class="creation-actions">
         <button class="btn quiet sm" :disabled="busy || !editable || readOnly" @click="settingsVisible = true"><el-icon><Setting /></el-icon> 作品设置</button>
         <button class="btn quiet sm" :disabled="busy || !editable || readOnly" @click="fileInput.click()"><el-icon><Upload /></el-icon> 导入剧本</button>
-        <button class="btn ghost sm" :disabled="busy || !editable || !!categoryError" @click="save(false)">保存草稿</button>
-        <button class="btn sm" :disabled="busy || !editable || readOnly || !!categoryError" @click="save(true)">提交审核</button>
+        <button class="btn ghost sm" :disabled="busy || !editable" @click="save(false)">保存草稿</button>
+        <button class="btn sm" :disabled="busy || !editable || readOnly" @click="save(true)">提交审核</button>
       </div>
     </header>
-    <div v-if="error || categoryError" class="creation-error note bad" role="alert">{{ error || categoryError }}<button v-if="categoryError" class="text-button" @click="loadCategories">重新加载分类</button></div>
+    <div v-if="error" class="creation-error note bad" role="alert">{{ error }}</div>
     <div v-if="worksError" class="creation-error note bad" role="alert">{{ worksError }}<button class="text-button" @click="loadWorks">重新加载作品</button></div>
     <div v-if="loadedWork?.status === 'reviewing'" class="creation-error note info" role="status">作品正在审核中，暂不可编辑；你可以选择其他作品继续创作。</div>
     <div class="creation-mobile-tools"><button class="btn quiet sm" @click="directoryVisible = true">☰ 分集与资料</button><span>{{ chapters.length }} 集 · {{ totalWords.toLocaleString() }} 字</span><button class="btn quiet sm" @click="aiVisible = true">✦ AI 助手</button></div>
@@ -34,7 +33,7 @@
     <input ref="fileInput" class="sr-only creation-file-input" type="file" accept=".docx,.txt,.md" :disabled="busy || !editable || readOnly" @change="importFile($event.target.files[0]); $event.target.value = ''" />
     <PortalLayer v-model="directoryVisible" title="分集与资料" size="min(300px, 92vw)"><div class="creation-directory directory-drawer"><DirectoryContents /></div></PortalLayer>
     <PortalLayer v-model="aiVisible" title="AI 编剧助手" size="min(370px, 96vw)"><div class="creation-ai ai-drawer"><AiStudio v-if="compactAi" :key="workspaceRevision" embedded :workspace-state="aiState" :insert-disabled="busy || !editable || readOnly" :current-content="currentChapter.content" :work-id="createdId" @insert="insertAi" @fill-outline="fillOutline" /></div></PortalLayer>
-    <PortalLayer v-model="settingsVisible" title="作品设置" size="min(480px, 96vw)"><div class="panel-content"><label class="field">书名<input v-model="form.title" maxlength="100" :disabled="busy" /></label><label class="field">作品分类<select v-model="form.genreId" :disabled="busy"><option value="">选择分类</option><option v-for="category in categories" :key="category.categoryId" :value="category.categoryId">{{ category.categoryName }}</option></select></label><label class="field">简介<textarea v-model="form.summary" :disabled="busy" /></label><p class="cost">封面可在保存草稿后的作品详情中补充。提交审核后，作品将在审核期间锁定编辑。</p><button class="btn sm" @click="settingsVisible = false">完成设置</button></div></PortalLayer>
+    <PortalLayer v-model="settingsVisible" title="作品设置" size="min(480px, 96vw)"><div class="panel-content"><label class="field">书名<input v-model="form.title" maxlength="100" :disabled="busy" /></label><label class="field">简介<textarea v-model="form.summary" :disabled="busy" /></label><p class="cost">封面可在保存草稿后的作品详情中补充。提交审核后，作品将在审核期间锁定编辑。</p><button class="btn sm" @click="settingsVisible = false">完成设置</button></div></PortalLayer>
   </section>
 </template>
 <script setup>
@@ -54,7 +53,7 @@ import '../../assets/styles/creation.css'
 const { api, user, canCreate, goWork, goWorks, handleError } = usePortal()
 const route = useRoute()
 const router = useRouter()
-const form = reactive({ title: '', genreId: '', summary: '', scriptUrl: '', scriptName: '', scriptSize: 0 })
+const form = reactive({ title: '', summary: '', scriptUrl: '', scriptName: '', scriptSize: 0 })
 const newChapter = number => ({ draftId: crypto.randomUUID(), chapterTitle: `第 ${number} 集`, content: '', isFree: '0' })
 const sameChapter = (a, b) => a && b && a.chapterTitle === b.chapterTitle && a.content === b.content && a.isFree === b.isFree
 const chapters = ref([newChapter(1)])
@@ -69,14 +68,12 @@ const readOnly = ref(false)
 const currentChapter = computed(() => chapters.value[activeChapter.value])
 const currentText = computed(() => section.value === 'summary' ? form.summary : section.value === 'characters' ? characters.value : currentChapter.value.content)
 const totalWords = computed(() => chapters.value.reduce((count, chapter) => count + wordCount(chapter.content), 0))
-const categories = ref([])
 const works = ref([])
 const worksError = ref('')
 const loadedWork = ref(null)
 const workLoadFailed = ref(false)
 const editable = computed(() => canCreate.value && !workLoadFailed.value && (!loadedWork.value || canEdit(user.value, loadedWork.value)))
 const error = ref('')
-const categoryError = ref('')
 const saving = ref(false)
 const importing = ref(false)
 const generatingChapters = ref(false)
@@ -105,7 +102,7 @@ let ready = false
 let disposed = false
 let normalizingRoute = false
 const snapshot = () => JSON.stringify({ form, chapters: chapters.value, characters: characters.value, createdId: createdId.value })
-const workFields = (value = form) => JSON.stringify({ title: value.title, genreId: Number(value.genreId), summary: value.summary || '' })
+const workFields = (value = form) => JSON.stringify({ title: value.title, summary: value.summary || '' })
 const hasContent = () => Boolean(form.title || form.summary || characters.value || totalWords.value || createdId.value || chapters.value.length > 1 || chapters.value.some(chapter => chapter.isFree === '1'))
 function cacheDraft() {
   clearTimeout(timer)
@@ -153,7 +150,6 @@ async function removeChapter(index) {
   } catch (failure) { await handleError(failure) }
   finally { saving.value = false }
 }
-async function loadCategories() { categoryError.value = ''; try { categories.value = await api.value.listCategories() } catch (failure) { categoryError.value = failure.message; await handleError(failure) } }
 async function loadWorks() { worksError.value = ''; try { works.value = await api.value.listWorks() } catch (failure) { worksError.value = '作品列表加载失败，请重试'; await handleError(failure) } }
 async function switchWork(event) {
   const target = event.target.value
@@ -356,8 +352,7 @@ function cachedDraft(key) {
 }
 function restoreDraft(draft) {
   for (const key of Object.keys(form)) {
-    if (key === 'genreId' && ['string', 'number'].includes(typeof draft.form[key])) form[key] = String(draft.form[key])
-    else if (typeof draft.form[key] === typeof form[key]) form[key] = draft.form[key]
+    if (typeof draft.form[key] === typeof form[key]) form[key] = draft.form[key]
   }
   chapters.value = draft.chapters.map((chapter, index) => ({ ...chapter, isFree: String(chapter.isFree ?? originalChapters.get(Number(chapter.chapterId))?.isFree ?? '0'), chapterTitle: !createdId.value && index === 0 && chapter.chapterTitle === '第一集' ? '第 1 集' : chapter.chapterTitle, draftId: crypto.randomUUID() }))
   characters.value = typeof draft.characters === 'string' ? draft.characters : ''
@@ -367,7 +362,7 @@ async function loadWorkspace() {
   clearTimeout(timer); ready = false; initializing.value = true; completed = false; error.value = ''; workLoadFailed.value = false; storageFailed.value = false
   loadedWork.value = null; createdId.value = null; originalChapters = new Map(); activeChapter.value = 0; section.value = 'chapter'
   directoryVisible.value = false; aiVisible.value = false; settingsVisible.value = false
-  Object.assign(form, { title: '', genreId: '', summary: '', scriptUrl: '', scriptName: '', scriptSize: 0 })
+  Object.assign(form, { title: '', summary: '', scriptUrl: '', scriptName: '', scriptSize: 0 })
   chapters.value = [newChapter(1)]; characters.value = ''; Object.assign(aiState, newAiState()); workspaceRevision.value++
   try {
     const legacy = !route.query.workId ? cachedDraft(draftBase) : null
@@ -379,7 +374,7 @@ async function loadWorkspace() {
     if (id) {
       const detail = await api.value.getWork(id)
       loadedWork.value = detail.work
-      Object.assign(form, { title: detail.work.title || '', genreId: String(detail.work.genreId || ''), summary: detail.work.summary || '' })
+      Object.assign(form, { title: detail.work.title || '', summary: detail.work.summary || '' })
       const remote = (detail.chapters || []).map(chapter => ({ chapterId: Number(chapter.chapterId), chapterNo: chapter.chapterNo, chapterTitle: chapter.chapterTitle || '', content: chapter.content || '', isFree: chapter.isFree, draftId: crypto.randomUUID() }))
       chapters.value = remote.length ? remote : [newChapter(1)]
       originalChapters = new Map(remote.map(chapter => [chapter.chapterId, { chapterTitle: chapter.chapterTitle, content: chapter.content, isFree: chapter.isFree }]))
@@ -420,7 +415,7 @@ onMounted(async () => {
   } catch (failure) { draftStatus.value = '无法恢复草稿，请检查作品列表'; if (failure.code) await handleError(failure) }
   media = window.matchMedia('(max-width: 899px)'); resizeAi(); media.addEventListener('change', resizeAi)
   window.addEventListener('beforeunload', protectUnload)
-  await Promise.all([loadCategories(), loadWorks(), loadWorkspace()])
+  await Promise.all([loadWorks(), loadWorkspace()])
 })
 onBeforeUnmount(() => { cacheDraft(); disposed = true; ready = false; clearTimeout(timer); media?.removeEventListener('change', resizeAi); window.removeEventListener('beforeunload', protectUnload) })
 </script>
