@@ -153,7 +153,9 @@ async function syncQuote(amountFen) {
     const body = { inquiryId, price: amountFen, licenseType: props.licenseType || null }
     if (props.isBuyer) await api.value.counterOffer(body)
     else await api.value.createQuote(body)
-  } catch { /* 报价同步失败不阻断已发出的消息 */ }
+  } catch (e) { /* 报价同步失败不阻断已发出的消息，但需明示告知，避免静默死链 */
+    ElMessage.warning('消息已发出，但报价同步失败：' + (e?.message || '请稍后在询盘处重新发起报价'))
+  }
 }
 </script>
 

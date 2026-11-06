@@ -114,7 +114,7 @@
             <p class="order-meta">金额：{{ moneyFromFen(o.amount) }} · 授权：{{ licenseLabel(o.licenseType) }}</p>
             <p v-if="o.cancelReason" class="order-meta">取消原因：{{ o.cancelReason }}</p>
             <div class="order-progress">
-              <div v-for="(step, i) in orderProgressSteps" :key="step.key" class="progress-step" :class="{ active: getProgressIndex(o) >= i, current: getProgressIndex(o) === i, terminated: getTerminal(o) && getProgressIndex(o) < i }">
+              <div v-for="(step, i) in orderProgressSteps" :key="step.key" class="progress-step" :class="{ active: getProgressIndex(o) >= i, current: getProgressIndex(o) === i, terminated: getTerminal(o) && getProgressIndex(o) < i, skipped: i === 0 && !o.contractId }">
                 <span class="progress-dot"></span>
                 <span class="progress-label">{{ step.label }}</span>
               </div>
@@ -123,8 +123,8 @@
             <div class="order-foot">
               <span class="cost">创建于 {{ dateText(o.createdAt) }}</span>
               <div class="foot-actions">
-                <button v-if="!isTerminalOrder(o)" class="btn sm quiet" @click="openOrderContract(o)">查看合同</button>
-                <button v-if="o.status === 'confirmed'" class="btn sm ghost" @click="doCancelOrder(o)">取消订单</button>
+                <button v-if="!isTerminalOrder(o) && o.contractId" class="btn sm quiet" @click="openOrderContract(o)">查看合同</button>
+                <button v-if="o.status === 'confirmed' || o.status === 'paying'" class="btn sm ghost" @click="doCancelOrder(o)">取消订单</button>
                 <button v-if="isBuyerOfOrder(o) && o.status === 'paying'" class="btn sm" @click="doPayOrder(o)">付款</button>
                 <button v-if="isSellerOf(o) && o.status === 'delivering' && !isDeliveryUploaded(o)" class="btn sm" @click="goOrderDelivery(o)">去交割</button>
                 <button v-if="isSellerOf(o) && o.status === 'delivering' && isDeliveryUploaded(o)" class="btn quiet sm" @click="goOrderDelivery(o)">等待买家收货</button>
@@ -529,11 +529,11 @@ async function goOrderDelivery(o) {
   }
 }
 
-// 取消订单：仅合同双方签署完成前（confirmed）可取消，买卖双方任一方均可发起
+// 取消订单：签署完成前（confirmed）与尚未付款（paying）均可取消，买卖双方任一方；付款后不可取消
 async function doCancelOrder(o) {
   let reason = ''
   try {
-    const res = await ElMessageBox.prompt('确定取消该订单吗？合同双方签署完成后将不可取消。可填写取消原因（选填）。', '取消订单', { type: 'warning', inputPlaceholder: '取消原因（选填）', confirmButtonText: '确定取消', cancelButtonText: '再想想', inputValidator: v => (v && v.length > 200) ? '原因不超过200字' : true })
+    const res = await ElMessageBox.prompt('确定取消该订单吗？付款前可取消；买方一旦付款即不可取消且不支持退款。可填写取消原因（选填）。', '取消订单', { type: 'warning', inputPlaceholder: '取消原因（选填）', confirmButtonText: '确定取消', cancelButtonText: '再想想', inputValidator: v => (v && v.length > 200) ? '原因不超过200字' : true })
     reason = (res?.value || '').trim()
   } catch { return } // 用户关闭/取消
   try { await api.value.cancelOrder(o.orderId, reason); ElMessage.success('订单已取消'); await loadOrders() } catch (e) { await handleError(e) }
@@ -682,6 +682,10 @@ onUnmounted(() => { stopChatPoll() })
 .progress-step.active:not(:last-child)::after { background: var(--indigo) }
 .progress-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--rule); border: 2px solid #fff; z-index: 1; transition: background .2s }
 .progress-step.active .progress-dot { background: var(--indigo) }
+/* 无版权单未签合同：「待签署」步整体置灰，不被后续状态点亮 */
+.progress-step.skipped .progress-dot, .progress-step.skipped.active .progress-dot { background: var(--rule) }
+.progress-step.skipped .progress-label, .progress-step.skipped.active .progress-label { color: var(--ink-3); font-weight: 400 }
+.progress-step.skipped:not(:last-child)::after { background: var(--rule) }
 .progress-step.current .progress-dot { background: var(--cinnabar); box-shadow: 0 0 0 3px var(--cinnabar-w) }
 .progress-label { font-size: 12px; color: var(--ink-3); margin-top: 4px }
 .progress-step.active .progress-label { color: var(--indigo); font-weight: 500 }
