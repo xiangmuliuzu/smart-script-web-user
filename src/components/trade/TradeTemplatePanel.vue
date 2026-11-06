@@ -149,7 +149,8 @@ async function syncQuote(amountFen) {
   const inquiryId = Number(props.inquiryId) || 0
   if (!inquiryId) return
   try {
-    const body = { inquiryId, price: amountFen, licenseType: props.licenseType || 'non_exclusive' }
+    // 无版权询盘 licenseType 为空：不再默认 non_exclusive，后端会沿用询盘的空值
+    const body = { inquiryId, price: amountFen, licenseType: props.licenseType || null }
     if (props.isBuyer) await api.value.counterOffer(body)
     else await api.value.createQuote(body)
   } catch { /* 报价同步失败不阻断已发出的消息 */ }
