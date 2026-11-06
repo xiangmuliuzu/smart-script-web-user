@@ -12,7 +12,6 @@ const router = useRouter()
 const items = [
   { path: '/demand', label: '任务广场' },
   { path: '/demand/mine', label: '我的任务' },
-  { path: '/demand/submissions', label: '我的投稿' },
 ]
 // 任务详情页（/demand/:id）不高亮任何分区，避免误以为仍在广场列表。
 const activePath = computed(() => items.find(item => item.path === route.path)?.path || '')

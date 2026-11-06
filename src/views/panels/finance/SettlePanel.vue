@@ -41,7 +41,11 @@
             <tr v-for="item in list" :key="item.settleId">
               <td>
                 <b>{{ item.workTitle || item.settleNo || '结算单' }}</b>
-                <p class="cost">{{ item.orderNo || '—' }}{{ item.status === 'pending' ? ' · 待确认' : '' }}</p>
+                <p class="cost">
+                  <template v-if="item.bizType === 'demand_stage'">任务 {{ item.bizNo || ('#' + item.demandId) }} · 第 {{ item.stageOrder }} 轮</template>
+                  <template v-else>{{ item.orderNo || '—' }}</template>
+                  {{ item.status === 'pending' ? ' · 待确认' : '' }}
+                </p>
               </td>
               <td class="num">{{ fenText(item.totalAmount) }}</td>
               <td class="num">{{ fenText(item.platformFee) }}</td>
@@ -118,15 +122,17 @@
         </div>
         <ul class="rows detail-rows">
           <li><span class="k">结算单号</span><span class="v muted">{{ settleDetail.settleNo || '—' }}</span></li>
-          <li><span class="k">订单号</span><span class="v muted">{{ settleDetail.orderNo || '—' }}</span></li>
+          <li v-if="settleDetail.bizType === 'demand_stage'"><span class="k">征集任务</span><span class="v muted">{{ settleDetail.bizNo || ('#' + settleDetail.demandId) || '—' }}</span></li>
+          <li v-if="settleDetail.bizType === 'demand_stage'"><span class="k">交付轮次</span><span class="v muted">第 {{ settleDetail.stageOrder }} 轮</span></li>
+          <li v-else><span class="k">订单号</span><span class="v muted">{{ settleDetail.orderNo || '—' }}</span></li>
           <li><span class="k">作品</span><span class="v muted">{{ settleDetail.workTitle || '—' }}</span></li>
-          <li><span class="k">订单总额</span><span class="v muted">{{ fenText(settleDetail.totalAmount) }}</span></li>
+          <li><span class="k">{{ settleDetail.bizType === 'demand_stage' ? '本轮金额' : '订单总额' }}</span><span class="v muted">{{ fenText(settleDetail.totalAmount) }}</span></li>
           <li><span class="k">平台抽成</span><span class="v muted">{{ fenText(settleDetail.platformFee) }}</span></li>
           <li><span class="k">抽成比例</span><span class="v muted">{{ splitRateLabel(settleDetail.splitRate) }}</span></li>
           <li><span class="k">作者实得</span><span class="v muted">{{ fenText(settleDetail.sellerAmount) }}</span></li>
           <li><span class="k">创建时间</span><span class="v muted">{{ dateText(settleDetail.createdAt) }}</span></li>
         </ul>
-        <p class="cost explain">订单完成后先进入待结算。作者实得 = 订单总额 − 平台抽成。仅在确认无误后入账。</p>
+        <p class="cost explain">{{ settleDetail.bizType === 'demand_stage' ? '任务逐轮验收通过先进入待结算。作者实得 = 本轮金额 − 平台抽成。仅在确认无误后入账。' : '订单完成后先进入待结算。作者实得 = 订单总额 − 平台抽成。仅在确认无误后入账。' }}</p>
         <ul v-if="settleDetail.status === 'disputed'" class="rows detail-rows">
           <li><span class="k">异议原因</span><span class="v muted">{{ settleDetail.disputeReason || '—' }}</span></li>
           <li><span class="k">异议时间</span><span class="v muted">{{ dateText(settleDetail.disputeTime) }}</span></li>

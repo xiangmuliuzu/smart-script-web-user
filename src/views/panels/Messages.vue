@@ -58,18 +58,13 @@ function bizNoOf(message) {
   const m = `${message.title || ''} ${message.content || ''}`.match(/\b(?:INQ|ORD|CTC)[A-Za-z0-9-]+\b/)
   return m ? m[0] : ''
 }
-// 后端 TRD-DM-ACC 的 businessId 是 submissionId（其余任务通知均为 demandId），
-// 该条只标「投稿中标」，因此按标题分流到「我的投稿」分区，避免把投稿号当任务号跳详情。
-function isSubmissionNotice(message) {
-  return String(message.title || '').includes('中标')
-}
 async function jumpTrade(message) {
   const jump = tradeJumpOf(message)
   if (!jump) return
   try { await api.value.readMessage(message.messageId); message.isRead = true; await refreshUnread() } catch { /* 标记失败不打断跳转 */ }
   visible.value = false
   if (jump.demand) {
-    return router.push(isSubmissionNotice(message) ? '/demand/submissions' : `/demand/${encodeURIComponent(message.businessId)}`)
+    return router.push(`/demand/${encodeURIComponent(message.businessId)}`)
   }
   openPanel('cooperation', jump.tab, bizNoOf(message))
 }

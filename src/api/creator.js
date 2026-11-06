@@ -295,7 +295,7 @@ export const applyWithdraw = form => data(financeBase + '/withdraw/apply', { met
 export const listWithdraws = (params = {}) =>
   data(financeBase + '/withdraw/list' + qs({ pageNum: 1, pageSize: 20, ...params }))
 
-// ──── 任务广场（需求悬赏）：创作者侧只读广场 + 接单 + 交付 + 投稿，发布/托管/验收归企业端 ────
+// ──── 任务广场（需求悬赏）：创作者侧只读广场 + 接单 + 交付，发布/托管/验收归企业端 ────
 const demandBase = '/api/v1/trade/demand'
 const demandPath = id => demandBase + '/' + encodeURIComponent(id)
 // 金额口径：入参 budget 与 budgetMin/budgetMax 为分，stages[].amount 为元，出参一律为分（展示时 /100）。
@@ -306,8 +306,6 @@ export async function listDemands({ status, genreId, keyword, mine, sortBy, orde
 // 广场统计：availableCount / prizePoolFen(分) / todayNewCount / genreCounts:[{genreId,count}]，公开可接单口径
 export const demandStats = () => data(demandBase + '/stats')
 export const getDemand = id => data(demandPath(id))
-export const submitToDemand = (demandId, body) => data(demandPath(demandId) + '/submit', { method: 'POST', body })
-export const mySubmissions = () => data(demandBase + '/my-submissions')
 // 验收轮次（出参 amount 为分）；可交付作品=本人且非已上架售卖
 export const demandStages = demandId => data(demandPath(demandId) + '/stages')
 export const deliverableWorks = () => data(demandBase + '/deliverable-works')

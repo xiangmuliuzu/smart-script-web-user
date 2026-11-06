@@ -137,7 +137,7 @@
         <div v-if="orderTotal > PAGE_SIZE" class="pagination-bar"><button class="btn sm ghost" :disabled="orderPageNum <= 1" @click="orderPageNum--; loadOrders()">上一页</button><span class="cost">第 {{ orderPageNum }} 页 / 共 {{ Math.ceil(orderTotal / PAGE_SIZE) }} 页</span><button class="btn sm ghost" :disabled="orderPageNum * PAGE_SIZE >= orderTotal" @click="orderPageNum++; loadOrders()">下一页</button></div>
       </template>
 
-      <!-- 任务广场已提升为顶级页签 /demand（广场/我的任务/我的投稿/详情），不再在本抽屉内展示 -->
+      <!-- 任务广场已提升为顶级页签 /demand（广场/我的任务/详情），不再在本抽屉内展示 -->
     </div>
     <PortalLayer v-model="orderContractVisible" :title="orderContractTitle" modal big>
       <div v-loading="orderContractLoading" class="preview-wrap">

@@ -19,9 +19,8 @@
       <dl class="dd-info">
         <div><dt>任务编号</dt><dd>{{ demand.demandNo }}</dd></div>
         <div><dt>发布方</dt><dd>{{ demand.clientName || '-' }}</dd></div>
-        <div><dt>投稿截止</dt><dd>{{ dateText(demand.deadline) }}</dd></div>
+        <div><dt>接单截止</dt><dd>{{ dateText(demand.deadline) }}</dd></div>
         <div><dt>总集数</dt><dd>{{ Number(demand.totalEpisodes) > 0 ? demand.totalEpisodes + ' 集 · 逐轮验收' : '未设定 · 整单时限 ' + (demand.durationHours || '-') + ' 小时' }}</dd></div>
-        <div><dt>投稿数</dt><dd>{{ demand.submissionCount || 0 }}</dd></div>
         <div><dt>托管状态</dt><dd>{{ escrowStatusLabel(demand.escrowStatus) }}（{{ money(demand.escrowAmount) }}）</dd></div>
         <div><dt>我的押金</dt><dd>{{ depositStatusLabel(demand.depositStatus) }}<template v-if="Number(demand.depositAmount) > 0">（{{ money(demand.depositAmount) }}）</template></dd></div>
         <div v-if="isOwner"><dt>接单人</dt><dd>我 · {{ timeText(demand.acceptedAt) }} 接单</dd></div>
@@ -41,12 +40,11 @@
       <section v-if="!isOwner" class="dd-actions">
         <template v-if="canClaim">
           <button class="btn" :disabled="busy" @click="openDeposit">付押金接单（{{ depositText }}）</button>
-          <button class="btn quiet" :disabled="busy" @click="openSubmit">投稿等选标</button>
           <button class="btn ghost" :disabled="busy" @click="openChat">联系发布方</button>
         </template>
         <p v-else-if="demand.status === 'open' && demand.escrowStatus !== 'escrowed'" class="note">该任务尚未完成托管付款，暂不可接单；发布方付完托管款后会出现在任务广场。</p>
-        <p v-else-if="demand.status === 'open'" class="note">该任务当前不可接单，可在「我的投稿」查看你的处理结果或另选任务。</p>
-        <p v-else class="note">任务已{{ demandStatusLabel(demand.status) }}，不能再接单或投稿。</p>
+        <p v-else-if="demand.status === 'open'" class="note">该任务当前不可接单，请另选其他任务。</p>
+        <p v-else class="note">任务已{{ demandStatusLabel(demand.status) }}，不能再接单。</p>
       </section>
       <p v-else class="note dd-owned">你已接下此任务，押金 {{ money(demand.depositAmount) }} 在全部轮次验收通过后退还；逾期未通过将被没收。</p>
 
@@ -63,23 +61,10 @@
         <button class="btn" :disabled="payChecking" @click="checkDeposit">{{ payChecking ? '查询中…' : '我已完成支付' }}</button>
       </div>
     </PortalLayer>
-
-    <PortalLayer v-model="submitVisible" title="投稿" modal>
-      <div class="dialog-body">
-        <label class="field">投稿作品
-          <select v-model.number="submitForm.workId">
-            <option :value="null">选择您的作品</option>
-            <option v-for="work in works" :key="work.workId" :value="Number(work.workId)">{{ work.title || ('作品#' + work.workId) }}</option>
-          </select>
-        </label>
-        <label class="field">附言（可选）<textarea v-model="submitForm.message" rows="4" placeholder="介绍您的作品与该需求的适配度…"></textarea></label>
-        <div class="dialog-foot"><button class="btn" :disabled="busy" @click="doSubmit">{{ busy ? '提交中…' : '确认投稿' }}</button></div>
-      </div>
-    </PortalLayer>
   </div>
 </template>
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import QRCode from 'qrcode'
@@ -92,7 +77,6 @@ const { api, user, handleError } = usePortal()
 const route = useRoute()
 const demandId = computed(() => Number(route.params.id))
 const demand = ref(null)
-const works = ref([])
 const panel = ref(null)
 const pending = ref(true)
 const error = ref('')
@@ -102,8 +86,6 @@ const payQr = ref('')
 const payAmount = ref(0)
 const payMessage = ref('')
 const payChecking = ref(false)
-const submitVisible = ref(false)
-const submitForm = reactive({ workId: null, message: '' })
 const isOwner = computed(() => !!demand.value && !!user.value?.userId && String(demand.value.acceptedCreatorId) === String(user.value.userId))
 const canClaim = computed(() => demand.value?.status === 'open' && demand.value?.escrowStatus === 'escrowed')
 const tagList = computed(() => String(demand.value?.tags || '').split(/[,，]/).map(t => t.trim()).filter(Boolean))
@@ -150,21 +132,6 @@ async function checkDeposit() {
     }
   } catch (failure) { payMessage.value = failure.message || '查询失败，请稍后重试' }
   finally { payChecking.value = false }
-}
-function openSubmit() {
-  Object.assign(submitForm, { workId: null, message: '' })
-  submitVisible.value = true
-  api.value.listWorks().then(items => { works.value = items || [] }).catch(() => { works.value = [] })
-}
-async function doSubmit() {
-  if (!submitForm.workId) { ElMessage.warning('请选择投稿作品'); return }
-  busy.value = true
-  try {
-    await api.value.submitToDemand(demand.value.demandId, { workId: submitForm.workId, message: submitForm.message?.trim() || undefined })
-    submitVisible.value = false
-    ElMessage.success('投稿成功，等待发布者选标')
-    await load()
-  } catch (failure) { await handleError(failure) } finally { busy.value = false }
 }
 async function openChat() {
   try { await api.value.demandChatSession(demand.value.demandId); ElMessage.success('会话已就绪，可在「会话」面板沟通') }

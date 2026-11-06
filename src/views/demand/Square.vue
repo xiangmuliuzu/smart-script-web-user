@@ -32,7 +32,6 @@
     <LoadState :pending="pending" :error="error" :retry="load" />
     <p v-if="!pending && !error && !list.length" class="load-state">当前条件下暂无可接单任务</p>
     <DemandCard v-for="item in list" :key="item.demandId" :demand="item" mode="square" @open="goDemandDetail">
-      <button class="btn sm" @click.stop="openSubmit(item)">投稿</button>
       <button class="btn sm ghost" @click.stop="goDemandDetail(item.demandId)">接单</button>
     </DemandCard>
     <div v-if="total > PAGE_SIZE" class="pager">
@@ -40,28 +39,12 @@
       <span class="cost">第 {{ pageNum }} / {{ pageCount }} 页 · 共 {{ total }} 条</span>
       <button class="btn sm ghost" :disabled="pageNum >= pageCount" @click="turn(1)">下一页</button>
     </div>
-
-    <PortalLayer v-model="submitVisible" :title="'投稿 - ' + (submitTarget?.title || '')" modal>
-      <div class="dialog-body">
-        <label class="field">投稿作品
-          <select v-model.number="submitForm.workId">
-            <option :value="null">选择您的作品</option>
-            <option v-for="work in works" :key="work.workId" :value="Number(work.workId)">{{ work.title || ('作品#' + work.workId) }}</option>
-          </select>
-        </label>
-        <label class="field">附言（可选）<textarea v-model="submitForm.message" rows="4" placeholder="介绍您的作品与该需求的适配度…"></textarea></label>
-        <p class="cost">投稿是「等发布者选标」，走询盘与订单成交；若想立刻拿下这一单，请在详情页「付押金接单」，走逐轮验收与放款。两者互斥，选标后征集即关闭。</p>
-        <div class="dialog-foot"><button class="btn" :disabled="busy" @click="doSubmit">{{ busy ? '提交中…' : '确认投稿' }}</button></div>
-      </div>
-    </PortalLayer>
   </div>
 </template>
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
 import { usePortal } from '../../utils/portal.js'
 import LoadState from '../../components/LoadState.vue'
-import PortalLayer from '../../components/PortalLayer.vue'
 import DemandTabs from '../../components/demand/DemandTabs.vue'
 import DemandCard from '../../components/demand/DemandCard.vue'
 import { money, genreOptions, SORT_OPTIONS } from '../../utils/demand.js'
@@ -73,11 +56,6 @@ const pageNum = ref(1)
 const pending = ref(false)
 const error = ref('')
 const stats = ref({})
-const busy = ref(false)
-const submitVisible = ref(false)
-const submitTarget = ref(null)
-const submitForm = reactive({ workId: null, message: '' })
-const works = ref([])
 const filters = reactive({ keyword: '', genreId: null, budgetMinYuan: null, budgetMaxYuan: null, episodesMin: null, sort: 'created:desc' })
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
 // 奖池口径与列表一致（公开可接单），后端给的是分
@@ -119,22 +97,6 @@ function turn(offset) {
   const next = pageNum.value + offset
   if (next < 1 || next > pageCount.value) return
   pageNum.value = next; load()
-}
-function openSubmit(demand) {
-  submitTarget.value = demand
-  Object.assign(submitForm, { workId: null, message: '' })
-  submitVisible.value = true
-  api.value.listWorks().then(items => { works.value = items || [] }).catch(() => { works.value = [] })
-}
-async function doSubmit() {
-  if (!submitForm.workId) { ElMessage.warning('请选择投稿作品'); return }
-  busy.value = true
-  try {
-    await api.value.submitToDemand(submitTarget.value.demandId, { workId: submitForm.workId, message: submitForm.message?.trim() || undefined })
-    submitVisible.value = false
-    ElMessage.success('投稿成功，等待发布者选标')
-    await load()
-  } catch (failure) { await handleError(failure) } finally { busy.value = false }
 }
 onMounted(async () => { await Promise.all([loadMeta(), load()]) })
 </script>

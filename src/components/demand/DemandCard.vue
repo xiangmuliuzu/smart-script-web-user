@@ -10,7 +10,7 @@
       <template v-else> · 整单时限 {{ demand.durationHours || '-' }} 小时</template>
     </p>
     <p class="cost dc-meta">
-      {{ genreLabel(demand.genreId) }}<template v-if="mode === 'square'"> · 投稿 {{ demand.submissionCount || 0 }}</template>
+      {{ genreLabel(demand.genreId) }}
       <!-- 标签必须带前缀：否则「玄幻 · 11 / 22」会被读成集数进度 -->
       <template v-if="tagList.length"> · 标签 {{ tagList.join(' / ') }}</template>
     </p>

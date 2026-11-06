@@ -18,10 +18,6 @@ export const escrowStatusLabel = s => ESCROW_LABELS[s] || s || '-'
 const DEPOSIT_LABELS = { none: '未缴', held: '在押', refunded: '已退还', forfeited: '已没收' }
 export const depositStatusLabel = s => DEPOSIT_LABELS[s] || s || '-'
 
-// 投稿状态（SUBMISSION_STATUS_*）
-const SUBMISSION_LABELS = { submitted: '已投稿', shortlisted: '入围', accepted: '已选用', rejected: '未选用' }
-export const submissionStatusLabel = s => SUBMISSION_LABELS[s] || s || '-'
-
 /* 验收轮次：后端激活某轮只写 started_at/due_at，status 仍是 pending，
    所以「进行中」必须由 startedAt 判定，不能只看 status。 */
 const STAGE_STATUS_LABELS = { ai_reviewing: 'AI 审核中', submitted: '待验收', approved: '已通过', rejected: '已驳回' }
