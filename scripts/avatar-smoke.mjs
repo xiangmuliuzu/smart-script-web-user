@@ -51,7 +51,6 @@ try {
   await imageLoaded('.profile-avatar img')
   await account.locator('.profile-avatar-row input[type=file]').setInputFiles({ name: 'avatar.png', mimeType: 'image/png', buffer: imageBytes })
   await page.waitForFunction(path => document.querySelector('.profile-avatar img')?.src.endsWith(path), updatedPath)
-  await account.getByRole('button', { name: '保存修改', exact: true }).click()
   await page.waitForFunction(path => document.querySelector('.avatar-btn img')?.src.endsWith(path), updatedPath)
   await imageLoaded('.avatar-btn img')
   await page.reload()
