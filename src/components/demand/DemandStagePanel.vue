@@ -1,7 +1,7 @@
 <template>
   <section class="stage-panel">
     <LoadState :pending="pending" :error="error" :retry="reload" loading-text="正在加载验收轮次…" />
-    <div v-if="!pending && !error && !stages.length" class="note">该任务未配置逐轮验收，接单后按整单时限（{{ demand.durationHours || '-' }} 小时）交付。</div>
+    <div v-if="!pending && !error && !stages.length" class="note">该任务未配置逐轮验收，接单后按整单时限（{{ formatHours(demand.durationHours) }}）交付。</div>
     <template v-else>
       <p v-if="activeRound" class="round-banner" :data-urgent="countdown(activeRound.dueAt).urgent">第 {{ activeRound.stageOrder }} 轮 · {{ countdown(activeRound.dueAt).text }}</p>
       <p v-else-if="stages.every(s => s.status === 'approved')" class="round-banner done">全部 {{ stages.length }} 轮已验收通过，款项已逐轮放出</p>
@@ -12,7 +12,7 @@
           <span class="sc-amount">{{ money(stage.amount) }}</span>
           <span class="sc-status">{{ stageStatusLabel(stage) }}</span>
         </div>
-        <p class="cost">时限 {{ durationText(stage) }} · <span :class="dueClass(stage)">截止 {{ timeText(stage.dueAt) }}</span><template v-if="stage.startedAt"> · 开始于 {{ timeText(stage.startedAt) }}</template></p>
+        <p class="cost">时限 {{ durationText(stage) }}<template v-if="extendedHoursOf(stage) > 0"> · 已延时 {{ formatHours(extendedHoursOf(stage)) }}</template> · <span :class="dueClass(stage)">截止 {{ timeText(stage.dueAt) }}</span><template v-if="stage.startedAt"> · 开始于 {{ timeText(stage.startedAt) }}</template></p>
         <template v-if="stage.workId || stage.deliverableDesc">
           <p class="cost">交付作品：《{{ stage.workTitle || ('作品#' + stage.workId) }}》<template v-if="stage.submittedAt"> · 提交于 {{ timeText(stage.submittedAt) }}</template></p>
           <p v-if="stage.deliverableDesc" class="sc-desc">{{ stage.deliverableDesc }}</p>
@@ -27,7 +27,7 @@
         <div v-if="isOwner && isActive(stage)" class="sc-actions">
           <button class="btn sm" :disabled="busy" @click="openDeliver(stage)">提交交付物</button>
           <button v-if="stage.extendStatus !== 'pending'" class="btn sm quiet" :disabled="busy" @click="openExtend(stage)">申请延时</button>
-          <span v-else class="cost sc-pending">延时申请待发布者处理（{{ stage.extendDays || 0 }} 天 {{ stage.extendHours || 0 }} 小时）</span>
+          <span v-else class="cost sc-pending">延时申请待发布者处理（{{ formatHours((Number(stage.extendDays) || 0) * 24 + (Number(stage.extendHours) || 0)) }}）</span>
         </div>
 
         <div class="sc-history">
@@ -35,10 +35,11 @@
           <ul v-if="historyOpen[stage.stageId]" class="history-list">
             <li v-if="!historyOf(stage.stageId).length" class="cost">本轮暂无延时记录</li>
             <li v-for="row in historyOf(stage.stageId)" :key="row.applyId" class="history-row">
-              <span class="cost">{{ extendTypeLabel(row.applyType) }} · {{ row.days || 0 }} 天 {{ row.hours || 0 }} 小时</span>
+              <span class="cost">{{ extendTypeLabel(row.applyType) }} · {{ formatHours((Number(row.days) || 0) * 24 + (Number(row.hours) || 0)) }}</span>
               <span v-if="row.reason" class="cost">原因：{{ row.reason }}</span>
               <span class="tone" :data-tone="extendTone(row.status, row.applyType)">{{ extendStatusLabel(row.status, row.applyType) }}</span>
               <span class="cost">{{ timeText(row.appliedAt || row.createdAt) }}</span>
+              <span v-if="row.dueAfter" class="cost">顺延至 {{ timeText(row.dueAfter) }}</span>
             </li>
           </ul>
         </div>
@@ -63,11 +64,10 @@
     <PortalLayer v-model="extendVisible" :title="`申请延时 - 第 ${current?.stageOrder || ''} 轮`" modal>
       <div class="dialog-body">
         <div class="field-row">
-          <label class="field">延长天数<input v-model.number="extendForm.days" type="number" min="0" max="30"></label>
-          <label class="field">延长小时<input v-model.number="extendForm.hours" type="number" min="0" max="72"></label>
+          <label class="field">延长小时数<input v-model.number="extendForm.hours" type="number" min="1" max="720" placeholder="例如 24"></label>
         </div>
         <label class="field">延时原因<textarea v-model="extendForm.reason" rows="3" placeholder="说明为什么需要延长（发布者可据此判断）…"></textarea></label>
-        <p class="cost">延时申请需发布者同意才会顺延截止时间；发布者超过 24 小时未处理将自动驳回。</p>
+        <p class="cost">按小时填写，展示时自动折算为天。延时申请需发布者同意才会顺延截止时间；发布者超过 24 小时未处理将自动驳回。</p>
         <div class="dialog-foot"><button class="btn" :disabled="busy" @click="doRequestExtend">{{ busy ? '提交中…' : '提交申请' }}</button></div>
       </div>
     </PortalLayer>
@@ -79,7 +79,7 @@ import { ElMessage } from 'element-plus'
 import { usePortal } from '../../utils/portal.js'
 import LoadState from '../LoadState.vue'
 import PortalLayer from '../PortalLayer.vue'
-import { money, timeText, countdown, durationText, stageStatusLabel, stageTone, isActiveStage, extendTypeLabel, extendStatusLabel, extendTone, aiBrief, dueTone } from '../../utils/demand.js'
+import { money, timeText, countdown, durationText, stageStatusLabel, stageTone, isActiveStage, extendTypeLabel, extendStatusLabel, extendTone, aiBrief, dueTone, formatHours } from '../../utils/demand.js'
 const props = defineProps({ demand: { type: Object, required: true }, isOwner: Boolean })
 // 提交交付/延时动作后通知父页重拉任务详情（整单状态可能随之变化）
 const emit = defineEmits(['changed'])
@@ -95,16 +95,21 @@ const current = ref(null)
 const deliverVisible = ref(false)
 const extendVisible = ref(false)
 const deliverForm = reactive({ workId: null, deliverableDesc: '', deliverableUrl: '' })
-const extendForm = reactive({ days: null, hours: null, reason: '' })
+const extendForm = reactive({ hours: null, reason: '' })
 // 倒计时每分钟翻一次用的心跳值（与定时器 id 分离，避免把 id 当成响应式变量写回）
 const tick = ref(0)
 let clockTimer = null
 let pollTimer = null
+let syncTimer = null
 
 const isActive = stage => props.isOwner && isActiveStage(stage)
 // 当前活动轮：面板顶部的倒计时条只标这一轮，后续轮次的时限在各自卡片里展示
 const activeRound = computed(() => { void tick.value; return stages.value.find(stage => isActiveStage(stage)) || null })
 const historyOf = stageId => history.value.filter(row => String(row.stageId) === String(stageId))
+// 已生效延时累计（申请通过 + 自主延时）：时限本身不变，界面直接标明已顺延多少
+const extendedHoursOf = stage => historyOf(stage.stageId)
+  .filter(row => row.status === 'approved')
+  .reduce((sum, row) => sum + (Number(row.days) || 0) * 24 + (Number(row.hours) || 0), 0)
 // 截止时间颜色跟阶段走（逾期红/临期橙/其余中性），不再无条件标红
 const dueClass = stage => ['sc-due', dueTone(stage) === 'danger' ? 'sc-danger' : dueTone(stage) === 'warn' ? 'sc-warn' : '']
 async function loadStages() {
@@ -128,7 +133,7 @@ function openDeliver(stage) {
 }
 function openExtend(stage) {
   current.value = stage
-  Object.assign(extendForm, { days: null, hours: null, reason: '' })
+  Object.assign(extendForm, { hours: null, reason: '' })
   extendVisible.value = true
 }
 async function doDeliver() {
@@ -144,12 +149,11 @@ async function doDeliver() {
   } catch (failure) { await handleError(failure) } finally { busy.value = false }
 }
 async function doRequestExtend() {
-  const days = Number(extendForm.days) || 0
   const hours = Number(extendForm.hours) || 0
-  if (days + hours <= 0) { ElMessage.warning('延长时长必须大于 0'); return }
+  if (hours <= 0) { ElMessage.warning('延长小时数必须大于 0'); return }
   busy.value = true
   try {
-    await api.value.requestStageExtend(props.demand.demandId, current.value.stageId, { days, hours, reason: extendForm.reason?.trim() || undefined })
+    await api.value.requestStageExtend(props.demand.demandId, current.value.stageId, { days: 0, hours, reason: extendForm.reason?.trim() || undefined })
     extendVisible.value = false
     ElMessage.success('延时申请已提交，等待发布者处理')
     await reload()
@@ -161,8 +165,10 @@ onMounted(async () => {
   clockTimer = setInterval(() => { tick.value++ }, 60000)
   // 有轮次卡在 AI 审核中时按 5 秒轮询取结果（与 APP 同口径）
   pollTimer = setInterval(() => { if (stages.value.some(stage => stage.status === 'ai_reviewing')) reload() }, 5000)
+  // 延时审批与下一轮激活发生在发布者端：30 秒重拉，截止时间/剩余时长自动同步
+  syncTimer = setInterval(() => { if (!busy.value) reload() }, 30000)
 })
-onUnmounted(() => { clearInterval(clockTimer); clearInterval(pollTimer) })
+onUnmounted(() => { clearInterval(clockTimer); clearInterval(pollTimer); clearInterval(syncTimer) })
 defineExpose({ reload })
 </script>
 <style scoped>

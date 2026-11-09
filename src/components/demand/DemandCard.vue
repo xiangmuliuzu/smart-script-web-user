@@ -7,7 +7,7 @@
     <p class="cost dc-meta">
       编号 {{ demand.demandNo }} · 预算 {{ money(demand.budget) }} · 截止 {{ dateText(demand.deadline) }}
       <template v-if="Number(demand.totalEpisodes) > 0"> · {{ demand.totalEpisodes }} 集 · 逐轮验收</template>
-      <template v-else> · 整单时限 {{ demand.durationHours || '-' }} 小时</template>
+      <template v-else> · 整单时限 {{ formatHours(demand.durationHours) }}</template>
     </p>
     <p class="cost dc-meta">
       {{ genreLabel(demand.genreId) }}
@@ -36,7 +36,7 @@
 </template>
 <script setup>
 import { computed } from 'vue'
-import { demandStatusLabel, escrowStatusLabel, depositStatusLabel, money, dateText, timeText, countdown, genreLabel } from '../../utils/demand.js'
+import { demandStatusLabel, escrowStatusLabel, depositStatusLabel, money, dateText, timeText, countdown, genreLabel, formatHours } from '../../utils/demand.js'
 // open 统一回传 demandId，与 layout 提供的 goDemandDetail(id) 直接对接
 const props = defineProps({ demand: { type: Object, required: true }, mode: { type: String, default: 'square' } })
 defineEmits(['open'])
@@ -50,20 +50,24 @@ const statusTone = computed(() => ({ open: 'warn', in_progress: 'info', selected
 const roundCountdown = computed(() => countdown(props.demand.dueAt))
 </script>
 <style scoped>
-.demand-card { border: 1px solid var(--rule, #ebeef5); border-radius: 6px; padding: 14px 16px; margin-bottom: 10px; background: #fff; cursor: pointer; transition: box-shadow .15s, border-color .15s }
-.demand-card:hover { box-shadow: 0 2px 8px rgba(0, 0, 0, .07); border-color: var(--indigo, #409eff) }
-.dc-head { display: flex; align-items: center; gap: 10px }
-.dc-title { margin: 0; font-size: 15.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.dc-status { flex: none; padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 500; background: #f4f4f5; color: #909399 }
-.dc-status[data-tone="warn"] { background: #fdf6ec; color: #e6a23c }
-.dc-status[data-tone="info"] { background: #ecf5ff; color: #409eff }
-.dc-status[data-tone="ok"] { background: #f0f9eb; color: #67c23a }
-.dc-status[data-tone="danger"] { background: #fef0f0; color: #f56c6c }
-.dc-meta { margin: 6px 0 0 }
-.dc-req { margin: 8px 0 0; font-size: 13px; color: var(--ink-2, #606266); line-height: 1.6 }
-.dc-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; flex-wrap: wrap }
+/* 纸感任务单：细线外框 + 左侧书脊高亮，hover 不发光只收边框 */
+.demand-card { position: relative; margin-bottom: 10px; padding: 16px 18px 14px; background: var(--paper-2); border: 1px solid var(--rule); border-radius: var(--radius); cursor: pointer; transition: border-color .15s, background .15s }
+.demand-card::before { content: ""; position: absolute; left: -1px; top: -1px; bottom: -1px; width: 2px; background: transparent; transition: background .15s }
+.demand-card:hover { border-color: var(--indigo-dim); background: #FCFBF8 }
+.demand-card:hover::before { background: var(--indigo) }
+.demand-card:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px }
+.dc-head { display: flex; align-items: baseline; gap: 12px }
+.dc-title { margin: 0; min-width: 0; font-family: var(--serif); font-size: 16px; font-weight: 600; letter-spacing: .01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.dc-status { flex: none; padding: 1px 7px; border: 1px solid currentColor; border-radius: var(--radius); font-size: 11.5px; font-weight: 500; color: var(--ink-3); background: none }
+.dc-status[data-tone="warn"] { color: var(--ochre) }
+.dc-status[data-tone="info"] { color: var(--indigo) }
+.dc-status[data-tone="ok"] { color: var(--bamboo) }
+.dc-status[data-tone="danger"] { color: var(--cinnabar) }
+.dc-meta { margin: 6px 0 0; font-size: 12.5px; color: var(--ink-3); font-variant-numeric: tabular-nums }
+.dc-req { margin: 9px 0 0; font-size: 13px; color: var(--ink-2); line-height: 1.7 }
+.dc-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 11px; padding-top: 10px; border-top: 1px dashed var(--rule); flex-wrap: wrap }
 .dc-actions { display: flex; gap: 8px; flex-wrap: wrap }
-.dc-danger { color: #f56c6c; font-weight: 600; margin-left: 6px }
+.dc-danger { color: var(--cinnabar); font-weight: 600; margin-left: 6px }
 .dc-count { margin-left: 6px }
-.dc-urgent { color: #e6a23c; font-weight: 600 }
+.dc-urgent { color: var(--ochre); font-weight: 600 }
 </style>

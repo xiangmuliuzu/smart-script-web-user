@@ -109,12 +109,21 @@ export function countdown(dueAt) {
   if (hours > 0) return { text: `剩余 ${hours} 小时 ${minutes % 60} 分`, overdue: false, urgent: hours <= 6 }
   return { text: `剩余 ${Math.max(minutes, 1)} 分`, overdue: false, urgent: true }
 }
-/* 轮次时限展示：后端 durationDays + durationHours，缺失时回落整单 durationHours */
+/* 时长统一按小时填写/存储，展示时自动折算为「X 天 Y 小时」（兼容历史天+小时数据） */
+export function formatHours(hours) {
+  const total = Math.round(Number(hours) || 0)
+  if (total <= 0) return '-'
+  const days = Math.floor(total / 24)
+  const rest = total % 24
+  if (days > 0 && rest > 0) return `${days} 天 ${rest} 小时`
+  if (days > 0) return `${days} 天`
+  return `${rest} 小时`
+}
+/* 轮次时限展示：后端历史数据可能按天+小时存储，统一折算总小时后展示 */
 export function durationText(stage) {
-  const days = Number(stage?.durationDays) || 0
-  const hours = Number(stage?.durationHours) || 0
-  if (days + hours <= 0) return stage?.demandDurationHours ? `时限 ${stage.demandDurationHours} 小时` : '时限未设'
-  return [days ? `${days} 天` : '', hours ? `${hours} 小时` : ''].filter(Boolean).join(' ')
+  const total = (Number(stage?.durationDays) || 0) * 24 + (Number(stage?.durationHours) || 0)
+  if (total <= 0) return stage?.demandDurationHours ? formatHours(stage.demandDurationHours) : '时限未设'
+  return formatHours(total)
 }
 /* 题材字典：任务 genreId 是独立于 sys_category 的固定枚举（1–7），
    与 APP 端 lib/core/constants/demand_genre.dart 的 DemandGenre.labels 逐项对齐；

@@ -77,8 +77,12 @@
               <TradeTemplatePanel v-model:visible="templateVisible" :session-id="chatSessionId" :inquiry-id="activeSessionInquiryId" :is-buyer="isCurrentBuyer" :license-type="currentLicenseType" @sent="onTemplateSent" />
               <div class="chat-input-row">
                 <button type="button" class="template-toggle-btn" :class="{ active: templateVisible }" @click="templateVisible = !templateVisible">{{ templateVisible ? '收起定型文' : '定型文' }}</button>
+                <label class="quote-amount-box" :title="isCurrentBuyer ? '修改金额后可不带文字直接发送议价' : '修改金额后可不带文字直接发送报价'">
+                  <span class="quote-yen">¥</span>
+                  <input v-model="quoteAmountInput" class="quote-amount-input" type="number" min="0" step="0.01" :placeholder="isCurrentBuyer ? '议价金额' : '报价金额'" @keydown.enter.exact.prevent="sendFreeText">
+                </label>
                 <textarea v-model="chatInput" class="chat-textarea" rows="1" placeholder="输入消息，Enter 发送 / Shift+Enter 换行" @keydown.enter.exact.prevent="sendFreeText"></textarea>
-                <button type="button" class="send-btn" :disabled="chatSending || !chatInput.trim()" @click="sendFreeText">发送</button>
+                <button type="button" class="send-btn" :disabled="chatSending || !canSendMessage" @click="sendFreeText">发送</button>
               </div>
             </template>
             <div v-else class="load-state"><p>选择一个会话开始沟通</p></div>
@@ -288,6 +292,8 @@ async function selectSession(s) {
   chatSessionId.value = s.sessionId
   activeSessionInquiryId.value = s.inquiryId || null
   sessionInquiry.value = null
+  // 切换会话先清空上一会话报价，避免金额输入框按旧报价预填
+  latestQuote.value = null
   if (s.inquiryId) {
     try { sessionInquiry.value = await api.value.getInquiry(s.inquiryId) } catch { sessionInquiry.value = null }
   }
@@ -340,6 +346,34 @@ const negTone = computed(() => {
   if (q.status === 'accepted') return 'accepted'
   if (q.status === 'rejected') return 'rejected'
   return q.quoterRole === 'seller' ? 'seller' : 'buyer'
+})
+
+// ── 金额直发（对齐 APP：有文字，或金额与顶部价格不同即可发送；仅金额变化时单独发起报价/议价） ──
+const quoteAmountInput = ref('')
+const quoteBaselineFen = computed(() => {
+  if (latestQuote.value) return Number(latestQuote.value.price) || 0
+  const inq = sessionInquiry.value || inquiries.value.find(i => i.inquiryId === activeSessionInquiryId.value)
+  return inq?.budget == null ? null : Number(inq.budget)
+})
+const quoteAmountFen = computed(() => {
+  const raw = String(quoteAmountInput.value || '').trim()
+  if (!raw) return null
+  const yuan = parseFloat(raw)
+  if (isNaN(yuan) || yuan <= 0) return null
+  return Math.round(yuan * 100)
+})
+const quoteChanged = computed(() => {
+  if (quoteAccepted.value) return false
+  const fen = quoteAmountFen.value
+  if (fen == null) return false
+  const base = quoteBaselineFen.value
+  return base == null || fen !== Number(base)
+})
+const canSendMessage = computed(() => !chatSending.value && (!!chatInput.value.trim() || quoteChanged.value))
+const fenToInputText = fen => (fen == null ? '' : String(Number(fen) / 100))
+// 会话切换或最新报价刷新时，金额框回填最新基准（用户正在输入时不会被轮询覆盖）
+watch([chatSessionId, () => latestQuote.value?.quoteId, () => sessionInquiry.value?.inquiryId], () => {
+  quoteAmountInput.value = fenToInputText(quoteBaselineFen.value)
 })
 
 function isQuoteSysMsg(msg) {
@@ -414,16 +448,40 @@ async function onTemplateSent(msg) {
   scrollChatBottom()
 }
 
-/** 自由打字发送：复用定型文发出后的追加与滚动逻辑。 */
+/** 自由发送：有文字直接发；金额变化时先同步报价/议价，仅金额变化也可单独发送。 */
 async function sendFreeText() {
+  if (chatSending.value || !chatSessionId.value) return
   const content = chatInput.value.trim()
-  if (!content || chatSending.value || !chatSessionId.value) return
+  const changed = quoteChanged.value
+  if (!content && !changed) {
+    ElMessage.warning('请输入消息内容，或修改金额后发送' + (isCurrentBuyer.value ? '议价' : '报价'))
+    return
+  }
   chatSending.value = true
   try {
-    const msg = await api.value.sendChat(chatSessionId.value, content)
-    if (!msg) throw new Error('发送响应不完整，请刷新会话确认')
-    chatInput.value = ''
-    await onTemplateSent(msg)
+    // 金额变化时先发起报价/议价；此时即使没有文字，也单独完成一次报价/议价
+    if (changed) {
+      const inquiryId = Number(activeSessionInquiryId.value) || 0
+      if (!inquiryId) throw new Error('当前会话缺少询盘信息，无法发起' + (isCurrentBuyer.value ? '议价' : '报价'))
+      const body = { inquiryId, price: quoteAmountFen.value, licenseType: currentLicenseType.value || null }
+      // 买方议价、卖方报价，与 APP 双角色口径一致
+      if (isCurrentBuyer.value) await api.value.counterOffer(body)
+      else await api.value.createQuote(body)
+      await loadLatestQuote()
+      // 报价接口会生成 [报价]/[议价] 系统消息卡片，刷新列表
+      await loadChatMessages()
+      await nextTick()
+      scrollChatBottom()
+      quoteAmountInput.value = fenToInputText(quoteBaselineFen.value)
+    }
+    if (content) {
+      const msg = await api.value.sendChat(chatSessionId.value, content)
+      if (!msg) throw new Error('发送响应不完整，请刷新会话确认')
+      chatInput.value = ''
+      await onTemplateSent(msg)
+    } else {
+      ElMessage.success(isCurrentBuyer.value ? '议价已发送' : '报价已发送')
+    }
   } catch (e) {
     ElMessage.error('发送失败：' + (e?.message || e))
   } finally {
@@ -751,6 +809,11 @@ onUnmounted(() => { stopChatPoll() })
 .send-btn { flex: none; align-self: flex-end; height: 38px; padding: 0 18px; border: none; border-radius: 999px; background: var(--indigo); color: #fff; font-size: 13px; cursor: pointer; transition: background .15s, opacity .15s }
 .send-btn:hover { background: var(--indigo-dim) }
 .send-btn:disabled { background: var(--rule-2); cursor: not-allowed }
+.quote-amount-box { flex: none; align-self: flex-end; display: flex; align-items: center; gap: 2px; height: 38px; padding: 0 8px; border: 1px solid #dcdfe6; border-radius: 8px; background: #fff; transition: border-color .15s, box-shadow .15s }
+.quote-amount-box:focus-within { border-color: var(--indigo); box-shadow: 0 0 0 2px rgba(44, 74, 82, .12) }
+.quote-yen { font-size: 12px; font-weight: 600; color: var(--ochre) }
+.quote-amount-input { width: 84px; border: 0; outline: none; background: transparent; font-size: 13px; font-family: inherit; color: #303133 }
+.quote-amount-input::-webkit-outer-spin-button, .quote-amount-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0 }
 .status-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 500 }
 .tag-pending { background: #fdf6ec; color: #e6a23c }
 .tag-pending_seller { background: var(--cinnabar-w); color: var(--cinnabar) }

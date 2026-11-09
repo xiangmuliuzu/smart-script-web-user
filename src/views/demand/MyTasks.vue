@@ -27,7 +27,7 @@
     </DemandCard>
     <div v-if="total > PAGE_SIZE" class="pager">
       <button class="btn sm ghost" :disabled="pageNum <= 1" @click="turn(-1)">上一页</button>
-      <span class="cost">第 {{ pageNum }} / {{ pageCount }} 页 · 共 {{ total }} 条</span>
+      <span class="pager-text">第 {{ pageNum }} / {{ pageCount }} 页 · 共 {{ total }} 条</span>
       <button class="btn sm ghost" :disabled="pageNum >= pageCount" @click="turn(1)">下一页</button>
     </div>
   </div>
@@ -81,7 +81,8 @@ async function openChat(demand) {
 onMounted(load)
 </script>
 <style scoped>
-.demand-page { padding: 4px 0 24px }
-.pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 14px }
-.link { color: var(--indigo, #409eff); cursor: pointer }
+.demand-page { padding: 0 0 30px }
+.pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 16px }
+.pager-text { font-size: 12.5px; color: var(--ink-3); font-variant-numeric: tabular-nums }
+.link { color: var(--indigo); cursor: pointer }
 </style>

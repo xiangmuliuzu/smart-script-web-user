@@ -20,7 +20,7 @@
         <div><dt>任务编号</dt><dd>{{ demand.demandNo }}</dd></div>
         <div><dt>发布方</dt><dd>{{ demand.clientName || '-' }}</dd></div>
         <div><dt>接单截止</dt><dd>{{ dateText(demand.deadline) }}</dd></div>
-        <div><dt>总集数</dt><dd>{{ Number(demand.totalEpisodes) > 0 ? demand.totalEpisodes + ' 集 · 逐轮验收' : '未设定 · 整单时限 ' + (demand.durationHours || '-') + ' 小时' }}</dd></div>
+        <div><dt>总集数</dt><dd>{{ Number(demand.totalEpisodes) > 0 ? demand.totalEpisodes + ' 集 · 逐轮验收' : '未设定 · 整单时限 ' + formatHours(demand.durationHours) }}</dd></div>
         <div><dt>托管状态</dt><dd>{{ escrowStatusLabel(demand.escrowStatus) }}（{{ money(demand.escrowAmount) }}）</dd></div>
         <div><dt>我的押金</dt><dd>{{ depositStatusLabel(demand.depositStatus) }}<template v-if="Number(demand.depositAmount) > 0">（{{ money(demand.depositAmount) }}）</template></dd></div>
         <div v-if="isOwner"><dt>接单人</dt><dd>我 · {{ timeText(demand.acceptedAt) }} 接单</dd></div>
@@ -72,7 +72,7 @@ import { usePortal } from '../../utils/portal.js'
 import LoadState from '../../components/LoadState.vue'
 import PortalLayer from '../../components/PortalLayer.vue'
 import DemandStagePanel from '../../components/demand/DemandStagePanel.vue'
-import { demandStatusLabel, escrowStatusLabel, depositStatusLabel, money, dateText, timeText, genreLabel } from '../../utils/demand.js'
+import { demandStatusLabel, escrowStatusLabel, depositStatusLabel, money, dateText, timeText, genreLabel, formatHours } from '../../utils/demand.js'
 const { api, user, handleError } = usePortal()
 const route = useRoute()
 const demandId = computed(() => Number(route.params.id))
