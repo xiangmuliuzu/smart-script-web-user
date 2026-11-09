@@ -208,7 +208,10 @@
         <section class="rail-block">
           <span class="rail-label">积分</span>
           <p class="rail-quota">{{ quota === null ? '—' : quota }}</p>
-          <button class="rail-refresh" type="button" :disabled="running" @click="refreshQuota">刷新余额</button>
+          <div class="rail-actions">
+            <button class="rail-refresh" type="button" :disabled="running" @click="refreshQuota">刷新余额</button>
+            <button class="rail-refresh rail-recharge" type="button" @click="openRecharge">充值</button>
+          </div>
         </section>
         <section v-if="step === 3 && chapters.length" class="rail-block">
           <span class="rail-label">进度</span>
@@ -291,7 +294,7 @@ import '../../assets/styles/creation.css'
 // 已提交到后端的作品 / 章节：进入确认或生成后锁定，避免重复创建。
 const committedWorkId = ref(null)
 const committedChapters = computed(() => chapters.value.filter(chapter => chapter.chapterId))
-const { api, user, canCreate, handleError } = usePortal()
+const { api, user, canCreate, handleError, openPanel } = usePortal()
 // 换行常量：局部修订时拼正则用，避免手写转义。
 const LINE_BREAK = String.fromCharCode(10)
 const router = useRouter()
@@ -313,7 +316,10 @@ const loadSkills = () => skillPromise ||= (api.value.listAiSkills ? api.value.li
 const loadModels = () => modelPromise ||= (api.value.listAiModels ? api.value.listAiModels().then(rows => { modelChannels.value = rows || [] }, failure => { modelError.value = failure.message; return handleError(failure) }) : Promise.resolve())
 const modelOptions = computed(() => (modelChannels.value || []).flatMap(channel => (channel.models || []).map(model => ({ value: model, label: `${channel.channelName} · ${model}${model === channel.defaultModel ? '（默认）' : ''}` }))))
 const skillName = computed(() => (skills.value || []).find(skill => String(skill.id) === String(setup.skillId))?.skillName || '默认导演')
-const quotaText = computed(() => quota.value === null ? '剩余积分 —' : quota.value > 0 ? `剩余 ${quota.value} 积分` : '剩余 0 积分，请先在 App 福利中心获取')
+const quotaText = computed(() => quota.value === null ? '剩余积分 —' : quota.value > 0 ? `剩余 ${quota.value} 积分` : '剩余 0 积分，可充值或在 App 福利中心获取')
+// 充值面板与 AI 创作页是兄弟组件：打开后由充值成功事件触发刷新（与工作台 AI 助手一致）。
+function openRecharge() { openPanel?.('recharge') }
+function refreshAfterRecharge() { refreshQuota() }
 async function refreshQuota() {
   // 余额接口按 userId 查询（与工作台 AiStudio 一致），缺少用户时静默跳过。
   if (!api.value?.getAiQuota || !user.value?.userId) return
@@ -800,11 +806,15 @@ async function leavePage() { if (await allowNavigation()) router.push('/works') 
 onMounted(() => {
   refreshQuota()
   loadHistory({ silent: true })
+  window.addEventListener('recharge-success', refreshAfterRecharge)
   loadSkills()
   loadModels()
   window.addEventListener('beforeunload', protectUnload)
 })
-onBeforeUnmount(() => window.removeEventListener('beforeunload', protectUnload))
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', protectUnload)
+  window.removeEventListener('recharge-success', refreshAfterRecharge)
+})
 </script>
 <style scoped>
 .ai-studio { display: flex; flex-direction: column; height: calc(100dvh - 56px); background: var(--paper-3); caret-color: var(--cinnabar); }
@@ -956,6 +966,9 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', protectUnload))
 .rail-quota { margin: 6px 0 0; font-family: var(--serif); font-size: 42px; line-height: 1; color: #fff; font-variant-numeric: tabular-nums; }
 .rail-refresh { margin-top: 10px; padding: 3px 0; border: 0; border-bottom: 1px solid rgba(234, 240, 239, .5); background: none; color: #EAF0EF; font-size: 12px; }
 .rail-refresh:hover { border-bottom-color: #EAF0EF; }
+.rail-actions { display: flex; gap: 16px; }
+.rail-recharge { color: #D4A359; border-bottom-color: rgba(212, 163, 89, .6); }
+.rail-recharge:hover { border-bottom-color: #D4A359; }
 .rail-stats, .rail-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; margin: 10px 0 0; }
 .rail-stats dt, .rail-facts dt { font-size: 11.5px; color: rgba(234, 240, 239, .7); }
 .rail-stats dd, .rail-facts dd { margin: 3px 0 0; font-family: var(--serif); font-size: 16px; color: #fff; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
