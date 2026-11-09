@@ -267,12 +267,15 @@
                 <time>{{ dateText(record.createdAt) }}</time>
                 <span class="history-tokens">{{ record.tokens === null || record.tokens === undefined ? '—' : record.tokens + ' token' }}</span>
               </button>
-              <button v-if="!manageMode && record.type === 'outline' && parseAiCreateOutlineInput(record.input)" type="button" class="btn quiet sm history-continue" @click="continueSession(record)">继续这次创作</button>
             </div>
             <div v-if="!manageMode && historyExpanded.has(record.recordId)" class="history-detail">
               <template v-if="record.input"><h4>我的输入</h4><pre>{{ record.input }}</pre></template>
               <template v-if="record.output"><h4>AI 输出</h4><pre>{{ record.output }}</pre></template>
               <p v-if="!record.input && !record.output" class="cost">这条记录没有留存输入输出。</p>
+              <div v-if="record.type === 'outline' && parseAiCreateOutlineInput(record.input)" class="history-detail-actions">
+                <button class="btn sm" type="button" @click="continueSession(record)">继续这次创作</button>
+                <span class="cost">恢复这次的书名、灵感、大纲和之后生成的章节</span>
+              </div>
             </div>
           </li>
         </ol>
@@ -1023,9 +1026,9 @@ onBeforeUnmount(() => {
 :global(.btn.danger) { background: var(--cinnabar); border-color: var(--cinnabar); color: #fff; }
 :global(.btn.danger:hover) { opacity: .88; }
 :global(.history-entry) { position: relative; }
-:global(.history-continue) { position: absolute; right: 2px; bottom: 8px; }
 :global(.history-detail) { padding: 2px 2px 16px; }
 :global(.history-detail h4) { margin: 10px 0 6px; font-size: 11.5px; font-weight: 600; color: var(--ink-2); letter-spacing: .04em; }
+:global(.history-detail-actions) { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--rule); }
 :global(.history-detail pre) { margin: 0; max-height: 220px; overflow: auto; padding: 12px 14px; background: var(--paper); border: 1px solid var(--rule); font-family: var(--sans); font-size: 12.5px; line-height: 1.8; white-space: pre-wrap; word-break: break-word; color: var(--ink-2); scrollbar-width: thin; }
 
 @media (prefers-reduced-motion: reduce) {
