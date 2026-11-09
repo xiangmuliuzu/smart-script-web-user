@@ -22,17 +22,17 @@
     <div class="creation-columns">
       <aside class="creation-directory" aria-label="分集与资料"><DirectoryContents /></aside>
       <div class="creation-editor">
-        <div class="editor-location"><span>{{ section === 'summary' ? '作品资料 / 故事简介' : section === 'characters' ? '作品资料 / 人物便签' : '正文分集 / 第 ' + (activeChapter + 1) + ' 集' }}</span><span>{{ wordCount(currentText).toLocaleString() }} 字</span><div class="view-mode" role="group" aria-label="创作模式"><button type="button" :aria-pressed="!readOnly" :disabled="busy" @click="readOnly = false">编辑</button><button type="button" :aria-pressed="readOnly" :disabled="busy" @click="readOnly = true">阅读</button></div></div>
+        <div class="editor-location"><span>{{ section === 'summary' ? '作品资料 / 故事简介' : section === 'outline' ? '作品资料 / 剧本大纲' : section === 'characters' ? '作品资料 / 人物便签' : '正文分集 / 第 ' + (activeChapter + 1) + ' 集' }}</span><span>{{ wordCount(currentText).toLocaleString() }} 字</span><div class="view-mode" role="group" aria-label="创作模式"><button type="button" :aria-pressed="!readOnly" :disabled="busy" @click="readOnly = false">编辑</button><button type="button" :aria-pressed="readOnly" :disabled="busy" @click="readOnly = true">阅读</button></div></div>
         <div v-if="section === 'chapter'" class="chapter-trial-setting"><el-switch v-model="currentChapter.isFree" active-value="1" inactive-value="0" aria-label="设为试读章节（免费阅读）" :disabled="busy || !editable || readOnly" /><span>设为试读章节（免费阅读）</span><small>保存后请在作品详情发布章节，作品通过审核后读者可免费阅读</small></div>
         <ScriptEditor v-if="section === 'chapter'" ref="scriptEditor" :key="currentChapter.draftId" v-model="currentChapter.content" v-model:title="currentChapter.chapterTitle" :disabled="busy || !editable" :read-only="readOnly" />
-        <div v-else class="script-paper notes-paper"><h2>{{ section === 'summary' ? '故事简介' : '人物便签' }}</h2><p class="notes-description">{{ section === 'summary' ? '用一段话讲清人物、冲突与故事走向，保存时同步至作品简介。' : '记录人物关系、动机与成长线。人物便签仅保存在当前浏览器，可导出备份。' }}</p><textarea v-if="section === 'summary'" v-model="form.summary" aria-label="故事简介" :disabled="busy || !editable" :readonly="readOnly" placeholder="这个故事从谁开始，又将走向哪里？" /><textarea v-else v-model="characters" aria-label="人物便签" :disabled="busy || !editable" :readonly="readOnly" placeholder="姓名 / 身份 / 性格 / 人物关系…" /><button v-if="section === 'characters'" class="btn ghost sm" :disabled="!characters.trim()" @click="exportNotes()">导出人物便签</button><details v-if="section === 'characters' && noteBackups.length" class="notes-backups"><summary>已保存作品的便签存档</summary><button v-for="note in noteBackups" :key="note.title" @click="exportNotes(note.characters, note.title)">下载 · {{ note.title }}</button></details></div>
+        <div v-else class="script-paper notes-paper"><h2>{{ section === 'summary' ? '故事简介' : section === 'outline' ? '剧本大纲' : '人物便签' }}</h2><p class="notes-description">{{ section === 'summary' ? '用一段话讲清人物、冲突与故事走向，保存时同步至作品简介。' : section === 'outline' ? 'AI 剧本生成的每集事件卡会存到这里：可在此直接修改，再回到 AI 面板按这份大纲生成各章。大纲随保存草稿在本机存档。' : '记录人物关系、动机与成长线。人物便签仅保存在当前浏览器，可导出备份。' }}</p><textarea v-if="section === 'summary'" v-model="form.summary" aria-label="故事简介" :disabled="busy || !editable" :readonly="readOnly" placeholder="这个故事从谁开始，又将走向哪里？" /><textarea v-else-if="section === 'outline'" v-model="scriptOutline" class="outline-textarea" aria-label="剧本大纲" :disabled="busy || !editable" :readonly="readOnly" placeholder="AI 剧本生成的分集事件卡会出现在这里，也可以自己写一份骨架：第1集：事件名 / 本集事件 / 冲突与推进 / 结果或反转 / 结尾钩子" /><textarea v-else v-model="characters" aria-label="人物便签" :disabled="busy || !editable" :readonly="readOnly" placeholder="姓名 / 身份 / 性格 / 人物关系…" /><div v-if="section === 'outline'" class="row top-gap"><button class="btn ghost sm" :disabled="!scriptOutline.trim()" @click="copyOutline">复制大纲</button><button class="btn ghost sm" :disabled="busy || !editable || readOnly || !scriptOutline.trim()" @click="clearOutline">清空</button><button class="btn sm" style="margin-left:auto" :disabled="busy || !editable || readOnly || !scriptOutline.trim() || planningOutline || generatingChapters" @click="fillOutline(scriptOutline)">根据当前剧本大纲生成各章</button></div><button v-if="section === 'characters'" class="btn ghost sm" :disabled="!characters.trim()" @click="exportNotes()">导出人物便签</button><details v-if="section === 'characters' && noteBackups.length" class="notes-backups"><summary>已保存作品的便签存档</summary><button v-for="note in noteBackups" :key="note.title" @click="exportNotes(note.characters, note.title)">下载 · {{ note.title }}</button></details></div>
         <footer class="editor-footer"><span>{{ readOnly ? '阅读模式 · 内容不可编辑' : section === 'chapter' ? '格式随正文保存 · Ctrl+Z 撤销 · Ctrl+B 加粗' : '让故事的骨架更清晰' }}</span><span>共 {{ chapters.length }} 集 · {{ totalWords.toLocaleString() }} 字</span></footer>
       </div>
-      <aside class="creation-ai" aria-label="AI 编剧助手"><AiStudio v-if="!compactAi" :key="workspaceRevision" embedded :workspace-state="aiState" :insert-disabled="busy || !editable || readOnly" :current-content="currentChapter.content" :work-id="createdId" @insert="insertAi" @fill-outline="fillOutline" /></aside>
+      <aside class="creation-ai" aria-label="AI 编剧助手"><AiStudio v-if="!compactAi" :key="workspaceRevision" embedded :workspace-state="aiState" :insert-disabled="busy || !editable || readOnly" :current-content="currentChapter.content" :outline="scriptOutline" :work-id="createdId" @insert="insertAi" @fill-outline="fillOutline" @create-outline="applyOutline" /></aside>
     </div>
     <input ref="fileInput" class="sr-only creation-file-input" type="file" accept=".docx,.txt,.md" :disabled="busy || !editable || readOnly" @change="importFile($event.target.files[0]); $event.target.value = ''" />
     <PortalLayer v-model="directoryVisible" title="分集与资料" size="min(300px, 92vw)"><div class="creation-directory directory-drawer"><DirectoryContents /></div></PortalLayer>
-    <PortalLayer v-model="aiVisible" title="AI 编剧助手" size="min(370px, 96vw)"><div class="creation-ai ai-drawer"><AiStudio v-if="compactAi" :key="workspaceRevision" embedded :workspace-state="aiState" :insert-disabled="busy || !editable || readOnly" :current-content="currentChapter.content" :work-id="createdId" @insert="insertAi" @fill-outline="fillOutline" /></div></PortalLayer>
+    <PortalLayer v-model="aiVisible" title="AI 编剧助手" size="min(370px, 96vw)"><div class="creation-ai ai-drawer"><AiStudio v-if="compactAi" :key="workspaceRevision" embedded :workspace-state="aiState" :insert-disabled="busy || !editable || readOnly" :current-content="currentChapter.content" :outline="scriptOutline" :work-id="createdId" @insert="insertAi" @fill-outline="fillOutline" @create-outline="applyOutline" /></div></PortalLayer>
     <PortalLayer v-model="settingsVisible" title="作品设置" size="min(480px, 96vw)"><div class="panel-content"><label class="field">书名<input v-model="form.title" maxlength="100" :disabled="busy" /></label><label class="field">简介<textarea v-model="form.summary" :disabled="busy" /></label><p class="cost">封面可在保存草稿后的作品详情中补充。提交审核后，作品将在审核期间锁定编辑。</p><button class="btn sm" @click="settingsVisible = false">完成设置</button></div></PortalLayer>
   </section>
 </template>
@@ -40,7 +40,7 @@
 import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Document, User, Upload, Setting, Plus } from '@element-plus/icons-vue'
+import { Document, User, Upload, Setting, Plus, Notebook } from '@element-plus/icons-vue'
 import { usePortal } from '../../utils/portal.js'
 import { canEdit, validateWork, validateChapter, wordCount, outlineChapters, planOutlineChapters } from '../../utils/creator.js'
 import { readDraft } from '../../utils/draft.js'
@@ -58,6 +58,8 @@ const newChapter = number => ({ draftId: crypto.randomUUID(), chapterTitle: `第
 const sameChapter = (a, b) => a && b && a.chapterTitle === b.chapterTitle && a.content === b.content && a.isFree === b.isFree
 const chapters = ref([newChapter(1)])
 const characters = ref('')
+// 剧本大纲：AI 剧本生成的分集事件卡，与故事简介/人物便签并列，保存在本机并按作品区分。
+const scriptOutline = ref('')
 const noteBackups = ref([])
 const newAiState = () => ({ tab: 'outline', outlineIncomplete: false, form: { workId: '', genre: '', episodes: 12, prompt: '', content: '', style: '增强画面感', chapterTitle: '', skillId: '', script: '', sbStyle: '电影感' }, results: { outline: '', write: '', polish: '', storyboard: '' } })
 const aiState = reactive(newAiState())
@@ -66,7 +68,7 @@ const activeChapter = ref(0)
 const section = ref('chapter')
 const readOnly = ref(false)
 const currentChapter = computed(() => chapters.value[activeChapter.value])
-const currentText = computed(() => section.value === 'summary' ? form.summary : section.value === 'characters' ? characters.value : currentChapter.value.content)
+const currentText = computed(() => section.value === 'summary' ? form.summary : section.value === 'outline' ? scriptOutline.value : section.value === 'characters' ? characters.value : currentChapter.value.content)
 const totalWords = computed(() => chapters.value.reduce((count, chapter) => count + wordCount(chapter.content), 0))
 const works = ref([])
 const worksError = ref('')
@@ -101,9 +103,9 @@ let media
 let ready = false
 let disposed = false
 let normalizingRoute = false
-const snapshot = () => JSON.stringify({ form, chapters: chapters.value, characters: characters.value, createdId: createdId.value })
+const snapshot = () => JSON.stringify({ form, chapters: chapters.value, characters: characters.value, outline: scriptOutline.value, createdId: createdId.value })
 const workFields = (value = form) => JSON.stringify({ title: value.title, summary: value.summary || '' })
-const hasContent = () => Boolean(form.title || form.summary || characters.value || totalWords.value || createdId.value || chapters.value.length > 1 || chapters.value.some(chapter => chapter.isFree === '1'))
+const hasContent = () => Boolean(form.title || form.summary || characters.value || scriptOutline.value || totalWords.value || createdId.value || chapters.value.length > 1 || chapters.value.some(chapter => chapter.isFree === '1'))
 function cacheDraft() {
   clearTimeout(timer)
   if (!ready || completed || !editable.value) return
@@ -114,7 +116,7 @@ function cacheDraft() {
   }
   catch { storageFailed.value = true; draftStatus.value = '本机保存失败，请保存草稿' }
 }
-watch([form, chapters, characters, createdId], () => {
+watch([form, chapters, characters, scriptOutline, createdId], () => {
   if (!ready || completed) return
   draftStatus.value = '正在保存本机草稿…'
   clearTimeout(timer); timer = setTimeout(cacheDraft, 400)
@@ -123,7 +125,7 @@ watch([form, chapters, characters, createdId], () => {
 // 目录在桌面和抽屉中复用，业务状态仍由本页统一维护。
 const DirectoryContents = defineComponent({ setup() { return () => h('div', { class: 'directory-content' }, [
   h('div', { class: 'directory-info' }, [
-    ...[['summary', Document, '故事简介'], ['characters', User, '人物便签']].map(([value, icon, label]) => h('button', { class: { selected: section.value === value }, onClick: () => selectSection(value) }, [h(icon, { class: 'directory-icon' }), label]))
+    ...[['summary', Document, '故事简介'], ['outline', Notebook, '剧本大纲'], ['characters', User, '人物便签']].map(([value, icon, label]) => h('button', { class: { selected: section.value === value }, onClick: () => selectSection(value) }, [h(icon, { class: 'directory-icon' }), label]))
   ]),
   h('div', { class: 'directory-heading' }, [h('h2', '正文分集'), h('button', { title: '新建分集', 'aria-label': '新建分集', disabled: busy.value || !editable.value || readOnly.value, onClick: addChapter }, [h(Plus, { class: 'directory-icon' }), '新建'])]),
   h('nav', { class: 'episode-list', 'aria-label': '正文分集' }, chapters.value.map((chapter, index) => h('div', { key: chapter.draftId, class: ['episode-card', { selected: section.value === 'chapter' && activeChapter.value === index }] }, [
@@ -184,6 +186,29 @@ async function insertAi(content) {
   section.value = 'chapter'; await nextTick(); scriptEditor.value.appendText(content)
   aiVisible.value = false; ElMessage.success('已插入当前分集末尾')
 }
+// AI 剧本结果写入左侧「剧本大纲」，用户可在此统一修改，再按大纲生成各章。
+async function applyOutline(content) {
+  if (busy.value || !editable.value || readOnly.value) return
+  const text = (content || '').trim()
+  if (!text) return
+  if (scriptOutline.value.trim() && scriptOutline.value.trim() !== text) {
+    try { await ElMessageBox.confirm('剧本大纲里已有内容，用本次 AI 生成的大纲覆盖它吗？', '创建剧本大纲', { confirmButtonText: '覆盖', cancelButtonText: '取消' }) } catch { return }
+  }
+  scriptOutline.value = text
+  section.value = 'outline'
+  aiVisible.value = false
+  cacheDraft()
+  ElMessage.success('已创建剧本大纲，可在左侧修改后再生成各章')
+}
+async function copyOutline() {
+  try { await navigator.clipboard.writeText(scriptOutline.value); ElMessage.success('已复制剧本大纲') }
+  catch { ElMessage.warning('复制失败，请手动选择文本复制') }
+}
+async function clearOutline() {
+  if (busy.value || !editable.value || readOnly.value) return
+  try { await ElMessageBox.confirm('清空剧本大纲？此操作不可撤销。', '清空剧本大纲', { confirmButtonText: '清空', cancelButtonText: '取消' }) } catch { return }
+  scriptOutline.value = ''; cacheDraft()
+}
 async function fillOutline(outline) {
   if (busy.value || !editable.value || readOnly.value) return
   const items = outlineChapters(outline)
@@ -204,7 +229,7 @@ async function fillOutline(outline) {
   const plan = planOutlineChapters(items, chapters.value)
   const pending = plan.filter(item => item.action === 'fill' || item.action === 'create')
   const preview = h('div', { style: 'max-height: 45vh; overflow-y: auto; white-space: pre-wrap' }, [
-    h('p', `请核对识别结果及章节序号。将生成 ${pending.length} 章，每次生成消耗一次 AI 次数；遇到字数上限时可确认后续写。生成后请检查并保存草稿。`),
+    h('p', `请核对识别结果及章节序号。将生成 ${pending.length} 章，每章按实际 token 扣除积分；单章超出字数上限时可确认续写。生成后请检查并保存草稿。`),
     h('p', '纯编号格式可能与剧情列表混淆，请逐项核对。'),
     ...plan.map(item => h('p', `${item.title}：${item.action === 'conflict' ? '冲突，跳过' : item.action === 'skip' ? '跳过' : item.action === 'fill' ? '填充' : '新建'} — ${item.reason}`))
   ])
@@ -216,7 +241,7 @@ async function fillOutline(outline) {
   try {
     for (const item of pending) {
       draftStatus.value = `正在生成 ${completedCount + 1}/${pending.length}：${item.title}`
-      const prompt = `请根据以下完整大纲，为“${item.title}”创作正文，只写这一章。\n完整大纲：\n${outline}\n本章剧情概要：\n${item.summary}`
+      const prompt = `请把下面这集写成一集完整剧本（700-900 字，以动作和对白推进，对白用“角色：台词”；开头一句自然交代地点和时间，不要写场景头、镜号、景别、运镜；结尾留一个具体钩子）。只写这一集。\n集名：${item.title}\n全剧事件卡：\n${outline}\n本集事件卡：\n${item.summary}`
       let output = await api.value.generateStream('write', { prompt, workId: createdId.value || undefined, type: 'script' }, () => {})
       if (disposed) return
       let chapter = item.chapter
@@ -234,13 +259,13 @@ async function fillOutline(outline) {
         if (storageFailed.value) throw new Error('本机草稿保存失败，请先保存已生成内容')
         if (!output.truncated) break
         try {
-          await ElMessageBox.confirm(`「${item.title}」达到单次生成长度上限，已有内容已保存在本机。续写会额外消耗一次 AI 次数，是否继续？`, '章节需要续写', { confirmButtonText: '续写本章', cancelButtonText: '暂时停止' })
+          await ElMessageBox.confirm(`「${item.title}」达到单次生成长度上限，已有内容已保存在本机。续写会再按实际 token 扣一次积分，是否继续？`, '章节需要续写', { confirmButtonText: '续写本章', cancelButtonText: '暂时停止' })
         } catch {
           error.value = `「${item.title}」尚未写完，已保留已生成的内容；后续章节尚未生成。`
           return
         }
         draftStatus.value = `正在续写：${item.title}`
-        const continuation = `请根据大纲和本章概要，从已有正文的末尾接着写完“${item.title}”。不要重复已有正文，不要写其他章节。\n完整大纲：\n${outline}\n本章概要：\n${item.summary}\n已有正文末尾：\n${generated.slice(-8000)}`
+        const continuation = `请从已有正文末尾接着写完“${item.title}”这一集剧本，保持动作与对白推进，不要重复已有正文、不要写场景头或镜头术语。\n全剧事件卡：\n${outline}\n本集事件卡：\n${item.summary}\n已有正文末尾：\n${generated.slice(-8000)}`
         output = await api.value.generateStream('write', { prompt: continuation, workId: createdId.value || undefined, type: 'script' }, () => {})
         if (disposed) return
         generated += output.content
@@ -323,6 +348,10 @@ async function save(submit) {
       try { storage.setItem(draftBase + ':notes:' + createdId.value, JSON.stringify({ title: form.title, characters: characters.value })) }
       catch { cacheDraft(); storageFailed.value = true; ElMessage.warning('作品已保存，人物便签未能在本机存档，请先导出便签'); return }
     }
+    try {
+      if (scriptOutline.value) storage.setItem(draftBase + ':outline:' + createdId.value, scriptOutline.value)
+      else storage.removeItem(draftBase + ':outline:' + createdId.value)
+    } catch { cacheDraft(); storageFailed.value = true; ElMessage.warning('作品已保存，剧本大纲未能在本机存档，请先复制大纲'); return }
     savedSnapshot = snapshot(); cacheDraft(); draftStatus.value = '作品已保存'
     ElMessage.success(submit ? '已提交内容审核' : '草稿已保存至作品')
     completed = true; storage.removeItem(draftKey); await goWork(createdId.value)
@@ -356,6 +385,7 @@ function restoreDraft(draft) {
   }
   chapters.value = draft.chapters.map((chapter, index) => ({ ...chapter, isFree: String(chapter.isFree ?? originalChapters.get(Number(chapter.chapterId))?.isFree ?? '0'), chapterTitle: !createdId.value && index === 0 && chapter.chapterTitle === '第一集' ? '第 1 集' : chapter.chapterTitle, draftId: crypto.randomUUID() }))
   characters.value = typeof draft.characters === 'string' ? draft.characters : ''
+  scriptOutline.value = typeof draft.outline === 'string' ? draft.outline : ''
   draftStatus.value = '已恢复本机草稿'
 }
 async function loadWorkspace() {
@@ -363,7 +393,7 @@ async function loadWorkspace() {
   loadedWork.value = null; createdId.value = null; originalChapters = new Map(); activeChapter.value = 0; section.value = 'chapter'
   directoryVisible.value = false; aiVisible.value = false; settingsVisible.value = false
   Object.assign(form, { title: '', summary: '', scriptUrl: '', scriptName: '', scriptSize: 0 })
-  chapters.value = [newChapter(1)]; characters.value = ''; Object.assign(aiState, newAiState()); workspaceRevision.value++
+  chapters.value = [newChapter(1)]; characters.value = ''; scriptOutline.value = ''; Object.assign(aiState, newAiState()); workspaceRevision.value++
   try {
     const legacy = !route.query.workId ? cachedDraft(draftBase) : null
     const rawId = route.query.workId || legacy?.createdId
@@ -379,6 +409,7 @@ async function loadWorkspace() {
       chapters.value = remote.length ? remote : [newChapter(1)]
       originalChapters = new Map(remote.map(chapter => [chapter.chapterId, { chapterTitle: chapter.chapterTitle, content: chapter.content, isFree: chapter.isFree }]))
       try { characters.value = JSON.parse(storage.getItem(draftBase + ':notes:' + id) || 'null')?.characters || '' } catch { /* 损坏的便签不影响正文。 */ }
+      try { scriptOutline.value = storage.getItem(draftBase + ':outline:' + id) || '' } catch { /* 损坏的大纲存档不影响正文。 */ }
     }
     savedSnapshot = snapshot(); originalWorkFields = workFields(); draftStatus.value = id ? '作品已加载' : '草稿尚未保存'
     const draft = (legacy && Number(legacy.createdId) === id ? legacy : null) || cachedDraft(draftKey)
