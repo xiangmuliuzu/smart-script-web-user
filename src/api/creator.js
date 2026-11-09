@@ -195,6 +195,12 @@ export const getAiQuota = async userId => {
   const result = await data(`/api/v1/welfare/points/balance?userId=${encodeURIComponent(userId)}`)
   return { available: Number(result.balance) || 0 }
 }
+// ──── E 模块：积分充值（金额↔积分换算、模拟支付入账；真实微信/支付宝由支付组接入） ────
+// 换算比例、档位、金额区间全部由后端返回，前端不写死。
+export const getRechargeConfig = userId => data(`/api/v1/welfare/recharge/config?userId=${encodeURIComponent(userId)}`)
+export const createRechargeOrder = ({ userId, yuan, channel }) => data('/api/v1/welfare/recharge/order', { method: 'POST', body: { userId, yuan, channel } })
+export const mockPayRecharge = ({ userId, orderNo }) => data('/api/v1/welfare/recharge/mock-pay', { method: 'POST', body: { userId, orderNo } })
+export const listRechargeOrders = (userId, limit = 20) => data(`/api/v1/welfare/recharge/orders?userId=${encodeURIComponent(userId)}&limit=${encodeURIComponent(limit)}`)
 // 创作者端=卖方门户：交易通知只取 SELLER/BOTH（及无受众的通用通知），买方视角通知（如询盘已被接受）不进此端。
 export const listMessages = async () => asList(await data('/api/v1/messages' + qs({ pageSize: 100, portalRole: 'SELLER' }))).map(item => ({ ...item, isRead: item.read, content: item.summary, createTime: item.createdAt }))
 export const getMessage = id => data(`/api/v1/messages/${encodeURIComponent(id)}`)
