@@ -2,7 +2,7 @@
   <section class="sec" :class="{ 'ai-embedded': embedded }"><div v-if="embedded" class="ai-panel-head"><h2><span>✦</span> AI 编剧助手<button class="ai-recharge" type="button" @click="openRecharge">充值</button></h2><span class="ai-quota" :class="{ 'ai-quota-empty': quota === 0 }">{{ quotaText }}</span></div><div v-else class="sub-head"><h3>AI 辅助创作</h3><span class="count">让灵感成为下一幕</span></div>
     <PortalTabs v-model="tab" :items="tabs" :drawer="embedded" label="AI 创作工具" />
     <div v-if="tab !== 'log'" class="compose">
-      <form class="compose-form" @submit.prevent="generate"><h3>{{ tabHeading }}</h3>
+      <form class="compose-form" @submit.prevent="generate()"><h3>{{ tabHeading }}</h3>
         <label class="field">导演(skill)<select aria-label="导演(skill)" v-model="form.skillId" :disabled="generating"><option value="">默认导演</option><option v-for="skill in visibleSkills" :key="skill.id" :value="skill.id">{{ skill.skillName }}</option></select></label>
         <label class="field">模型<select aria-label="模型" v-model="form.model" :disabled="generating"><option value="">默认模型</option><option v-for="opt in modelOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option></select></label>
         <label v-if="!embedded" class="field">作品<select aria-label="作品" v-model="form.workId" :disabled="generating"><option value="">选择作品（选填）</option><option v-for="work in works" :key="work.workId" :value="work.workId" :disabled="work.status === 'reviewing'">{{ work.title }}（{{ stateOf(work.status).label }}）</option></select></label>
@@ -12,7 +12,18 @@
         <template v-else><button v-if="embedded" class="text-button ai-read-current" type="button" :disabled="generating || !currentContent.trim()" @click="form.content = documentText(currentContent)">读取当前分集正文</button><label class="field">要润色的原文<textarea v-model="form.content" placeholder="粘贴需要润色的片段" /></label><label class="field">润色方向<select v-model="form.style"><option>增强画面感</option><option>精简啰嗦</option><option>加强情绪</option></select></label></template>
         <p v-if="error" class="note bad" role="alert">{{ error }}</p><button class="btn" :disabled="generating || !canCreate">{{ generating ? '正在生成…' : tab === 'outline' ? '生成剧本大纲' : tab === 'write' ? '生成正文' : tab === 'storyboard' ? '生成分镜' : '开始润色' }}</button><p class="cost">生成结果和积分消耗以服务端返回为准</p>
       </form>
-      <div class="compose-out"><h3>{{ tab === 'polish' ? '润色结果' : '生成结果' }}</h3><div class="ai-scroll"><p v-if="generating && result" class="cost" role="status">正在生成，内容持续更新…</p><div v-if="result" class="prose ai-result">{{ displayResult }}</div><LoadState v-else :pending="generating" :empty="!generating" empty-text="写下你的想法，故事将在这里展开。" /><div v-if="result" class="row top-gap"><button v-if="embedded && tab === 'outline'" class="btn sm" :disabled="generating || insertDisabled || outlineIncomplete" @click="$emit('fill-outline', displayResult)">按大纲生成各章</button><button v-if="embedded" class="btn sm" :disabled="generating || insertDisabled" @click="$emit('insert', displayResult)">插入正文</button><button v-else class="btn sm" :disabled="generating || copying" @click="adopt">{{ tab === 'outline' ? '采用' : '写入章节' }}</button><button class="btn quiet sm" :disabled="generating || insertDisabled" @click="generate">重新生成</button><button v-if="embedded" class="btn quiet sm" :disabled="copying" @click="copyResult">复制</button><button v-else class="btn quiet sm" :disabled="generating" @click="results[tab] = ''">丢弃</button></div><p v-if="result && !form.workId && !embedded" class="cost">未选择作品时，采用会将内容复制到剪贴板。</p><p v-if="embedded && result" class="cost">插入会追加到当前分集，保留原文。按大纲生成仅填充空章节，每章消耗一次 AI 次数。</p></div></div>
+      <div class="compose-out"><h3>{{ tab === 'polish' ? '润色结果' : '生成结果' }}</h3><div class="ai-scroll"><p v-if="generating && result" class="cost" role="status">正在生成，内容持续更新…</p><div v-if="result" class="prose ai-result">{{ displayResult }}</div><LoadState v-else :pending="generating" :empty="!generating" empty-text="写下你的想法，故事将在这里展开。" /><div v-if="result" class="row top-gap">
+          <button v-if="embedded && tab === 'outline'" class="btn sm" :disabled="generating || insertDisabled || outlineIncomplete" @click="chooseFillOutline">按大纲生成各章</button>
+          <button v-if="embedded && tab === 'outline'" class="btn sm" :disabled="generating || insertDisabled" @click="$emit('create-outline', displayResult)">创建剧本大纲</button>
+          <button v-else-if="embedded" class="btn sm" :disabled="generating || insertDisabled" @click="$emit('insert', displayResult)">插入正文</button>
+          <button v-else class="btn sm" :disabled="generating || copying" @click="adopt">{{ tab === 'outline' ? '采用' : '写入章节' }}</button>
+          <button class="btn quiet sm" :disabled="generating || insertDisabled" @click="regenerate">重新生成</button>
+          <button v-if="embedded" class="btn quiet sm" :disabled="copying" @click="copyResult">复制</button>
+          <button v-else class="btn quiet sm" :disabled="generating" @click="results[tab] = ''">丢弃</button>
+        </div>
+        <p v-if="result && !form.workId && !embedded" class="cost">未选择作品时，采用会将内容复制到剪贴板。</p>
+        <p v-if="embedded && result && tab === 'outline'" class="cost">「创建剧本大纲」会把结果存到左侧「剧本大纲」，可直接修改后再按大纲生成各章。「按大纲生成各章」可选用当前输出或已保存的剧本大纲，仅填充空章节，每章按实际 token 扣除积分。</p>
+        <p v-else-if="embedded && result" class="cost">插入会追加到当前分集，保留原文。重新生成可选择完整重写，或带着当前结果提意见再生成。</p></div></div>
     </div>
     <div v-else class="top-gap"><LoadState :pending="recordLoading" :error="recordError" :retry="loadRecords" :empty="!recordLoading && !recordError && !records.length" /><div v-if="embedded && records.length && !recordError" class="ai-records"><article v-for="record in records" :key="record.recordId" :class="{ open: expanded.has(record.recordId) }"><button class="ai-record-row" type="button" @click="toggleRecord(record.recordId)"><b>{{ typeLabels[record.type] || record.type || 'AI 创作' }}</b><span>{{ record.tokens ?? '—' }} token</span><p>{{ record.title || '独立创作' }}</p><small>{{ dateText(record.createdAt || record.createTime) }}</small></button><div v-if="expanded.has(record.recordId)" class="ai-record-detail"><div v-if="record.input"><h4>我的输入</h4><pre>{{ record.input }}</pre></div><div v-if="record.output"><h4>AI 输出</h4><pre>{{ record.output }}</pre></div><p v-else-if="record.type === 'outline'" class="note">大纲请求未留存内容，请生成后及时保存。</p></div></article></div><div v-else-if="records.length && !recordError" class="tbl"><table><thead><tr><th>时间</th><th>类型</th><th>作品 / 章节</th><th class="num">消耗</th></tr></thead><tbody><tr v-for="record in records" :key="record.recordId"><td>{{ dateText(record.createTime || record.createdAt) }}</td><td>{{ typeLabels[record.type] || record.type || 'AI 创作' }}</td><td>{{ record.workTitle || record.title || '—' }}</td><td>{{ record.tokens ?? '—' }} token</td></tr></tbody></table></div></div>
     <ChapterEditor v-if="editorVisible" v-model="editorVisible" :work-id="form.workId" :chapter-no="nextChapterNo" :initial-content="adopted" />
@@ -27,8 +38,8 @@ import { documentText } from '../../utils/document.js'
 import PortalTabs from '../../components/PortalTabs.vue'
 import LoadState from '../../components/LoadState.vue'
 import ChapterEditor from '../../components/ChapterEditor.vue'
-const props = defineProps({ works: Array, embedded: Boolean, workId: [Number, String], currentContent: { type: String, default: '' }, insertDisabled: Boolean, workspaceState: Object })
-defineEmits(['insert', 'fill-outline'])
+const props = defineProps({ works: Array, embedded: Boolean, workId: [Number, String], currentContent: { type: String, default: '' }, outline: { type: String, default: '' }, insertDisabled: Boolean, workspaceState: Object })
+const emit = defineEmits(['insert', 'fill-outline', 'create-outline'])
 const { api, user, canCreate, handleError, openPanel } = usePortal()
 const quota = ref(null)
 // 余额只展示真实积分数；不足时不再引导到手机端（PC 已提供充值入口）。
@@ -127,13 +138,15 @@ function toggleRecord(id) {
 const editorVisible = ref(false)
 const adopted = ref('')
 const nextChapterNo = ref(1)
-async function generate() {
+async function generate(feedback = '') {
   if (generating.value || props.insertDisabled || !canCreate.value) return
   const type = tab.value
   error.value = ''
   // 去次数化：不再前端拦截次数，直接调用，积分是否足够由后端校验（不足返回积分不足提示）。
+  const previous = (results[type] || '').trim()
+  if (feedback && !previous) { error.value = '当前没有可修改的生成结果，请先完整生成一次'; return }
   const required = type === 'polish' ? form.content : type === 'storyboard' ? form.script : form.prompt
-  if (!(required || '').trim()) { error.value = type === 'polish' ? '请输入要润色的原文' : type === 'storyboard' ? '请输入剧本文本' : '请输入创作要求'; return }
+  if (!feedback && !(required || '').trim()) { error.value = type === 'polish' ? '请输入要润色的原文' : type === 'storyboard' ? '请输入剧本文本' : '请输入创作要求'; return }
   if (type === 'outline' && (!Number.isInteger(Number(form.episodes)) || Number(form.episodes) < 1 || Number(form.episodes) > 200)) { error.value = '集数需为 1–200 的整数'; return }
   generating.value = true
   results[type] = ''
@@ -141,7 +154,30 @@ async function generate() {
   try {
     const skillId = form.skillId || undefined
     const model = form.model || undefined
-    const body = type === 'outline' ? { inspiration: `${form.prompt}\n请提供 ${form.episodes} 个分集，每集单独一行标题，格式为“第1集：章节名称”，下一行写该集剧情概要。`, genre: form.genre, style: `共 ${form.episodes} 集`, workId: form.workId || undefined, skillId, model } : type === 'polish' ? { content: documentText(form.content), style: form.style, skillId, model } : type === 'storyboard' ? { script: documentText(form.script), style: form.sbStyle, workId: form.workId || undefined, skillId, model } : { prompt: `${form.chapterTitle}\n${props.embedded && props.currentContent ? '已有正文：\n' + documentText(props.currentContent) + '\n续写要求：\n' : ''}${form.prompt}`, workId: form.workId || undefined, type: 'script', skillId, model }
+    const episodeFormat = `请按下面格式写 ${form.episodes} 集分集事件卡，从第1集起连续编号：\n第1集：事件名\n本集事件：……\n冲突与推进：……\n结果或反转：……\n结尾钩子：……\n每集是一件完整的事（有开场、交锋、结果），结尾钩子要具体；不要写场景头、镜号、景别、运镜。`
+    let body
+    if (type === 'outline') {
+      // 提意见重生成：带着上一版大纲和修改意见，让模型在原稿上改，而不是从零重写。
+      const inspiration = feedback
+        ? `${form.prompt}\n上一版大纲（大体满意，请在保留整体结构与事件走向的前提下按修改意见调整）：\n${previous.slice(0, 12000)}\n修改意见：${feedback}\n${episodeFormat}`
+        : `${form.prompt}\n${episodeFormat}`
+      body = { inspiration, genre: form.genre, style: `共 ${form.episodes} 集`, workId: form.workId || undefined, skillId, model }
+    } else if (type === 'polish') {
+      const source = documentText(form.content) || previous
+      body = feedback
+        ? { content: `原文：\n${source}\n上一版润色结果：\n${previous}\n修改意见：${feedback}\n请在上一版基础上按修改意见继续调整，输出修改后的完整文本。`, style: form.style, skillId, model }
+        : { content: source, style: form.style, skillId, model }
+    } else if (type === 'storyboard') {
+      const script = documentText(form.script)
+      body = feedback
+        ? { script: `剧本文本：\n${script}\n上一版分镜：\n${previous}\n修改意见：${feedback}\n请按修改意见重写分镜，保持场次与镜号结构，保留景别/运镜/时长/画面/台词/音效转场。`, style: form.sbStyle, workId: form.workId || undefined, skillId, model }
+        : { script, style: form.sbStyle, workId: form.workId || undefined, skillId, model }
+    } else {
+      const prompt = feedback
+        ? `${form.chapterTitle}\n上一版正文：\n${previous}\n修改意见：${feedback}\n请在上一版基础上按修改意见改写，保持动作与对白推进、700-900 字，只写这一集，结尾留具体钩子。`
+        : `${form.chapterTitle}\n${props.embedded && props.currentContent ? '已有正文：\n' + documentText(props.currentContent) + '\n续写要求：\n' : ''}${form.prompt}`
+      body = { prompt, workId: form.workId || undefined, type: 'script', skillId, model }
+    }
     // 流式生成：delta 逐块追加，实现打字机式实时输出。
     if (api.value.generateStream) {
       const response = await api.value.generateStream(type, body, delta => { results[type] += delta })
@@ -166,6 +202,38 @@ async function generate() {
     }
   } catch (failure) { error.value = failure.message; if (failure.message && failure.message.includes('积分不足')) await promptExchange(); else await handleError(failure) }
   finally { generating.value = false; await loadQuota() }
+}
+// 「重新生成」两个入口：完整重写，或带着当前结果提意见再生成。
+async function regenerate() {
+  if (generating.value || props.insertDisabled) return
+  let feedbackMode = false
+  try {
+    await ElMessageBox.confirm('重新生成会覆盖当前结果。选择生成方式：', '重新生成', { confirmButtonText: '完整重新生成', cancelButtonText: '提意见重新生成', distinguishCancelAndClose: true })
+  } catch (action) {
+    if (action === 'cancel') feedbackMode = true
+    else return
+  }
+  if (!feedbackMode) { await generate(); return }
+  let feedback = ''
+  try {
+    const result = await ElMessageBox.prompt('写下修改意见，会和当前生成结果一起提交给 AI：', '提意见重新生成', { confirmButtonText: '按意见重新生成', cancelButtonText: '取消', inputType: 'textarea', inputPlaceholder: '例如：第 3 集冲突不够，人物动机要更明确…', inputValidator: value => (value || '').trim().length >= 2 || '请至少写 2 个字' })
+    feedback = (result.value || '').trim()
+  } catch { return }
+  if (!feedback) return
+  await generate(feedback)
+}
+// 「按大纲生成各章」两个来源：本次 AI 输出，或左侧保存并修改过的剧本大纲。
+async function chooseFillOutline() {
+  const saved = (props.outline || '').trim()
+  if (!saved) { emit('fill-outline', displayResult.value); return }
+  let source = displayResult.value
+  try {
+    await ElMessageBox.confirm('用哪一份大纲生成各章？「剧本大纲」是左侧保存、可修改的版本；「当前输出」是本次 AI 生成的结果。', '按大纲生成各章', { confirmButtonText: '用当前输出', cancelButtonText: '用剧本大纲', distinguishCancelAndClose: true })
+  } catch (action) {
+    if (action === 'cancel') source = saved
+    else return
+  }
+  emit('fill-outline', source)
 }
 async function adopt() {
   if (!result.value || copying.value) return
@@ -198,7 +266,7 @@ watch(tab, value => {
 watch(() => props.insertDisabled, (disabled, previous) => { if (previous && !disabled) loadQuota() })
 watch(() => props.workId, value => { if (props.embedded) form.workId = value || '' }, { immediate: true })
 watch(user, value => { if (value?.userId) loadQuota() }, { immediate: true })
-// 次数余额实时刷新：组件常驻时 onMounted 只执行一次，补上页面切回/窗口聚焦时的重取。
+// 积分余额实时刷新：组件常驻时 onMounted 只执行一次，补上页面切回/窗口聚焦时的重取。
 function refreshQuotaWhenVisible() {
   if (document.visibilityState === 'visible') loadQuota()
 }

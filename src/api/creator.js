@@ -90,7 +90,7 @@ export const listAiModels = async () => asList(await data('/api/v1/content/ai/mo
 // ──── AI 流式生成（SSE，逐块回调 delta）────
 // 协议与后端 AppAiController 一致：data:{"delta":"..."} 逐块下发，
 // data:{"done":true,...} 结束；event:error + data:{"code","message"} 失败。
-// 流成功结束才由服务端落记录、扣次数；失败不落库不扣次。
+// 流成功结束才由服务端落记录、按实际 token 扣积分；失败不落库不扣积分。
 const STREAM_BASE = import.meta.env?.VITE_APP_BASE_API || '/dev-api'
 export async function generateStream(type, form, onDelta) {
   const token = getToken()
@@ -98,7 +98,7 @@ export async function generateStream(type, form, onDelta) {
   if (form !== undefined) headers['Content-Type'] = 'application/json'
   if (token) headers.Authorization = 'Bearer ' + token
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 120000)
+  const timer = setTimeout(() => controller.abort(), 600000)
   try {
     const response = await fetch(STREAM_BASE + '/api/v1/content/ai/' + type + '/stream', {
       method: 'POST',
@@ -145,7 +145,10 @@ export async function generateStream(type, form, onDelta) {
     }
     if (!done) throw new Error('生成中断，已保留收到的内容，请重试')
     if (!delta.trim()) throw new Error('本次未返回生成内容，请重试')
-    return type === 'outline' ? { outline: delta, ...done } : { content: delta, ...done }
+    // 大纲分段/分批生成时，以 done 下发的规整全文为准（逐块 delta 可能在集号处缺少换行）；
+    // 其余类型仍用 delta 拼接。
+    if (type === 'outline') return { outline: (done.content || delta), ...done }
+    return { content: delta, ...done }
   } finally {
     clearTimeout(timer)
   }
@@ -261,6 +264,15 @@ export const uploadDelivery = (id, body) =>
   data(deliveryBase + '/' + encodeURIComponent(id) + '/upload', { method: 'POST', body })
 export const confirmDelivery = id =>
   data(deliveryBase + '/' + encodeURIComponent(id) + '/confirm', { method: 'POST' })
+
+// ──── 购买获得的版权材料（与 App/企业端共用 /api/v1/trade/copyright；确认收货后的交割 cert） ────
+const buyerCopyrightBase = '/api/v1/trade/copyright'
+export async function listBuyerCopyrights(params = {}) {
+  const result = await data(buyerCopyrightBase + '/list' + qs({ pageNum: 1, pageSize: 50, ...params }))
+  return { total: Number(result?.total || 0), list: asList(result) }
+}
+export const getBuyerCopyright = fileId =>
+  data(buyerCopyrightBase + '/' + encodeURIComponent(fileId))
 
 // ──── C 交易域：合同（签署前置实名认证由后端校验） ────
 export const listContracts = params => data('/api/v1/trade/contracts/list?' + new URLSearchParams(Object.fromEntries(Object.entries(params || {}).filter(([, v]) => v != null && v !== ''))).toString())
