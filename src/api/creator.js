@@ -262,6 +262,15 @@ export const uploadDelivery = (id, body) =>
 export const confirmDelivery = id =>
   data(deliveryBase + '/' + encodeURIComponent(id) + '/confirm', { method: 'POST' })
 
+// ──── 购买获得的版权材料（与 App/企业端共用 /api/v1/trade/copyright；确认收货后的交割 cert） ────
+const buyerCopyrightBase = '/api/v1/trade/copyright'
+export async function listBuyerCopyrights(params = {}) {
+  const result = await data(buyerCopyrightBase + '/list' + qs({ pageNum: 1, pageSize: 50, ...params }))
+  return { total: Number(result?.total || 0), list: asList(result) }
+}
+export const getBuyerCopyright = fileId =>
+  data(buyerCopyrightBase + '/' + encodeURIComponent(fileId))
+
 // ──── C 交易域：合同（签署前置实名认证由后端校验） ────
 export const listContracts = params => data('/api/v1/trade/contracts/list?' + new URLSearchParams(Object.fromEntries(Object.entries(params || {}).filter(([, v]) => v != null && v !== ''))).toString())
 export const getContractByOrder = orderId => data(`/api/v1/trade/contracts/${encodeURIComponent(orderId)}`)
