@@ -97,3 +97,26 @@ test('AI records rebuild the setup and chapters of a previous AI creation sessio
   assert.equal(buildAiCreateSession(records).chapters.length, 2)
   assert.equal(buildAiCreateSession([{ recordId: 1, type: 'write', input: 'x', output: 'y' }]), null)
 })
+
+test('AI records merge one outline with its own chapters into a single entry', async () => {
+  const { groupAiCreateRecords, AI_CREATE_MARK } = await import('../src/utils/creatorAi.js')
+  const NL = String.fromCharCode(10)
+  const outlineInput = ['灵感：书名：深夜频率', '故事灵感：深夜电台主播', '请提供 8 个分集'].join(NL)
+  const records = [
+    { recordId: 9, type: 'write', title: '深夜频率', tokens: 2, input: AI_CREATE_MARK + ' 请根据以下完整大纲，为“第二集 · 迟到的信”创作正文，只写这一章。', output: AI_CREATE_MARK + ' 第二集正文', createdAt: '2026-11-09 10:05' },
+    { recordId: 8, type: 'write', title: '深夜频率', tokens: 2, input: AI_CREATE_MARK + ' 请根据以下完整大纲，为“第一集 · 深夜频率”创作正文，只写这一章。', output: AI_CREATE_MARK + ' 第一集正文', createdAt: '2026-11-09 10:04' },
+    { recordId: 7, type: 'outline', title: '深夜频率', tokens: 3, input: outlineInput, output: '第一集：深夜频率', createdAt: '2026-11-09 10:03' },
+    // 工作台里生成的正文没有标记，不能被并进来。
+    { recordId: 6, type: 'write', title: '深夜频率', tokens: 1, input: '请根据以下完整大纲，为“别处的一章”创作正文，只写这一章。', output: '别处正文', createdAt: '2026-11-09 10:02' },
+    { recordId: 5, type: 'polish', title: '独立创作', tokens: 1, input: '原文', output: '润色', createdAt: '2026-11-09 10:01' }
+  ]
+  const groups = groupAiCreateRecords(records)
+  assert.equal(groups.length, 3)
+  assert.equal(groups[0].kind, 'session')
+  assert.equal(groups[0].tokens, 7)
+  assert.deepEqual(groups[0].chapters.map(chapter => [chapter.title, chapter.content]), [['第一集 · 深夜频率', '第一集正文'], ['第二集 · 迟到的信', '第二集正文']])
+  assert.deepEqual(groups[0].tokenRecords.map(item => item.recordId), [7, 8, 9])
+  assert.equal(groups[1].kind, 'single')
+  assert.equal(groups[1].record.recordId, 6)
+  assert.equal(groups[2].record.type, 'polish')
+})

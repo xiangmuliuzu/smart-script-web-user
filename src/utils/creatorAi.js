@@ -189,3 +189,50 @@ export function buildAiCreateSession(records, outlineRecord = null) {
   const recovered = chapters.map((chapter, index) => ({ title: chapter.title, content: chapter.content, chapterId: index === 0 && outline.recordId != null ? Number(outline.recordId) : null }))
   return { setup, outline: outline.output || '', chapters: recovered, createdAt: outline.createdAt }
 }
+
+// AI 创作页生成的章节正文记录标记：写进 sys_ai_write_record.input_prompt 前缀，
+// 删除大纲记录时后端按它级联清掉这一会话的章节，不用新增表结构。
+export const AI_CREATE_MARK = '[AI创作]'
+export const markAiCreatePrompt = prompt => AI_CREATE_MARK + ' ' + String(prompt || '')
+
+/**
+ * 把原始 AI 记录合并成「一次创作一条」：大纲记录 + 它之后标记为本页生成的章节记录。
+ * 返回按时间倒序的记录组，未归属大纲的独立记录保持单独一条。
+ * @param {Array} records listAiRecords() 的结果（已按时间倒序）
+ */
+export function groupAiCreateRecords(records) {
+  const list = records || []
+  const outlines = list.filter(record => record.type === 'outline' && parseAiCreateOutlineInput(record.input))
+  // 每一条本页章节归给「它之前最近的一次大纲」（recordId 更大即更近）。
+  const ownerOf = new Map()
+  for (const record of list) {
+    if (record.type !== 'write' || !String(record.output || '').startsWith(AI_CREATE_MARK)) continue
+    const owner = outlines
+      .filter(outline => outline.recordId == null || record.recordId == null || Number(outline.recordId) < Number(record.recordId))
+      .sort((a, b) => Number(b.recordId || 0) - Number(a.recordId || 0))[0]
+    if (owner) ownerOf.set(record.recordId, owner)
+  }
+  const groups = []
+  list.forEach((record, index) => {
+    if (ownerOf.has(record.recordId)) return
+    if (outlines.includes(record)) {
+      const chapters = list
+        .filter(item => ownerOf.get(item.recordId) === record)
+        .map(item => ({ recordId: item.recordId, title: chapterTitleFromPrompt(item.input) || '章节正文', content: (item.output || '').slice(AI_CREATE_MARK.length).trim() }))
+        .sort((a, b) => Number(a.recordId || 0) - Number(b.recordId || 0))
+      groups.push({
+        id: 'outline-' + record.recordId,
+        kind: 'session',
+        record,
+        outlineRecord: record,
+        chapters,
+        tokenRecords: [record, ...chapters.map(chapter => list.find(item => item.recordId === chapter.recordId))],
+        createdAt: record.createdAt,
+        tokens: [record, ...list.filter(item => ownerOf.get(item.recordId) === record)].reduce((sum, item) => sum + (Number(item.tokens) || 0), 0)
+      })
+      return
+    }
+    groups.push({ id: 'record-' + index, kind: 'single', record, tokenRecords: [record], createdAt: record.createdAt, tokens: Number(record.tokens) || 0 })
+  })
+  return groups
+}

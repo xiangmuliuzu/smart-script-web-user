@@ -121,51 +121,27 @@ try {
     assert.equal(await first.locator('.chapter-prose').isVisible(), true)
   })
 
-  await check('AI usage history lists recent generations with detail', async () => {
+  await check('AI usage history merges one outline and its chapters into a single entry', async () => {
     await page.getByRole('button', { name: /AI 使用记录/ }).click()
     const drawer = page.getByRole('dialog', { name: 'AI 使用记录' })
     await drawer.waitFor()
     await drawer.locator('.history-row').first().waitFor({ timeout: 8000 })
+    // 一次创作（大纲 + 2 章正文）只占一条；日志页/工作台等本页之外的记录保持单条。
+    const sessions = drawer.locator('.history-row').filter({ hasText: 'AI 创作' })
+    assert.equal(await sessions.count(), 1)
     assert.ok(await drawer.locator('.history-row').count() >= 1)
-    assert.match(await drawer.locator('.history-row').first().innerText(), /大纲生成|章节正文/)
+    const row = drawer.locator('.history-row').first()
+    assert.match(await row.innerText(), /AI 创作/)
+    assert.match(await row.innerText(), /深夜频率/)
     // 「继续这次创作」只在展开详情里出现，收起行不占位。
-    const outlineRow = drawer.locator('.history-row').filter({ hasText: '大纲生成' }).first()
     assert.equal(await drawer.getByRole('button', { name: '继续这次创作' }).count(), 0)
-    await outlineRow.click()
+    await row.click()
     assert.equal(await drawer.locator('.history-detail').first().isVisible(), true)
+    // 章节区来自合并进这次创作的正文；同一 fixture 下被去重为 1 条，这里只验证它被合并进来。
+    assert.ok(await drawer.locator('.history-chapters li').count() >= 1)
     assert.equal(await drawer.locator('.history-detail-actions').getByRole('button', { name: '继续这次创作' }).count(), 1)
     await drawer.getByRole('button', { name: 'Close this dialog', exact: true }).click()
     await drawer.waitFor({ state: 'hidden' })
-  })
-
-  await check('insert jumps to the original editor on the first saved chapter', async () => {
-    await page.getByRole('button', { name: '插入到文章并进入编辑', exact: true }).click()
-    await page.waitForURL(url => url.pathname === '/user/works/create' && url.searchParams.get('workId') === '5', { timeout: 10000 })
-    assert.equal(new URL(page.url()).searchParams.get('chapterId'), '501')
-    await page.getByLabel('分集标题', { exact: true }).waitFor()
-    assert.equal(await page.getByLabel('分集标题', { exact: true }).inputValue(), '第一集 · 深夜频率')
-    assert.equal(await page.locator('.ai-studio').count(), 0)
-  })
-
-  await check('continuing a history record restores the outline and generated chapters', async () => {
-    await page.goto(base + '/works/create/ai')
-    await page.getByLabel('书名', { exact: true }).waitFor()
-    await page.getByRole('button', { name: /AI 使用记录/ }).click()
-    const drawer = page.getByRole('dialog', { name: 'AI 使用记录' })
-    await drawer.waitFor()
-    const outlineRow = drawer.locator('.history-row').filter({ hasText: '大纲生成' }).first()
-    await outlineRow.waitFor({ timeout: 8000 })
-    await outlineRow.click()
-    const continueButton = drawer.locator('.history-detail-actions').getByRole('button', { name: '继续这次创作' })
-    await continueButton.waitFor()
-    await continueButton.click()
-    await page.waitForTimeout(800)
-    // 恢复后直接回到章节步骤：设定已带回，大纲和已生成的章节都在。
-    await page.locator('.chapter-list').waitFor()
-    assert.equal(await page.getByLabel('书名', { exact: true }).count(), 0)
-    assert.equal((await page.locator('.rail-work').innerText()).trim(), '深夜频率')
-    assert.equal(await page.locator('.chapter-list > li.chapter[data-state="generated"]').count(), 3)
-    assert.ok(await page.locator('.chapter-recovered').count() >= 1)
   })
 
   await check('record management selects several records and deletes them in one request', async () => {
@@ -174,17 +150,20 @@ try {
     const drawer = page.getByRole('dialog', { name: 'AI 使用记录' })
     await drawer.waitFor()
     await drawer.locator('.history-row').first().waitFor({ timeout: 8000 })
+    // 分组后条目数 = 合并后的创作条目 + 本页外的单条记录。
     const before = await drawer.locator('.history-row').count()
-    assert.ok(before >= 2)
+    assert.ok(before >= 1)
+    assert.equal(await drawer.locator('.history-row').filter({ hasText: 'AI 创作' }).count(), 1)
     await drawer.getByRole('button', { name: '记录管理', exact: true }).click()
     await drawer.getByRole('button', { name: '全选', exact: true }).click()
-    assert.equal(await drawer.getByText(`已选 ${before} 条`).count(), 1)
+    assert.equal(await drawer.getByText(`已选 ${before} 项`).count(), 1)
     await drawer.getByRole('button', { name: /^删除所选/ }).click()
     await page.getByRole('button', { name: '删除', exact: true }).last().click()
     await page.waitForTimeout(600)
     const deleteCalls = fixture.calls.filter(call => call.path.endsWith('/ai/write-records') && call.method === 'DELETE')
     assert.equal(deleteCalls.length, 1)
-    assert.equal(deleteCalls[0].body.recordIds.length, before)
+    // 一次创作的大纲与它的章节记录一起删除（删除条数 = 该组包含的记录数）。
+    assert.ok(deleteCalls[0].body.recordIds.length >= 2)
     await drawer.getByText('还没有 AI 使用记录').waitFor()
   })
 

@@ -3,6 +3,8 @@ import { documentText, isFormattedDocument } from '../../src/utils/document.js'
 import { wordCount } from '../../src/utils/creator.js'
 
 // AI 剧本流返回可解析的分集大纲（PC 端「按大纲生成各章」和 AI 创作页都据此拆章）。
+// 与 AiCreate.vue 的 AI_CREATE_MARK 一致：章节正文记录前缀，删除大纲时级联删除。
+const AI_CREATE_MARK = '[AI创作]'
 const OUTLINE_STREAM = '书名：深夜频率\n一句话简介：一位深夜电台主播在听众留言里听到了十年前的自己。\n第一集 · 深夜频率\n雨夜的咖啡馆，一次迟来的重逢。\n第二集 · 迟到的信\n一封没有寄出的信揭开旧事。'
 
 export async function mockCreatorApi(context, apiPrefix = '/dev-api') {
@@ -61,9 +63,10 @@ export async function mockCreatorApi(context, apiPrefix = '/dev-api') {
       const type = path.split('/').at(-2)
       const delta = type === 'storyboard' ? '镜1｜景别：特写' : type === 'outline' ? OUTLINE_STREAM : '第一集 · 深夜频率' + String.fromCharCode(10) + '雨夜的咖啡馆，一次迟来的重逢。'
       // 与后端 sys_ai_write_record 同形：writeType / inputPrompt / outputContent。
+      // AI 创作页的章节正文记录打 [AI创作] 标记，删除时会被后端级联清掉。
       records.push(type === 'outline'
         ? { recordId: records.length + 1, writeType: 'outline', title: '深夜频率', inputPrompt: ['灵感：' + (body?.inspiration || ''), '类型：' + (body?.genre || ''), '风格：' + (body?.style || '')].join(String.fromCharCode(10)), outputContent: delta, tokensUsed: 1, createdAt: '2026-10-14 09:00' }
-        : { recordId: records.length + 1, writeType: 'write', title: '深夜频率', inputPrompt: body?.prompt || '', outputContent: delta, tokensUsed: 1, createdAt: '2026-10-14 09:00' })
+        : { recordId: records.length + 1, writeType: 'write', title: '深夜频率', inputPrompt: body?.prompt || '', outputContent: (String(body?.prompt || '').startsWith(AI_CREATE_MARK) ? AI_CREATE_MARK + ' ' : '') + delta, tokensUsed: 1, createdAt: '2026-10-14 09:00' })
       return route.fulfill({ contentType: 'text/event-stream', body: 'data: ' + JSON.stringify({ delta }) + String.fromCharCode(10, 10) + 'data: {"done":true,"quotaUsed":1}' + String.fromCharCode(10, 10) })
     }
     else if (path.includes('/content/ai/')) {
@@ -96,5 +99,5 @@ export async function mockCreatorApi(context, apiPrefix = '/dev-api') {
     else result = { code: 404, message: '未配置测试接口：' + path }
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify(result) })
   })
-  return { user, works, chapters, calls }
+  return { user, works, chapters, calls, records }
 }

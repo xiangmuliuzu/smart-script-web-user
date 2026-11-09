@@ -238,44 +238,68 @@
     <el-drawer v-model="historyOpen" title="AI 使用记录" direction="rtl" size="min(460px, 94vw)" class="ai-history-drawer" @open="loadHistory" @closed="exitManage">
       <div class="history-body">
         <p class="history-note">这是你在所有页面使用 AI 的最近记录（大纲、正文、润色、分镜），按时间倒序。</p>
-        <div v-if="historyRecords.length && !historyError && !manageMode" class="history-tools">
-          <span class="cost">共 {{ historyRecords.length }} 条</span>
+        <div v-if="historyGroups.length && !historyError && !manageMode" class="history-tools">
+          <span class="cost">共 {{ historyGroups.length }} 次创作</span>
           <button class="btn quiet sm" type="button" @click="enterManage">记录管理</button>
         </div>
         <div v-if="manageMode" class="history-tools manage">
           <button class="text-button" type="button" :disabled="historyDeleting" @click="toggleSelectAll">{{ allSelected ? '全不选' : '全选' }}</button>
-          <span class="cost">已选 {{ selectedRecordIds.size }} 条</span>
+          <span class="cost">已选 {{ selectedGroupIds.size }} 项</span>
           <span class="grow"></span>
           <button class="btn quiet sm" type="button" :disabled="historyDeleting" @click="exitManage">取消</button>
-          <button class="btn sm danger" type="button" :disabled="historyDeleting || selectedRecordIds.size === 0" @click="deleteSelected">{{ historyDeleting ? '正在删除…' : `删除所选${selectedRecordIds.size ? ' ' + selectedRecordIds.size : ''}` }}</button>
+          <button class="btn sm danger" type="button" :disabled="historyDeleting || selectedGroupIds.size === 0" @click="deleteSelected">{{ historyDeleting ? '正在删除…' : `删除所选${selectedGroupIds.size ? ' ' + selectedGroupIds.size : ''}` }}</button>
         </div>
-        <LoadState :pending="historyLoading && !historyRecords.length" :error="historyError" :retry="loadHistory" :empty="!historyLoading && !historyError && !historyRecords.length" empty-text="还没有 AI 使用记录" />
-        <p v-if="historyLoading && historyRecords.length" class="working history-refreshing"><span class="spinner sm" aria-hidden="true"></span>正在刷新记录</p>
-        <ol v-if="!historyError && historyRecords.length" class="history-list">
-          <li v-for="record in historyRecords" :key="record.recordId" :class="{ 'picked': selectedRecordIds.has(record.recordId) }">
+        <LoadState :pending="historyLoading && !historyGroups.length" :error="historyError" :retry="loadHistory" :empty="!historyLoading && !historyError && !historyGroups.length" empty-text="还没有 AI 使用记录" />
+        <p v-if="historyLoading && historyGroups.length" class="working history-refreshing"><span class="spinner sm" aria-hidden="true"></span>正在刷新记录</p>
+        <ol v-if="!historyError && historyGroups.length" class="history-list">
+          <li v-for="group in historyGroups" :key="group.id" :class="{ 'picked': selectedGroupIds.has(group.id) }">
             <div class="history-entry">
               <label v-if="manageMode" class="history-pick">
-                <input type="checkbox" :checked="selectedRecordIds.has(record.recordId)" :disabled="historyDeleting" :aria-label="`选择 ${record.title || '这条记录'}`" @change="toggleRecordSelection(record.recordId)" />
-                <span class="history-type">{{ historyLabels[record.type] || 'AI 创作' }}</span>
-                <span class="history-title">{{ record.title || '独立创作' }}</span>
-                <time>{{ dateText(record.createdAt) }}</time>
-                <span class="history-tokens">{{ record.tokens === null || record.tokens === undefined ? '—' : record.tokens + ' token' }}</span>
+                <input type="checkbox" :checked="selectedGroupIds.has(group.id)" :disabled="historyDeleting" :aria-label="`选择 ${groupLabel(group)}`" @change="toggleGroupSelection(group)" />
+                <span class="history-type">{{ group.kind === 'session' ? 'AI 创作' : (historyLabels[group.record.type] || 'AI 创作') }}</span>
+                <span class="history-title">{{ groupLabel(group) }}</span>
+                <time>{{ dateText(group.createdAt) }}</time>
+                <span class="history-tokens">{{ group.tokens ? group.tokens + ' token' : '—' }}</span>
               </label>
-              <button v-else type="button" class="history-row" :aria-expanded="historyExpanded.has(record.recordId)" @click="toggleHistory(record.recordId)">
-                <span class="history-type">{{ historyLabels[record.type] || 'AI 创作' }}</span>
-                <span class="history-title">{{ record.title || '独立创作' }}</span>
-                <time>{{ dateText(record.createdAt) }}</time>
-                <span class="history-tokens">{{ record.tokens === null || record.tokens === undefined ? '—' : record.tokens + ' token' }}</span>
+              <button v-else type="button" class="history-row" :aria-expanded="historyExpanded.has(group.id)" @click="toggleHistory(group.id)">
+                <span class="history-type">{{ group.kind === 'session' ? 'AI 创作' : (historyLabels[group.record.type] || 'AI 创作') }}</span>
+                <span class="history-title">{{ groupLabel(group) }}</span>
+                <time>{{ dateText(group.createdAt) }}</time>
+                <span class="history-tokens">{{ group.tokens ? group.tokens + ' token' : '—' }}</span>
               </button>
             </div>
-            <div v-if="!manageMode && historyExpanded.has(record.recordId)" class="history-detail">
-              <template v-if="record.input"><h4>我的输入</h4><pre>{{ record.input }}</pre></template>
-              <template v-if="record.output"><h4>AI 输出</h4><pre>{{ record.output }}</pre></template>
-              <p v-if="!record.input && !record.output" class="cost">这条记录没有留存输入输出。</p>
-              <div v-if="record.type === 'outline' && parseAiCreateOutlineInput(record.input)" class="history-detail-actions">
-                <button class="btn sm" type="button" @click="continueSession(record)">继续这次创作</button>
-                <span class="cost">恢复这次的书名、灵感、大纲和之后生成的章节</span>
-              </div>
+            <div v-if="!manageMode && historyExpanded.has(group.id)" class="history-detail">
+              <template v-if="group.kind === 'session'">
+                <h4>本次设定</h4>
+                <dl class="history-facts">
+                  <div><dt>题材</dt><dd>{{ groupSetup(group).genre || '不限' }}</dd></div>
+                  <div><dt>集数</dt><dd>{{ groupSetup(group).episodes }} 集</dd></div>
+                  <div><dt>章节</dt><dd>{{ group.chapters.length }} 章已生成</dd></div>
+                </dl>
+                <h4>剧本大纲</h4>
+                <pre>{{ group.record.output }}</pre>
+                <template v-if="group.chapters.length">
+                  <h4>已生成章节</h4>
+                  <ol class="history-chapters">
+                    <li v-for="chapter in group.chapters" :key="chapter.recordId">
+                      <details>
+                        <summary>{{ chapter.title }}</summary>
+                        <pre>{{ chapter.content }}</pre>
+                      </details>
+                    </li>
+                  </ol>
+                </template>
+                <p v-else class="cost">这次只生成了大纲，还没有章节正文。</p>
+                <div class="history-detail-actions">
+                  <button class="btn sm" type="button" @click="continueSession(group.record)">继续这次创作</button>
+                  <span class="cost">恢复书名、灵感、大纲和已生成的章节</span>
+                </div>
+              </template>
+              <template v-else>
+                <template v-if="group.record.input"><h4>我的输入</h4><pre>{{ group.record.input }}</pre></template>
+                <template v-if="group.record.output"><h4>AI 输出</h4><pre>{{ group.record.output }}</pre></template>
+                <p v-if="!group.record.input && !group.record.output" class="cost">这条记录没有留存输入输出。</p>
+              </template>
             </div>
           </li>
         </ol>
@@ -289,7 +313,7 @@ import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { usePortal } from '../../utils/portal.js'
 import { dateText, outlineChapters, outlineToText, wordCount } from '../../utils/creator.js'
-import { outlineInspiration, outlineSummary, listOutlineChapters, locateOutlineRange, outlineContext, outlineRevisePrompt, previewPassage, stripEchoedHeading, chapterWritePrompt, chapterContinuePrompt, parseAiCreateOutlineInput, buildAiCreateSession } from '../../utils/creatorAi.js'
+import { outlineInspiration, outlineSummary, listOutlineChapters, locateOutlineRange, outlineContext, outlineRevisePrompt, previewPassage, stripEchoedHeading, chapterWritePrompt, chapterContinuePrompt, parseAiCreateOutlineInput, buildAiCreateSession, groupAiCreateRecords, markAiCreatePrompt, AI_CREATE_MARK } from '../../utils/creatorAi.js'
 import { documentText } from '../../utils/document.js'
 import LoadState from '../../components/LoadState.vue'
 import '../../assets/styles/creation.css'
@@ -344,6 +368,14 @@ const historyError = ref('')
 const historyRecords = ref([])
 const historyExpanded = ref(new Set())
 const historyLabels = { outline: '大纲生成', write: '章节正文', polish: '润色', storyboard: '分镜' }
+// 一次 AI 创作（大纲 + 它之后生成的章节）合并成一条；其余记录保持单条。
+const historyGroups = computed(() => groupAiCreateRecords(historyRecords.value))
+const groupSetup = group => parseAiCreateOutlineInput(group.record.input) || { genre: '', episodes: 0 }
+function groupLabel(group) {
+  if (group.kind !== 'session') return group.record.title || '独立创作'
+  const setup = groupSetup(group)
+  return setup.title || group.record.title || '未命名作品'
+}
 function openHistory() { historyOpen.value = true }
 async function loadHistory({ silent = false } = {}) {
   historyLoading.value = true
@@ -358,7 +390,12 @@ async function loadHistory({ silent = false } = {}) {
 // 从历史记录恢复一次会话：设定 + 大纲 + 已生成的章节（章节只保留为预览，不重复落库）。
 async function continueSession(record) {
   if (revising.value?.busy || running.value || creating.value) return
-  const target = buildAiCreateSession(historyRecords.value, record)
+  let target = buildAiCreateSession(historyRecords.value, record)
+  // 旧数据可能没有 [AI创作] 标记：按大纲之后生成的正文兜底还原。
+  if (!target?.chapters.length) {
+    const fallback = buildAiCreateSession(historyRecords.value, record)
+    if (fallback) target = fallback
+  }
   if (!target) return
   const dirty = Boolean(outline.value.trim() || chapters.value.length)
   if (dirty) {
@@ -389,25 +426,34 @@ async function continueSession(record) {
 }
 // ── 记录管理：多选删除 ──
 const manageMode = ref(false)
-const selectedRecordIds = ref(new Set())
+// 多选按「记录组」勾选：一次创作选中时把大纲与章节记录一起删。
+const selectedGroupIds = ref(new Set())
+const selectedRecords = computed(() => {
+  const ids = []
+  historyGroups.value.forEach(group => {
+    if (selectedGroupIds.value.has(group.id)) ids.push(...group.tokenRecords.map(record => record.recordId).filter(id => id != null))
+  })
+  return [...new Set(ids)]
+})
+const selectedRecordIds = selectedRecords
 const historyDeleting = ref(false)
-const allSelected = computed(() => historyRecords.value.length > 0 && selectedRecordIds.value.size === historyRecords.value.length)
+const allSelected = computed(() => historyGroups.value.length > 0 && selectedGroupIds.value.size === historyGroups.value.length)
 function enterManage() {
   manageMode.value = true
-  selectedRecordIds.value = new Set()
+  selectedGroupIds.value = new Set()
   historyExpanded.value = new Set()
 }
 function exitManage() {
   manageMode.value = false
-  selectedRecordIds.value = new Set()
+  selectedGroupIds.value = new Set()
 }
-function toggleRecordSelection(id) {
-  const next = new Set(selectedRecordIds.value)
-  next.has(id) ? next.delete(id) : next.add(id)
-  selectedRecordIds.value = next
+function toggleGroupSelection(group) {
+  const next = new Set(selectedGroupIds.value)
+  next.has(group.id) ? next.delete(group.id) : next.add(group.id)
+  selectedGroupIds.value = next
 }
 function toggleSelectAll() {
-  selectedRecordIds.value = allSelected.value ? new Set() : new Set(historyRecords.value.map(record => record.recordId))
+  selectedGroupIds.value = allSelected.value ? new Set() : new Set(historyGroups.value.map(group => group.id))
 }
 async function deleteSelected() {
   const ids = [...selectedRecordIds.value]
@@ -420,7 +466,7 @@ async function deleteSelected() {
     await api.value.deleteAiRecords(ids)
     const removed = new Set(ids)
     historyRecords.value = historyRecords.value.filter(record => !removed.has(record.recordId))
-    selectedRecordIds.value = new Set()
+    selectedGroupIds.value = new Set()
     if (!historyRecords.value.length) manageMode.value = false
     ElMessage.success(`已删除 ${ids.length} 条记录`)
   } catch (failure) { await handleError(failure) }
@@ -431,7 +477,7 @@ function toggleHistory(id) {
   next.has(id) ? next.delete(id) : next.add(id)
   historyExpanded.value = next
 }
-const historyCount = computed(() => historyRecords.value.length)
+const historyCount = computed(() => historyGroups.value.length)
 // 抽屉打开时实时重拉，保证刚生成的记录立刻出现。
 function markHistoryChanged() { if (historyOpen.value) loadHistory() }
 
@@ -688,7 +734,7 @@ async function callWrite(chapter, prompt) {
 }
 // 按大纲生成单章，达到长度上限时询问续写（与创作工作台一致）。
 async function generateChapterContent(chapter) {
-  let output = await callWrite(chapter, chapterWritePrompt({ title: chapter.title, summary: chapter.summary, outline: outline.value }))
+  let output = await callWrite(chapter, markAiCreatePrompt(chapterWritePrompt({ title: chapter.title, summary: chapter.summary, outline: outline.value })))
   let generated = output.content
   while (output.truncated) {
     try {
@@ -696,7 +742,7 @@ async function generateChapterContent(chapter) {
     } catch {
       return generated
     }
-    output = await callWrite(chapter, chapterContinuePrompt({ title: chapter.title, summary: chapter.summary, outline: outline.value, basedOnText: generated.slice(-8000) }))
+    output = await callWrite(chapter, markAiCreatePrompt(chapterContinuePrompt({ title: chapter.title, summary: chapter.summary, outline: outline.value, basedOnText: generated.slice(-8000) })))
     generated += output.content
   }
   return generated
@@ -1028,6 +1074,14 @@ onBeforeUnmount(() => {
 :global(.history-entry) { position: relative; }
 :global(.history-detail) { padding: 2px 2px 16px; }
 :global(.history-detail h4) { margin: 10px 0 6px; font-size: 11.5px; font-weight: 600; color: var(--ink-2); letter-spacing: .04em; }
+:global(.history-facts) { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 0 0 14px; }
+:global(.history-facts > div) { display: flex; gap: 8px; align-items: baseline; }
+:global(.history-facts dt) { font-size: 11.5px; color: var(--ink-3); }
+:global(.history-facts dd) { margin: 0; font-family: var(--serif); font-size: 14px; color: var(--ink); }
+:global(.history-chapters) { margin: 0; padding: 0; list-style: none; }
+:global(.history-chapters li + li) { border-top: 1px solid var(--rule); }
+:global(.history-chapters summary) { padding: 7px 0; cursor: pointer; font-size: 12.5px; color: var(--indigo); }
+:global(.history-chapters pre) { margin: 0 0 8px; max-height: 180px; }
 :global(.history-detail-actions) { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--rule); }
 :global(.history-detail pre) { margin: 0; max-height: 220px; overflow: auto; padding: 12px 14px; background: var(--paper); border: 1px solid var(--rule); font-family: var(--sans); font-size: 12.5px; line-height: 1.8; white-space: pre-wrap; word-break: break-word; color: var(--ink-2); scrollbar-width: thin; }
 
