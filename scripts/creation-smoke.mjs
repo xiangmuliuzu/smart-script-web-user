@@ -186,7 +186,7 @@ try {
     assert.equal(await apiPage.evaluate(() => localStorage.getItem('PcUser-CreationDraft:73')), null)
   })
   await check('publish action confirms and submits all chapters for review', async () => {
-    await apiPage.getByRole('button', { name: '返回我的作品' }).click(); await apiPage.locator('.new-work').click()
+    await apiPage.getByRole('button', { name: '返回我的作品' }).click(); await apiPage.locator('.new-work').click(); await apiPage.getByRole('button', { name: /自己编辑/ }).click()
     await apiPage.getByLabel('作品名称', { exact: true }).fill('审核验证')
     await apiPage.getByLabel('分类', { exact: true }).selectOption('1'); await apiPage.getByLabel('分集正文', { exact: true }).fill('可提交的完整正文。')
     chapters.splice(0); await apiPage.getByRole('button', { name: '提交审核', exact: true }).click()

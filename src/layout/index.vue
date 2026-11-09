@@ -23,7 +23,7 @@
           </el-dropdown>
         </div>
       </header>
-      <main class="portal-main" :class="{ 'portal-main-editor': route.path.endsWith('/create') }"><router-view v-slot="{ Component }"><component :is="Component" :key="route.path" ref="workspace" /></router-view></main>
+      <main class="portal-main" :class="{ 'portal-main-editor': route.meta.editor }"><router-view v-slot="{ Component }"><component :is="Component" :key="route.path" ref="workspace" /></router-view></main>
       <MessagesPanel v-if="panel === 'messages'" v-model="panelVisible" />
       <PlatformChatPanel v-if="panel === 'chat'" v-model="panelVisible" />
       <CooperationPanel v-if="panel === 'cooperation'" v-model="panelVisible" :initial-tab="panelTab" :order-search="panelOrderSearch" :initial-keyword="panelKeyword" />

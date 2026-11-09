@@ -2,6 +2,9 @@
 import { documentText, isFormattedDocument } from '../../src/utils/document.js'
 import { wordCount } from '../../src/utils/creator.js'
 
+// AI 剧本流返回可解析的分集大纲（PC 端「按大纲生成各章」和 AI 创作页都据此拆章）。
+const OUTLINE_STREAM = '书名：深夜频率\n一句话简介：一位深夜电台主播在听众留言里听到了十年前的自己。\n第一集 · 深夜频率\n雨夜的咖啡馆，一次迟来的重逢。\n第二集 · 迟到的信\n一封没有寄出的信揭开旧事。'
+
 export async function mockCreatorApi(context, apiPrefix = '/dev-api') {
   const user = { userId: 7, userType: '01', nickname: '接口测试用户', authorCapability: true }
   const categories = [{ categoryId: 1, categoryName: '都市悬疑' }, { categoryId: 2, categoryName: '都市情感' }]
@@ -56,13 +59,22 @@ export async function mockCreatorApi(context, apiPrefix = '/dev-api') {
     else if (path.endsWith('/ai/skills')) result.data = skills
     else if (path.includes('/content/ai/') && path.endsWith('/stream')) {
       const type = path.split('/').at(-2)
-      const delta = type === 'storyboard' ? '镜1｜景别：特写｜运镜：固定｜时长：4秒｜画面内容：雨夜便利店暖黄灯光孤立在冷蓝雨夜中。' : '第一集 · 深夜频率\n雨夜的咖啡馆，一次迟来的重逢。'
-      return route.fulfill({ contentType: 'text/event-stream', body: 'data: ' + JSON.stringify({ delta }) + '\n\ndata: {"done":true,"quotaUsed":1}\n\n' })
+      const delta = type === 'storyboard' ? '镜1｜景别：特写' : type === 'outline' ? OUTLINE_STREAM : '第一集 · 深夜频率' + String.fromCharCode(10) + '雨夜的咖啡馆，一次迟来的重逢。'
+      // 与后端 sys_ai_write_record 同形：writeType / inputPrompt / outputContent。
+      records.push(type === 'outline'
+        ? { recordId: records.length + 1, writeType: 'outline', title: '深夜频率', inputPrompt: ['灵感：' + (body?.inspiration || ''), '类型：' + (body?.genre || ''), '风格：' + (body?.style || '')].join(String.fromCharCode(10)), outputContent: delta, tokensUsed: 1, createdAt: '2026-10-14 09:00' }
+        : { recordId: records.length + 1, writeType: 'write', title: '深夜频率', inputPrompt: body?.prompt || '', outputContent: delta, tokensUsed: 1, createdAt: '2026-10-14 09:00' })
+      return route.fulfill({ contentType: 'text/event-stream', body: 'data: ' + JSON.stringify({ delta }) + String.fromCharCode(10, 10) + 'data: {"done":true,"quotaUsed":1}' + String.fromCharCode(10, 10) })
     }
     else if (path.includes('/content/ai/')) {
       const type = path.split('/').at(-1)
-      if (type === 'write-records') result.data = records
-      else { result.data = { content: '第一集 · 深夜频率\n雨夜的咖啡馆，一次迟来的重逢。', quotaUsed: 1 }; records.push({ recordId: records.length + 1, type, quotaUsed: 1, createdAt: '2026-10-14 09:00' }) }
+      if (type === 'write-records' && method === 'DELETE') {
+        const ids = new Set((body?.recordIds || []).map(Number))
+        const before = records.length
+        records.splice(0, records.length, ...records.filter(record => !ids.has(Number(record.recordId))))
+        result.data = before - records.length
+      } else if (type === 'write-records') result.data = records
+      else result.data = { content: '第一集 · 深夜频率' + String.fromCharCode(10) + '雨夜的咖啡馆，一次迟来的重逢。', quotaUsed: 1 }
     } else if (path.endsWith('/messages/unread-count')) result.data = { total: messages.filter(message => !message.read).length }
     else if (path.endsWith('/messages/read-all')) messages.forEach(message => { message.read = true })
     else if (path === '/api/v1/messages') result.data = { list: messages }

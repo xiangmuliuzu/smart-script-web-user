@@ -11,7 +11,7 @@
       </form>
       <LoadState :pending="pending" :error="error" :retry="load" />
       <div v-if="!pending && !error" class="worklist">
-        <button class="workitem new-work" :disabled="!canCreate" @click="router.push(basePath + '/create')"><span class="work-cover"><span class="plus" aria-hidden="true">＋</span></span><span class="work-copy"><span class="work-title"><h3>创作与上传</h3><span class="work-kind">新建作品</span></span><span class="work-synopsis">从一个新故事开始，或上传你已经完成的剧本。创建后可以继续补充简介、章节和版权信息。</span><span class="work-foot"><span class="work-meta">点击此处进入创作页面</span><span class="btn sm">开始创作</span></span></span></button>
+        <button class="workitem new-work" :disabled="!canCreate" @click="startCreate = true"><span class="work-cover"><span class="plus" aria-hidden="true">＋</span></span><span class="work-copy"><span class="work-title"><h3>创作与上传</h3><span class="work-kind">新建作品</span></span><span class="work-synopsis">从一个新故事开始，或上传你已经完成的剧本。创建后可以继续补充简介、章节和版权信息。</span><span class="work-foot"><span class="work-meta">点击此处进入创作页面</span><span class="btn sm">开始创作</span></span></span></button>
         <button v-for="work in filtered" :key="work.workId" class="workitem" :data-reviewing="work.status === 'reviewing'" @click="goWork(work.workId)">
           <span class="work-cover" :class="{ 'script-cover': !hasCover(work) }"><img v-if="hasCover(work)" :src="avatarUrl(work.cover)" alt="" @error="failedCovers[work.workId] = work.cover" /><template v-else><span class="script-slip">{{ work.title }}</span><span class="bg-glyph" aria-hidden="true">{{ work.title?.slice(0, 1) }}</span></template><span class="stamp" :data-s="stateOf(work.status).stamp">{{ stateOf(work.status).label }}</span></span>
           <span class="work-copy"><span class="work-title"><h3>{{ work.title }}</h3><span class="work-kind">{{ workType(work.workType) }} · {{ work.genreName || '未分类' }}</span></span><span class="work-synopsis">{{ work.summary || '故事还在酝酿中，继续写下你的下一章。' }}</span><span class="work-foot"><span class="work-meta">{{ work.episodeCount != null ? work.episodeCount + ' 章 · ' : '' }}{{ words(work.wordCount) }} · 更新于 {{ dateText(work.updateTime || work.createTime).slice(5) }}</span><span class="btn sm" :class="{ quiet: !['revision', 'rejected'].includes(work.status) }">{{ stateOf(work.status).action }}</span></span></span>
@@ -30,6 +30,7 @@
       </div>
       <details class="aside-block activity-list"><summary><h3>最近动态</h3></summary><ul class="aside-log"><li v-for="work in recent" :key="work.workId"><time>{{ dateText(work.updateTime || work.createTime) }}</time>{{ work.title }} · {{ stateOf(work.status).label }}</li></ul><p v-if="!pending && !recent.length" class="cost">暂无最近动态</p></details>
     </aside>
+    <StartCreateDialog v-model="startCreate" @select="startMode" />
   </div>
 </template>
 <script setup>
@@ -41,6 +42,7 @@ import { stateOf, words, dateText, money } from '../../utils/creator.js'
 import { loadTodoOrders, orderStatusLabel, orderSteps, orderStepIndex } from '../../utils/orderTodo.js'
 import LoadState from '../../components/LoadState.vue'
 import RightsPanel from '../panels/Rights.vue'
+import StartCreateDialog from './StartCreateDialog.vue'
 const { api, canCreate, basePath, goWork, openPanel, handleError } = usePortal()
 const router = useRouter()
 const section = ref('works')
@@ -49,6 +51,9 @@ const failedCovers = ref({})
 const pending = ref(true)
 const error = ref('')
 const filterOpen = ref(false)
+const startCreate = ref(false)
+// 入口先选方式：AI 创作走独立的设定→大纲→章节流程，自己编辑进入原三栏工作台。
+function startMode(mode) { return router.push(basePath + (mode === 'ai' ? '/create/ai' : '/create')) }
 const keyword = ref('')
 const status = ref('')
 const workType = value => ({ short_drama: '短剧', novel: '小说', script: '剧本' })[value] || '短剧'

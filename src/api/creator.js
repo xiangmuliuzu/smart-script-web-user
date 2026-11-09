@@ -190,6 +190,8 @@ export const listAiRecords = async () => {
   }))
   return items.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
 }
+// 批量删除本人的 AI 生成记录（PC 创作者端「记录管理」）。
+export const deleteAiRecords = recordIds => data('/api/v1/content/ai/write-records', { method: 'DELETE', body: { recordIds } })
 // 积分余额（AI 创作按 token 消耗直接扣积分，前端展示剩余积分）。
 export const getAiQuota = async userId => {
   const result = await data(`/api/v1/welfare/points/balance?userId=${encodeURIComponent(userId)}`)

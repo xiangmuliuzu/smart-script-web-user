@@ -24,6 +24,8 @@ npm run gate
 
 浏览器验证：先启动开发服务，再运行 `npm run test:browser`。测试脚本在浏览器拦截 API 响应，应用仍执行正常登录与接口流程。Playwright 已作为本项目开发依赖，安装依赖后执行 `npx playwright install chromium` 准备浏览器。截图与校验结果在 `docs/screenshots`，验证范围和联调边界见 `docs/superpowers/reports/2026-10-14-user-prototype-v2-validation.md`。
 
+「创作与上传」入口先弹出方式选择：**AI 创作** 或 **自己编辑**。自己编辑进入下面的三栏工作区；AI 创作进入独立的 `/works/create/ai`，三步完成——填写书名与灵感并生成剧本大纲、修改确认大纲、按大纲逐章生成正文。确认大纲时会创建一部草稿作品，每章生成后立即保存为该作品的分集；完成后「插入到文章并进入编辑」跳回三栏工作区并定位到第一章。生成中可停止，已生成的章节保留；未勾选的分集不会生成，可在章节列表里重新生成或删除。AI 相关调用复用 `/api/v1/content/ai/outline/stream` 与 `/write/stream`，每次生成按积分扣减。
+
 创作上传采用三栏工作区：左侧管理资料和分集、中间编辑正文、右侧 AI 助手。默认分集名为「第 1 集、第 2 集…」，删除按钮在各分集卡片右下角，确认后删除，删除其他分集时保留当前正文。字体、字号、文字与段落格式及剧本工具使用单行可左右滚动的工具栏；窄屏目录与 AI 使用抽屉。草稿按用户保存在本机，保存草稿后同步到作品并进入详情；提交审核前确认锁定规则。人物便签仅在本机存档，可导出。
 
 TXT/Markdown/DOCX 草稿使用原生浏览器文本读取与解压，不执行文档代码。书名从文件名载入；正文导入当前分集，替换前确认，分类由用户选择。Markdown 按 TXT 上传以兼容服务端白名单。封面与头像支持 JPG/PNG，限制 5 MB。
@@ -57,5 +59,5 @@ npm run build 输出 dist，固定挂载到 `/user/`，对应服务器 http://12
 生产默认 VITE_APP_BASE_API=/prod-api；网关需将站点根路径 /prod-api/* 去除前缀后转发至整体后端。接口地址不加 `/user/`，例如 `/prod-api/api/v1/auth/login`。不要把 `/user/login` SPA 地址代理到后端。
 
 三端都完成生产构建后，可运行 `npm run test:paths`。脚本把三份真实 dist 挂载到同一个本机站点，验证资源路径、子目录登录/刷新/回跳及令牌隔离；仅拦截测试 API，不改服务器。修改基础路径后需要重新部署 dist，服务器上的旧构建不会自动改变。
-管理员端位于 `/`，企业端位于 `/enterprise/`。下述回跳地址是应用内部路径，由 Router 自动添加 `/user/` 前缀，不能手工重复添加。回跳白名单包含 /works、/works/create、数字作品详情路径及兼容的 /session、/session-check；/session 跳转到 /works。未实现的地址不在登录回跳白名单中。
+管理员端位于 `/`，企业端位于 `/enterprise/`。下述回跳地址是应用内部路径，由 Router 自动添加 `/user/` 前缀，不能手工重复添加。回跳白名单包含 /works、/works/create、/works/create/ai、数字作品详情路径及兼容的 /session、/session-check；/session 跳转到 /works。未实现的地址不在登录回跳白名单中。
 前端账号域检查只用于入口防护，业务授权与创作者能力仍由后端验证。

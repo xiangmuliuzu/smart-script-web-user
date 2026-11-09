@@ -3,7 +3,8 @@ import { getToken, safeRedirect } from './auth.js'
 import { portal } from './portal.js'
 const workChildren = [
   { path: '', component: () => import('./views/works/index.vue'), meta: { title: '我的作品' } },
-  { path: 'create', component: () => import('./views/works/Create.vue'), meta: { title: '创作上传' } },
+  { path: 'create', component: () => import('./views/works/Create.vue'), meta: { title: '创作上传', editor: true } },
+  { path: 'create/ai', component: () => import('./views/works/AiCreate.vue'), meta: { title: 'AI 创作', editor: true } },
   { path: ':id(\\d+)', component: () => import('./views/works/Detail.vue'), meta: { title: '作品详情' } }
 ]
 // 任务广场与工作台平级：同一 layout 下另起一条顶级路由，创作端只接单，不含发布入口。
