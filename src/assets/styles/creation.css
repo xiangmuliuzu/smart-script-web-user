@@ -116,6 +116,8 @@
 .ai-panel-head h2 span { color: var(--ochre); margin-right: 3px; }
 .ai-quota { font-size: 10px; padding: 3px 6px; background: #eae5d8; border-radius: 12px; color: var(--ink-2); white-space: nowrap; }
 .ai-quota.ai-quota-empty { background: #fbe9e7; color: #c62828; font-weight: 600; }
+.ai-recharge { margin-left: 8px; padding: 2px 10px; border: 1px solid rgba(212, 163, 89, .55); border-radius: 12px; background: transparent; color: #D4A359; font-size: 11px; font-family: var(--sans); cursor: pointer; white-space: nowrap; vertical-align: middle; }
+.ai-recharge:hover { background: rgba(212, 163, 89, .16); }
 .ai-embedded .ai-records article { border: 1px solid var(--rule); border-radius: 6px; margin-bottom: 8px; overflow: hidden; }
 .ai-embedded .ai-records .ai-record-row { display: block; width: 100%; border: 0; background: white; padding: 8px 10px; text-align: left; cursor: pointer; }
 .ai-embedded .ai-records .ai-record-row b { font-size: 12px; color: var(--indigo); }

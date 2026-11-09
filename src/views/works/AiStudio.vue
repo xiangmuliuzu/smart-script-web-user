@@ -1,5 +1,5 @@
 <template>
-  <section class="sec" :class="{ 'ai-embedded': embedded }"><div v-if="embedded" class="ai-panel-head"><h2><span>✦</span> AI 编剧助手</h2><span class="ai-quota" :class="{ 'ai-quota-empty': quota === 0 }">{{ quotaText }}</span></div><div v-else class="sub-head"><h3>AI 辅助创作</h3><span class="count">让灵感成为下一幕</span></div>
+  <section class="sec" :class="{ 'ai-embedded': embedded }"><div v-if="embedded" class="ai-panel-head"><h2><span>✦</span> AI 编剧助手<button class="ai-recharge" type="button" @click="openRecharge">充值</button></h2><span class="ai-quota" :class="{ 'ai-quota-empty': quota === 0 }">{{ quotaText }}</span></div><div v-else class="sub-head"><h3>AI 辅助创作</h3><span class="count">让灵感成为下一幕</span></div>
     <PortalTabs v-model="tab" :items="tabs" :drawer="embedded" label="AI 创作工具" />
     <div v-if="tab !== 'log'" class="compose">
       <form class="compose-form" @submit.prevent="generate"><h3>{{ tabHeading }}</h3>
@@ -29,9 +29,12 @@ import LoadState from '../../components/LoadState.vue'
 import ChapterEditor from '../../components/ChapterEditor.vue'
 const props = defineProps({ works: Array, embedded: Boolean, workId: [Number, String], currentContent: { type: String, default: '' }, insertDisabled: Boolean, workspaceState: Object })
 defineEmits(['insert', 'fill-outline'])
-const { api, user, canCreate, handleError } = usePortal()
+const { api, user, canCreate, handleError, openPanel } = usePortal()
 const quota = ref(null)
-const quotaText = computed(() => quota.value === null ? '剩余积分 —' : quota.value > 0 ? `剩余 ${quota.value} 积分` : '剩余 0 积分，需到手机获取')
+// 余额只展示真实积分数；不足时不再引导到手机端（PC 已提供充值入口）。
+const quotaText = computed(() => quota.value === null ? '剩余积分 —' : `剩余 ${Number(quota.value) || 0} 积分`)
+// 充值入口：打开积分充值面板（金额档位 / 自定义金额 / 换算 / 付费方式）。
+function openRecharge() { openPanel?.('recharge') }
 async function loadQuota() {
   if (!api.value?.getAiQuota || !user.value?.userId) return
   try { quota.value = (await api.value.getAiQuota(user.value.userId)).available }
@@ -199,15 +202,19 @@ watch(user, value => { if (value?.userId) loadQuota() }, { immediate: true })
 function refreshQuotaWhenVisible() {
   if (document.visibilityState === 'visible') loadQuota()
 }
+// 充值成功后刷新余额（充值面板与 AI 面板是兄弟组件，用窗口事件解耦）。
+function refreshAfterRecharge() { loadQuota() }
 onMounted(() => {
   loadQuota()
   loadSkills()
   loadModels()
   document.addEventListener('visibilitychange', refreshQuotaWhenVisible)
   window.addEventListener('focus', refreshQuotaWhenVisible)
+  window.addEventListener('recharge-success', refreshAfterRecharge)
 })
 onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', refreshQuotaWhenVisible)
   window.removeEventListener('focus', refreshQuotaWhenVisible)
+  window.removeEventListener('recharge-success', refreshAfterRecharge)
 })
 </script>

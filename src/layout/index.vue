@@ -29,6 +29,7 @@
       <CooperationPanel v-if="panel === 'cooperation'" v-model="panelVisible" :initial-tab="panelTab" :order-search="panelOrderSearch" :initial-keyword="panelKeyword" />
       <RightsPanel v-if="panel === 'rights'" ref="rightsPanelRef" v-model="panelVisible" :initial-tab="panelTab" />
       <AccountPanel v-if="panel === 'account'" v-model="panelVisible" :initial-tab="panelTab" />
+      <RechargePanel v-if="panel === 'recharge'" v-model="panelVisible" />
     </template>
   </div>
 </template>
@@ -47,6 +48,7 @@ import PlatformChatPanel from '../views/panels/PlatformChat.vue'
 import CooperationPanel from '../views/panels/Cooperation.vue'
 import RightsPanel from '../views/panels/Rights.vue'
 import AccountPanel from '../views/panels/Account.vue'
+import RechargePanel from '../views/panels/Recharge.vue'
 const router = useRouter()
 const route = useRoute()
 const api = shallowRef(null)
