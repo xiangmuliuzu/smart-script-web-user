@@ -21,7 +21,8 @@
       · 履约押金：{{ depositStatusLabel(demand.depositStatus) }}（{{ money(demand.depositAmount) }}）
     </p>
     <p v-if="mode === 'mine' && demand.acceptedAt" class="cost dc-meta">接单于 {{ timeText(demand.acceptedAt) }}</p>
-    <p v-if="mode === 'mine' && demand.dueAt" class="cost dc-meta">
+    <!-- 只有进行中的单才该有轮次倒计时：已完成/已关闭/已失败仍显示「剩余 N 天」会被读成还没结清 -->
+    <p v-if="mode === 'mine' && demand.status === 'in_progress' && demand.dueAt" class="cost dc-meta">
       当前轮截止：{{ timeText(demand.dueAt) }}
       <span v-if="roundCountdown.overdue" class="dc-danger">已逾期</span>
       <span v-else class="dc-count" :class="{ 'dc-urgent': roundCountdown.urgent }">{{ roundCountdown.text }}</span>

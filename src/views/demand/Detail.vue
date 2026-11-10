@@ -39,8 +39,9 @@
 
       <section v-if="!isOwner" class="dd-actions">
         <template v-if="canClaim">
-          <button class="btn" :disabled="busy" @click="openDeposit">付押金接单（{{ depositText }}）</button>
+          <button class="btn" :disabled="busy" @click="openDepositSandbox()">{{ busy ? '获取收款码…' : `支付宝扫码付押金 ¥${depositYuan} 接单` }}</button>
           <button class="btn ghost" :disabled="busy" @click="openChat">联系发布方</button>
+          <button class="btn quiet" :disabled="busy" @click="doDepositPass">开发环境一键直通接单</button>
         </template>
         <p v-else-if="demand.status === 'open' && demand.escrowStatus !== 'escrowed'" class="note">该任务尚未完成托管付款，暂不可接单；发布方付完托管款后会出现在任务广场。</p>
         <p v-else-if="demand.status === 'open'" class="note">该任务当前不可接单，请另选其他任务。</p>
@@ -52,19 +53,20 @@
       <DemandStagePanel ref="panel" :demand="demand" :is-owner="isOwner" @changed="load" />
     </template>
 
-    <PortalLayer v-model="payVisible" title="付押金接单" modal>
+    <PortalLayer v-model="payVisible" title="支付宝沙箱扫码付押金" modal>
       <div class="pay-body">
-        <p class="cost">押金 {{ payAmountText }}（预算的 10%，以后端返回金额为准），沙箱收款不产生真实资金。</p>
+        <p class="cost">押金 {{ payAmountText }}，金额以后端返回值为准；沙箱收款不产生真实资金。</p>
         <p class="cost">支付成功并查单确认后即视为接单成功，首轮验收计时同步开始。</p>
         <img v-if="payQr" :src="payQr" alt="支付宝沙箱押金收款二维码" width="220" height="220">
-        <p v-if="payMessage" class="cost pay-message">{{ payMessage }}</p>
+        <button class="btn pay-refresh" :disabled="payRefreshing" @click="refreshDepositQr">{{ payRefreshing ? '生成新码中…' : '刷新二维码' }}</button>
+        <p class="cost pay-message">{{ payMessage || '等待支付结果…扫码完成后会自动确认' }}</p>
         <button class="btn" :disabled="payChecking" @click="checkDeposit">{{ payChecking ? '查询中…' : '我已完成支付' }}</button>
       </div>
     </PortalLayer>
   </div>
 </template>
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import QRCode from 'qrcode'
@@ -86,12 +88,13 @@ const payQr = ref('')
 const payAmount = ref(0)
 const payMessage = ref('')
 const payChecking = ref(false)
+const payRefreshing = ref(false)
 const isOwner = computed(() => !!demand.value && !!user.value?.userId && String(demand.value.acceptedCreatorId) === String(user.value.userId))
 const canClaim = computed(() => demand.value?.status === 'open' && demand.value?.escrowStatus === 'escrowed')
 const tagList = computed(() => String(demand.value?.tags || '').split(/[,，]/).map(t => t.trim()).filter(Boolean))
 const statusTone = computed(() => ({ open: 'warn', in_progress: 'info', selected: 'info', completed: 'ok', closed: 'off', failed: 'danger' }[demand.value?.status] || 'off'))
-// 押金 = floor(预算/10)，展示以后端 payDeposit 返回值为准，这里只是接单前的预告值
-const depositText = computed(() => money(Math.floor((Number(demand.value?.budget) || 0) / 10)))
+// 押金 = floor(预算/10)，与 APP 按钮预告口径一致；实际扣款金额与接单结果以后端查单响应为准
+const depositYuan = computed(() => Math.floor((Number(demand.value?.budget) || 0) / 1000))
 const payAmountText = computed(() => money(payAmount.value))
 async function load() {
   if (!demandId.value) { error.value = '任务编号无效'; pending.value = false; return }
@@ -100,10 +103,36 @@ async function load() {
   catch (failure) { error.value = failure.message || '任务加载失败'; await handleError(failure) }
   finally { pending.value = false }
 }
-async function openDeposit() {
+// 备用通路：一键直通付押金并接单（沙箱未配置或被护栏拒绝时使用）
+async function doDepositPass() {
+  if (busy.value) return
   busy.value = true
   try {
-    const result = await api.value.payDeposit(demand.value.demandId)
+    await api.value.devPassDeposit(demand.value.demandId)
+    ElMessage.success('押金已入账，接单成功，首轮计时开始')
+    await load()
+    await panel.value?.reload()
+  } catch (failure) {
+    if (failure?.code === 403) ElMessage.warning('请先开通创作者资格再接单')
+    else if (failure?.code === 400) ElMessage.warning(failure.message || '开发直通不可用，请改用支付宝沙箱扫码付款')
+    else await handleError(failure)
+  } finally { busy.value = false }
+}
+// 主路径：支付宝沙箱扫码付押金并接单，收款码打开后每 3 秒静默查单（与 APP 弹窗同口径）。
+// refresh=true 让服务端换新商户单号重出码，用于旧码失效后手动/自动换码。
+async function openDepositSandbox({ refresh = false } = {}) {
+  busy.value = true
+  try {
+    const result = await api.value.payDeposit(demand.value.demandId, refresh)
+    if (result?.paid) {
+      // 旧收款码其实已被扫付，服务端已就地结算接单，这里按成功收尾
+      stopPayPolling()
+      payVisible.value = false
+      ElMessage.success('押金此前已支付，请查看任务最新状态')
+      await load()
+      await panel.value?.reload()
+      return
+    }
     if (!result?.qrCode) throw Object.assign(new Error('未取到沙箱支付二维码'), { code: 500 })
     payAmount.value = Number(result.amount) || 0
     payQr.value = await QRCode.toDataURL(result.qrCode, { width: 220, margin: 2 })
@@ -115,23 +144,49 @@ async function openDeposit() {
     else await handleError(failure)
   } finally { busy.value = false }
 }
-async function checkDeposit() {
+async function refreshDepositQr() {
+  if (payRefreshing.value) return
+  payRefreshing.value = true
+  payMessage.value = '正在生成新的收款码…'
+  try { await openDepositSandbox({ refresh: true }) } finally { payRefreshing.value = false }
+}
+let payTimer = null
+let payRotateTimer = null
+function stopPayPolling() { if (payTimer) { clearInterval(payTimer); payTimer = null } }
+watch(payVisible, visible => {
+  stopPayPolling()
+  if (payRotateTimer) { clearInterval(payRotateTimer); payRotateTimer = null }
+  if (visible) {
+    payTimer = setInterval(() => { checkDeposit({ silent: true }) }, 3000)
+    // 沙箱收款码有有效期，弹窗停留超过 5 分钟自动换一张新码（与 APP 同口径）
+    payRotateTimer = setInterval(() => { refreshDepositQr() }, 5 * 60 * 1000)
+  }
+})
+onUnmounted(() => { stopPayPolling(); if (payRotateTimer) clearInterval(payRotateTimer) })
+async function checkDeposit({ silent = false } = {}) {
   if (payChecking.value) return
-  payChecking.value = true
+  if (!silent) { payChecking.value = true; payMessage.value = '' }
   try {
     const result = await api.value.confirmDeposit(demand.value.demandId)
     if (result?.claimed) {
+      stopPayPolling()
       payVisible.value = false
       ElMessage.success('押金已入账，接单成功，首轮计时开始')
       await load()
       await panel.value?.reload()
     } else if (result?.paid) {
+      // 扣到钱却没接成功（多半被抢先），继续轮询没有意义
+      stopPayPolling()
       payMessage.value = result.reason || '押金已扣款但接单未成功，请联系平台核对'
-    } else {
-      payMessage.value = result?.reason || '尚未查询到支付成功，请完成支付后重试'
-    }
-  } catch (failure) { payMessage.value = failure.message || '查询失败，请稍后重试' }
-  finally { payChecking.value = false }
+    } else if (result?.closed) {
+      // 支付宝侧旧单已关闭，当前码再怎么扫也不会到账，自动换一张新码
+      await refreshDepositQr()
+    } else if (result?.reason) {
+      stopPayPolling()
+      payMessage.value = result.reason
+    } else if (!silent) payMessage.value = '尚未查询到支付成功，请完成支付后重试'
+  } catch (failure) { if (!silent) payMessage.value = failure.message || '查询失败，请稍后重试' }
+  finally { if (!silent) payChecking.value = false }
 }
 async function openChat() {
   try { await api.value.demandChatSession(demand.value.demandId); ElMessage.success('会话已就绪，可在「会话」面板沟通') }
@@ -155,9 +210,10 @@ onMounted(load)
 .dd-money b { display: block; font-size: 22px; color: var(--cinnabar, #f56c6c) }
 .dd-money span { font-size: 12px; color: var(--ink-3, #909399) }
 .dd-info { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 18px; margin: 16px 0; padding: 14px 16px; border: 1px solid var(--rule, #ebeef5); border-radius: 8px; background: #fcfbf8 }
-.dd-info > div { display: flex; gap: 8px; font-size: 13px }
+.dd-info > div { display: flex; gap: 8px; font-size: 13px; min-width: 0 }
 .dd-info dt { color: var(--ink-3, #909399); flex: none }
-.dd-info dd { margin: 0; color: var(--ink, #303133) }
+/* 任务编号这类长串不换行会挤进相邻格子造成字段粘连 */
+.dd-info dd { margin: 0; min-width: 0; overflow-wrap: anywhere; color: var(--ink, #303133) }
 .dd-fail { margin: 0 0 12px; padding: 9px 12px; border-radius: 6px; background: #fef0f0; color: #f56c6c; font-size: 13px }
 .dd-block { margin-bottom: 14px }
 .dd-block h3, .dd-section-title { margin: 0 0 8px; font-size: 15px }
@@ -168,6 +224,7 @@ onMounted(load)
 .pay-body { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center }
 .pay-body .cost { margin: 0; font-size: 12.5px; color: var(--ink-3, #909399) }
 .pay-message { color: #e6a23c }
+.pay-refresh { padding: 4px 16px; font-size: 12px }
 .dialog-body { display: flex; flex-direction: column; gap: 12px }
 .dialog-foot { display: flex; justify-content: flex-end }
 </style>

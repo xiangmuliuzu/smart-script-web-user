@@ -9,7 +9,7 @@
           <option v-for="option in demandStatusOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
         </select>
       </label>
-      <label class="field">搜索<input v-model="filters.keyword" type="search" placeholder="标题或任务编号"></label>
+      <label class="field">搜索<input v-model="filters.keyword" type="search" placeholder="标题或任务编号" @keyup.enter="applyFilters"></label>
       <label class="field">排序
         <select v-model="filters.sort">
           <option v-for="option in SORT_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option>
@@ -20,7 +20,7 @@
     </form>
 
     <LoadState :pending="pending" :error="error" :retry="load" />
-    <p v-if="!pending && !error && !list.length" class="load-state">还没有接下的任务，去<a class="link" @click="$router.push('/demand')">任务广场</a>看看</p>
+    <p v-if="!pending && !error && !list.length" class="load-state">还没有接下的任务，去<router-link class="link" to="/demand">任务广场</router-link>看看</p>
     <DemandCard v-for="item in list" :key="item.demandId" :demand="item" mode="mine" @open="goDemandDetail">
       <button class="btn sm" @click.stop="goDemandDetail(item.demandId)">去交付</button>
       <button class="btn sm ghost" @click.stop="openChat(item)">联系发布方</button>
@@ -41,7 +41,8 @@ import DemandTabs from '../../components/demand/DemandTabs.vue'
 import DemandCard from '../../components/demand/DemandCard.vue'
 import { demandStatusOptions, SORT_OPTIONS } from '../../utils/demand.js'
 const { api, openPanel, goDemandDetail, handleError } = usePortal()
-const PAGE_SIZE = 10
+// 分页口径与 APP 及 API 默认值一致
+const PAGE_SIZE = 20
 const list = ref([])
 const total = ref(0)
 const pageNum = ref(1)

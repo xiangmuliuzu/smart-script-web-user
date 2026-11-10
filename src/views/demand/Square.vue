@@ -17,7 +17,7 @@
 
     <form class="square-filter" @submit.prevent="applyFilters">
       <div class="toolbar">
-        <label class="field search-field">搜索<input v-model="filters.keyword" type="search" placeholder="输入任务标题或任务编号"></label>
+        <label class="field search-field">搜索<input v-model="filters.keyword" type="search" placeholder="输入任务标题或任务编号" @keyup.enter="applyFilters"></label>
         <label class="field sort-field">排序
           <select v-model="filters.sort" @change="applyFilters">
             <option v-for="option in SORT_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option>
@@ -89,7 +89,8 @@ import DemandTabs from '../../components/demand/DemandTabs.vue'
 import DemandCard from '../../components/demand/DemandCard.vue'
 import { money, genreOptions, genreLabel, SORT_OPTIONS } from '../../utils/demand.js'
 const { api, goDemandDetail, handleError } = usePortal()
-const PAGE_SIZE = 10
+// 分页口径与 APP 及 API 默认值一致
+const PAGE_SIZE = 20
 const list = ref([])
 const total = ref(0)
 const pageNum = ref(1)

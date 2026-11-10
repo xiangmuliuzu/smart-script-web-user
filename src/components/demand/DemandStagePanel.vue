@@ -4,7 +4,8 @@
     <div v-if="!pending && !error && !stages.length" class="note">该任务未配置逐轮验收，接单后按整单时限（{{ formatHours(demand.durationHours) }}）交付。</div>
     <template v-else>
       <p v-if="activeRound" class="round-banner" :data-urgent="countdown(activeRound.dueAt).urgent">第 {{ activeRound.stageOrder }} 轮 · {{ countdown(activeRound.dueAt).text }}</p>
-      <p v-else-if="stages.every(s => s.status === 'approved')" class="round-banner done">全部 {{ stages.length }} 轮已验收通过，款项已逐轮放出</p>
+      <p v-else-if="reviewable" class="round-banner wait">第 {{ reviewable.stageOrder }} 轮交付已提交，等待发布者验收</p>
+      <p v-else-if="stages.length && stages.every(s => s.status === 'approved')" class="round-banner done">全部 {{ stages.length }} 轮已验收通过，款项已逐轮放出</p>
 
       <article v-for="stage in stages" :key="stage.stageId" class="stage-card" :data-tone="stageTone(stage)">
         <div class="sc-head">
@@ -51,7 +52,7 @@
         <label class="field">交付作品
           <select v-model.number="deliverForm.workId">
             <option :value="null">选择作品（仅本人未上架售卖的作品可交付）</option>
-            <option v-for="work in works" :key="work.workId" :value="Number(work.workId)">{{ work.title || ('作品#' + work.workId) }}（{{ work.status }}）</option>
+            <option v-for="work in works" :key="work.workId" :value="Number(work.workId)">{{ work.title || ('作品#' + work.workId) }}（{{ workStatusLabel(work.status) }}）</option>
           </select>
         </label>
         <label class="field">交付说明<textarea v-model="deliverForm.deliverableDesc" rows="4" placeholder="本轮完成的集数、主要内容与待确认事项…"></textarea></label>
@@ -80,6 +81,7 @@ import { usePortal } from '../../utils/portal.js'
 import LoadState from '../LoadState.vue'
 import PortalLayer from '../PortalLayer.vue'
 import { money, timeText, countdown, durationText, stageStatusLabel, stageTone, isActiveStage, extendTypeLabel, extendStatusLabel, extendTone, aiBrief, dueTone, formatHours } from '../../utils/demand.js'
+import { shelfStatusLabel } from '../../utils/copyright.js'
 const props = defineProps({ demand: { type: Object, required: true }, isOwner: Boolean })
 // 提交交付/延时动作后通知父页重拉任务详情（整单状态可能随之变化）
 const emit = defineEmits(['changed'])
@@ -103,6 +105,12 @@ let pollTimer = null
 let syncTimer = null
 
 const isActive = stage => props.isOwner && isActiveStage(stage)
+// 交付选作品的状态汉化：sys_work.status 库端枚举 draft/pending/approved/on_shelf/off_shelf，
+// 上下架两态复用版权域同一个 shelfStatusLabel，其余在本文件补齐，不再把英文枚举直接给用户看
+const WORK_STATUS_LABELS = { draft: '草稿', pending: '审核中', approved: '已通过' }
+const workStatusLabel = status => WORK_STATUS_LABELS[status] || shelfStatusLabel(status)
+// 已提交待发布者验收的轮次：面板顶部给「待验收」横幅，创作者知道现在轮到对方操作
+const reviewable = computed(() => stages.value.find(stage => stage.status === 'submitted') || null)
 // 当前活动轮：面板顶部的倒计时条只标这一轮，后续轮次的时限在各自卡片里展示
 const activeRound = computed(() => { void tick.value; return stages.value.find(stage => isActiveStage(stage)) || null })
 const historyOf = stageId => history.value.filter(row => String(row.stageId) === String(stageId))
@@ -175,6 +183,7 @@ defineExpose({ reload })
 .stage-panel { margin-top: 16px }
 .round-banner { margin: 0 0 10px; padding: 9px 12px; border-radius: 6px; background: #ecf5ff; color: #409eff; font-size: 13px; font-weight: 600 }
 .round-banner[data-urgent="true"] { background: #fef0f0; color: #f56c6c }
+.round-banner.wait { background: #fdf6ec; color: #e6a23c }
 .round-banner.done { background: #f0f9eb; color: #67c23a }
 .stage-card { border: 1px solid var(--rule, #ebeef5); border-left-width: 3px; border-radius: 6px; padding: 12px 14px; margin-bottom: 10px; background: #fff }
 .stage-card[data-tone="ok"] { border-left-color: #67c23a }

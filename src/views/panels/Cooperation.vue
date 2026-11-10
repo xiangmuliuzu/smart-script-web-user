@@ -158,6 +158,7 @@
       <div style="text-align:center">
         <p>测试支付，不会产生真实资金。请使用支付宝沙箱钱包扫码。</p>
         <img v-if="paymentQr" :src="paymentQr" alt="支付宝沙箱支付二维码" width="220" height="220" />
+        <div><button type="button" class="btn" :disabled="paymentRefreshing" @click="refreshPaymentQr">{{ paymentRefreshing ? '生成新码中…' : '刷新二维码' }}</button></div>
         <p v-if="paymentMessage">{{ paymentMessage }}</p>
         <button type="button" class="btn" :disabled="paymentChecking" @click="checkSandboxPayment">{{ paymentChecking ? '查询中…' : '查询支付结果' }}</button>
       </div>
@@ -547,14 +548,25 @@ const paymentVisible = ref(false)
 const paymentQr = ref('')
 const paymentOrder = ref(null)
 const paymentChecking = ref(false)
+const paymentRefreshing = ref(false)
 const paymentMessage = ref('')
 
-/** 支付宝沙箱：取二维码扫码支付，再由服务端向支付宝查单确认（与 App / 企业端一致）。 */
-async function doPayOrder(o) {
-  // 付款前置提醒：与 APP 端口径一致，交易付款后不支持退款
-  try { await ElMessageBox.confirm('请注意：本订单付款成功后不支持退款，请与卖方确认交易内容无误后再谨慎决定是否付款。', '付款确认', { type: 'warning', confirmButtonText: '确认付款', cancelButtonText: '再想想' }) } catch { return }
+/** 支付宝沙箱：取二维码扫码支付，再由服务端向支付宝查单确认（与 App / 企业端一致）。
+ *  refresh=true 时服务端换新商户单号重出收款码，用于旧码失效后换码，且不再重复弹付款提醒。 */
+async function doPayOrder(o, { refresh = false } = {}) {
+  if (!refresh) {
+    // 付款前置提醒：与 APP 端口径一致，交易付款后不支持退款
+    try { await ElMessageBox.confirm('请注意：本订单付款成功后不支持退款，请与卖方确认交易内容无误后再谨慎决定是否付款。', '付款确认', { type: 'warning', confirmButtonText: '确认付款', cancelButtonText: '再想想' }) } catch { return }
+  }
   try {
-    const result = await api.value.payOrder(o.orderId)
+    const result = await api.value.payOrder(o.orderId, refresh)
+    if (result?.paid) {
+      // 旧收款码其实已被扫付，服务端已就地结算，这里按成功收尾
+      paymentVisible.value = false
+      ElMessage.success('沙箱支付此前已确认，订单进入交割')
+      await loadOrders()
+      return
+    }
     if (!result?.sandbox || !result.qrCode) throw new Error('获取沙箱支付二维码失败')
     paymentQr.value = await QRCode.toDataURL(result.qrCode, { width: 220, margin: 2 })
     paymentOrder.value = o
@@ -563,12 +575,27 @@ async function doPayOrder(o) {
   } catch (e) { await handleError(e) }
 }
 
+async function refreshPaymentQr() {
+  if (paymentRefreshing.value || !paymentOrder.value) return
+  paymentRefreshing.value = true
+  paymentMessage.value = '正在生成新的收款码…'
+  try { await doPayOrder(paymentOrder.value, { refresh: true }) } finally { paymentRefreshing.value = false }
+}
+
+// 沙箱收款码有有效期，弹窗停留超过 5 分钟自动换一张新码（与 APP 同口径）
+let paymentRotateTimer = null
+watch(paymentVisible, visible => {
+  if (paymentRotateTimer) { clearInterval(paymentRotateTimer); paymentRotateTimer = null }
+  if (visible) paymentRotateTimer = setInterval(() => { refreshPaymentQr() }, 5 * 60 * 1000)
+})
+
 async function checkSandboxPayment() {
   if (paymentChecking.value || !paymentOrder.value) return
   paymentChecking.value = true
   try {
     const result = await api.value.confirmSandboxPayment(paymentOrder.value.orderId)
     if (result?.paid) { paymentVisible.value = false; ElMessage.success('沙箱支付已确认，订单进入交割'); await loadOrders() }
+    else if (result?.closed) { await refreshPaymentQr() }
     else paymentMessage.value = '尚未查询到支付成功，请完成支付后重试'
   } catch (e) { paymentMessage.value = e.message || '查询失败，请稍后重试' }
   finally { paymentChecking.value = false }
@@ -676,7 +703,7 @@ onMounted(() => {
   else if (tab.value === 'order') loadOrders()
   else if (tab.value === 'inquiry') loadInquiries()
 })
-onUnmounted(() => { stopChatPoll() })
+onUnmounted(() => { stopChatPoll(); if (paymentRotateTimer) clearInterval(paymentRotateTimer) })
 </script>
 <style scoped>
 /* ── 询盘手风琴 ── */

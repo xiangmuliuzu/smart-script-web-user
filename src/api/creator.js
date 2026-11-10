@@ -245,7 +245,8 @@ export const modifyQuote = (id, form) => data(`/api/v1/trade/quote/${encodeURICo
 export const acceptQuote = id => data(`/api/v1/trade/quote/${encodeURIComponent(id)}/accept`, { method: 'PUT' })
 // 订单
 export const listOrders = params => data('/api/v1/trade/order/list?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))).toString())
-export const payOrder = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/pay`, { method: 'POST' })
+// refresh=true 让服务端换新商户单号重出收款码（旧码失效后用）
+export const payOrder = (id, refresh = false) => data(`/api/v1/trade/order/${encodeURIComponent(id)}/pay${refresh ? '?refresh=true' : ''}`, { method: 'POST' })
 // 沙箱支付：服务端向支付宝查单确认后才推进订单（与 App / 企业端同一接口）
 export const confirmSandboxPayment = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/pay/confirm`, { method: 'POST' })
 export const completeOrder = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/complete`, { method: 'POST' })
@@ -335,9 +336,11 @@ export const deliverStage = (demandId, stageId, body) => data(`${demandPath(dema
 export const requestStageExtend = (demandId, stageId, body) => data(`${demandPath(demandId)}/stage/${encodeURIComponent(stageId)}/extend/request`, { method: 'POST', body })
 export const stageExtendHistory = (demandId, stageId) => data(`${demandPath(demandId)}/stage/${encodeURIComponent(stageId)}/extend/history`)
 export const demandExtendHistory = demandId => data(demandPath(demandId) + '/extend/history')
-// 接单真实链路：付押金 → 查单确认（confirm 返回 {paid, claimed, reason}，落败时 paid 可能为真而 claimed 为假）。
-// claim 仅兜底，后端要求押金已 held，未付直接调必 400。
-export const payDeposit = demandId => data(demandPath(demandId) + '/pay/deposit', { method: 'POST' })
+// 备用通路：开发直通「点一下支付押金并接单」（与 APP 同端点同开关，prod 护栏下后端 400 拒绝；无创作者资格 403）。
+export const devPassDeposit = demandId => data(demandPath(demandId) + '/pay/deposit/dev-pass', { method: 'POST' })
+// 押金沙箱扫码（次入口）：付押金 → 查单确认（confirm 返回 {paid, claimed, closed, reason}，落败时 paid 可能为真而 claimed 为假）。
+// refresh=true 让服务端换新商户单号重出收款码（仅原付款人可换，他人仍复用同一张码）。
+export const payDeposit = (demandId, refresh = false) => data(demandPath(demandId) + `/pay/deposit${refresh ? '?refresh=true' : ''}`, { method: 'POST' })
 export const confirmDeposit = demandId => data(demandPath(demandId) + '/pay/deposit/confirm', { method: 'POST' })
 export const claimDemand = demandId => data(demandPath(demandId) + '/claim', { method: 'POST' })
 // 任务会话（创作者发起不带 targetUserId），返回会话 VO；后续收发与聊天列表沿用合作抽屉的会话能力
