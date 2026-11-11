@@ -18,8 +18,22 @@ export const updateWork = (id, form) => data(workPath(id), { method: 'PUT', body
 export const sendWorkDeletionCode = id => data(`/api/v1/content/works/${encodeURIComponent(id)}/delete-code`, { method: 'POST' })
 export const deleteWork = (id, code) => data(`/api/v1/content/works/${encodeURIComponent(id)}`, { method: 'DELETE', body: { code } })
 export const submitWork = id => data(workPath(id) + '/submit', { method: 'POST' })
-export const saveChapter = (id, chapter) => data(workPath(id) + '/chapters' + (chapter.chapterId ? '/' + encodeURIComponent(chapter.chapterId) : ''), { method: chapter.chapterId ? 'PUT' : 'POST', body: { chapterTitle: chapter.chapterTitle.trim(), content: chapter.content, isFree: chapter.isFree } })
+export const saveChapter = (id, chapter) => {
+  const body = { chapterTitle: chapter.chapterTitle.trim(), content: chapter.content, isFree: chapter.isFree }
+  // 摘要：只有调用方显式给出字符串才下发（空串=清空）。不传表示“本次不改”，
+  // 否则编辑正文时会把它清空——后端 null 不改、空串清空。
+  if (typeof chapter.summary === 'string') body.summary = chapter.summary
+  return data(workPath(id) + '/chapters' + (chapter.chapterId ? '/' + encodeURIComponent(chapter.chapterId) : ''), { method: chapter.chapterId ? 'PUT' : 'POST', body })
+}
 export const publishChapter = chapterId => data('/api/v1/content/chapters/' + encodeURIComponent(chapterId), { method: 'PUT', body: { status: '0' } })
+// 方案 2：正文定稿后单独调一次 AI，产出「本章摘要 + 台账更新」，后端写 summary 并合并台账（正文不变）。
+export const summarizeChapter = (workId, chapterId, content, model) => data('/api/v1/content/ai/chapter-summary', { method: 'POST', body: { workId, chapterId, content, model } })
+// 每集验收（5 项判定，≥4 项通过；只提示不改正文），结果后端落 sys_chapter_review。
+export const reviewChapter = (workId, chapterId, content, model) => data('/api/v1/content/ai/chapter-review', { method: 'POST', body: { workId, chapterId, content, model } })
+// 卷级状态快照：每 10 集一卷；生成后写正文只注入「本卷 + 上卷」。
+export const buildVolumeSnapshot = (workId, volumeNo, model) => data('/api/v1/content/ai/volume-snapshot', { method: 'POST', body: { workId, volumeNo, model } })
+export const listWorkVolumes = workId => data('/api/v1/content/works/' + encodeURIComponent(workId) + '/volumes')
+export const saveWorkVolume = (workId, volumeNo, snapshot) => data('/api/v1/content/works/' + encodeURIComponent(workId) + '/volumes/' + encodeURIComponent(volumeNo), { method: 'PUT', body: { snapshot } })
 export const deleteChapter = (id, chapterId) => data(workPath(id) + '/chapters/' + encodeURIComponent(chapterId), { method: 'DELETE' })
 export async function upload(file, purpose = 'script') {
   const body = new FormData()
@@ -80,6 +94,12 @@ export const disableSeal = id => data(sealPath(id) + '/disable', { method: 'PUT'
 export const deleteSeal = id => data(sealPath(id), { method: 'DELETE' })
 // AI 生成耗时可能超过默认 30s（大纲尤甚，需等待模型完整输出），单独放长到 120s。
 export const generate = (type, form) => data('/api/v1/content/ai/' + type, { method: 'POST', body: form, timeout: 120000 })
+
+// ──── 创作台账（跨端共享：故事简介 / 主要人物 / 人物关系 / 伏笔 / 时间线 / 物品位置 / 未解线索） ────
+// 与 App 同一接口 /api/v1/content/works/{workId}/ledger；作品归属由后端校验（非本人 403）。
+const ledgerPath = id => '/api/v1/content/works/' + encodeURIComponent(id) + '/ledger'
+export const getWorkLedger = id => data(ledgerPath(id))
+export const saveWorkLedger = (id, ledger) => data(ledgerPath(id), { method: 'PUT', body: ledger })
 
 // 导演(skill) 列表（E 模块，供「导演(skill)选择」下拉）
 export const listAiSkills = async () => asList(await data('/api/v1/content/ai/skills'))

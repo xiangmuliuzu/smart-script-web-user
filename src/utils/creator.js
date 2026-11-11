@@ -65,7 +65,9 @@ export function matchOutlineChapter(title, chapters) {
 export function outlineChapters(text) {
   const chapters = []
   const kinds = new Set()
-  for (const line of String(text || '').split(/\r?\n/)) {
+  // 长文生成常把「第N集：」粘在上一段句末，先按句末标点切开，避免整集被吞进上一集。
+  const normalized = String(text || '').replace(new RegExp(`([。！？…”』」）])\\s*(第\\s*[${NUMBER}]+\\s*[章节節集回]\\s*[:：])`, 'g'), '$1\n$2')
+  for (const line of normalized.split(/\r?\n/)) {
     const heading = line.trim().replace(/^#{1,6}\s*/, '').replace(/^\*\*(.*?)\*\*$/, '$1')
     if (chapterIdentity(heading).numbered) {
       kinds.add(chapterIdentity(heading).explicit ? 'explicit' : 'list')
@@ -76,8 +78,8 @@ export function outlineChapters(text) {
   }
   for (const chapter of chapters) chapter.summary = chapter.summary.trim()
   const identities = chapters.map(chapter => chapterIdentity(chapter.title))
-  const names = identities.map(identity => identity.name).filter(Boolean)
-  if (kinds.size > 1 || chapters.some(chapter => chapter.title.length > 100 || !chapter.summary) || new Set(identities.map(identity => identity.number)).size !== chapters.length || new Set(names).size !== names.length) return []
+  // 只拦编号重复、格式混用、无正文的条目；事件名重复在长连载里很常见（同一件事分几集推进），不应整份拒绝。
+  if (kinds.size > 1 || chapters.some(chapter => chapter.title.length > 100 || !chapter.summary) || new Set(identities.map(identity => identity.number)).size !== chapters.length) return []
   return chapters
 }
 // 新章由后端按现有最大序号追加，无法安全推断的情况一律交给作者处理。

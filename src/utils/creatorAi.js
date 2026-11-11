@@ -1,4 +1,5 @@
 import { outlineChapters } from './creator.js'
+import { documentText } from './document.js'
 
 // 换行统一走常量，避免工具转义。
 const LINE_BREAK = String.fromCharCode(10)
@@ -60,22 +61,26 @@ export function outlineSummary(text, limit = 200) {
 }
 
 /** 单章正文生成提示词（与创作工作台「按大纲生成各章」保持一致）。 */
-export function chapterWritePrompt({ title, summary, outline }) {
-  return [
+export function chapterWritePrompt({ title, summary, outline, guard }) {
+  const parts = [
     `请根据以下完整大纲，为“${title}”创作正文，只写这一章。`,
     `完整大纲：\n${outline}`,
     `本章剧情概要：\n${summary}`
-  ].join('\n')
+  ]
+  if (guard) parts.push(String(guard))
+  return parts.join('\n')
 }
 
 /** 单章达到生成长度上限后的续写提示词，basedOnText 取已生成正文末尾。 */
-export function chapterContinuePrompt({ title, summary, outline, basedOnText }) {
-  return [
+export function chapterContinuePrompt({ title, summary, outline, basedOnText, guard }) {
+  const parts = [
     `请根据大纲和本章概要，从已有正文的末尾接着写完“${title}”。不要重复已有正文，不要写其他章节。`,
     `完整大纲：\n${outline}`,
     `本章概要：\n${summary}`,
     `已有正文末尾：\n${basedOnText}`
-  ].join('\n')
+  ]
+  if (guard) parts.push(String(guard))
+  return parts.join('\n')
 }
 
 // ── 大纲局部修订 ──
@@ -235,4 +240,396 @@ export function groupAiCreateRecords(records) {
     groups.push({ id: 'record-' + index, kind: 'single', record, tokenRecords: [record], createdAt: record.createdAt, tokens: Number(record.tokens) || 0 })
   })
   return groups
+}
+
+// ── 创作台账与续写注入（跨端共享：人物卡/关系/伏笔/时间线/物品/未解线索） ──
+
+/**
+ * 台账注入块：六类各取尾部（台账是追加式，最新事实在末尾，从头截只会注入第 1 集旧状态）。
+ * 每类预算 = limit/6，超长标「（前略）」保留标签，避免只剩半句。
+ */
+export function ledgerPromptBlock(ledger, limit = 1600) {
+  const source = ledger || {}
+  const fields = [
+    ['主要人物', source.characters],
+    ['人物关系', source.relations],
+    ['伏笔（埋在哪集/是否回收）', source.foreshadow],
+    ['时间线', source.timeline],
+    ['物品位置', source.items],
+    ['未解线索', source.threads],
+  ]
+  const perField = Math.max(120, Math.floor(limit / fields.length))
+  const lines = fields
+    .filter(([, value]) => String(value || '').trim())
+    .map(([label, value]) => {
+      const text = String(value).trim()
+      return `${label}：\n${text.length > perField ? '（前略）' + text.slice(-perField) : text}`
+    })
+  if (!lines.length) return ''
+  const text = lines.join('\n\n')
+  return '【创作台账（已定事实，不得冲突）】\n' + (text.length > limit + 400 ? text.slice(-limit) : text)
+}
+
+/** 从本集事件卡里取「本集出场：A、B」名单。 */
+export function episodeCastFrom(card) {
+  const match = String(card || '').match(/本集出场[：:]\s*(.+)/)
+  if (!match) return []
+  return match[1]
+    .split(/[、，,／/；;]+/)
+    .map(name => name.trim())
+    .filter(Boolean)
+    .slice(0, 6)
+}
+
+/**
+ * 按出场人物筛选注入：人物卡与关系只保留本集出场者，其余四类（伏笔/时间线/道具/线索）仍全量。
+ * 这是 50 集量级的关键——设定库保留全量，正文只注入本集需要的 2-4 人。
+ */
+export function ledgerPromptBlockByCast(ledger, cast, limit = 1600) {
+  const names = (cast || []).filter(Boolean)
+  if (!names.length) return ledgerPromptBlock(ledger, limit)
+  const source = ledger || {}
+  const hitLines = (text) => String(text || '')
+    .split(/\n/)
+    .map(line => line.trim())
+    .filter(line => line && names.some(name => line.includes(name)))
+    .join('\n')
+  let characters = hitLines(source.characters)
+  if (!characters) characters = String(source.characters || '').trim().slice(-700)
+  let relations = hitLines(source.relations)
+  const parts = []
+  if (characters) parts.push(`【本集出场人物（只写这几人，勿写未出场人物）】\n${characters}`)
+  if (relations) parts.push(`【相关关系（仅本集出场人物）】\n${relations}`)
+  const rest = ledgerPromptBlock({
+    foreshadow: source.foreshadow,
+    timeline: source.timeline,
+    items: source.items,
+    threads: source.threads,
+  }, Math.max(400, limit - 1100))
+  if (rest) parts.push(rest)
+  if (!parts.length) return ''
+  const text = parts.join('\n\n')
+  return text.length > limit ? text.slice(-limit) : text
+}
+
+/**
+ * 卷级状态快照：每 10 集一卷，注入「本卷快照 + 上卷快照」，替代整份台账全文。
+ * 本卷是当前事实，上卷只作背景；未生成快照时返回空串，回退台账。
+ */
+export function volumeSnapshotBlock(volumes, chapterNo, limit = 1600) {
+  const list = Array.isArray(volumes) ? volumes : []
+  const volumeNo = Math.ceil(Number(chapterNo || 1) / 10)
+  const snapshotOf = (no) => {
+    const hit = list.find(item => Number(item.volumeNo) === Number(no))
+    return String(hit?.snapshot || '').trim()
+  }
+  const parts = []
+  const current = snapshotOf(volumeNo)
+  if (current) parts.push(`【本卷状态（第${volumeNo}卷，当前事实以此为准）】\n${current.slice(-800)}`)
+  const previous = volumeNo > 1 ? snapshotOf(volumeNo - 1) : ''
+  if (previous) parts.push(`【上卷状态（第${volumeNo - 1}卷，仅作背景，不得与本卷冲突）】\n${previous.slice(-800)}`)
+  if (!parts.length) return ''
+  const text = parts.join('\n\n')
+  return text.length > limit ? text.slice(-limit) : text
+}
+
+/** 从整份大纲里取某一集的事件卡：先按集号，再按集名匹配。 */
+export function episodeCardFrom(outline, chapterTitle, chapterNo) {
+  const text = String(outline || '')
+  const heads = []
+  const re = /^第\s*(\d{1,3})\s*集[：:]/gm
+  let match
+  while ((match = re.exec(text))) heads.push({ no: Number(match[1]), index: match.index })
+  if (!heads.length) return ''
+  const blocks = heads.map((head, index) => ({
+    no: head.no,
+    text: text.slice(head.index, index + 1 < heads.length ? heads[index + 1].index : text.length).trim(),
+  }))
+  const byNo = blocks.find(block => Number(chapterNo) > 0 && block.no === Number(chapterNo))
+  if (byNo) return byNo.text
+  const name = String(chapterTitle || '').replace(/^第\s*\S+?\s*[集章][：:·\s]*/, '').trim()
+  return (name && blocks.find(block => block.text.includes(name))?.text) || ''
+}
+
+/**
+ * 最近几章已落库的摘要（跨章连贯锚点）：只取当前集之前的章节，最多 6 章、合计 ≤1800 字。
+ * 50 集量级下 4 章太短，回溯不到上一卷的关系变化；摘要本身每章 ≤500 字，这里再从后往前累加。
+ */
+export function chapterSummaryBlock(chapters, currentNo, limit = 1800) {
+  const list = (chapters || [])
+    .map((chapter, index) => ({
+      ...chapter,
+      no: Number(chapter?.chapterNo || (String(chapter?.chapterTitle || '').match(/第\s*(\d{1,3})\s*集/) || [])[1] || index + 1)
+    }))
+    .filter(chapter => chapter.no < Number(currentNo || 0) && String(chapter.summary || '').trim())
+    .sort((a, b) => a.no - b.no)
+    .slice(-6)
+  if (!list.length) return ''
+  const lines = list.map(chapter => `第${chapter.no}集：${String(chapter.summary).trim()}`)
+  // 从最近一章往前累加，保证整章摘要不被切半句。
+  let text = ''
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const next = text ? `${lines[i]}\n${text}` : lines[i]
+    if (next.length > limit) break
+    text = next
+  }
+  return text ? `【前情摘要（已发生事实，勿重复交代）】\n${text}` : ''
+}
+
+/** 上一章正文末尾（默认 800 字），用作续写的承接锚点；过长会挤占模型输出额度。 */
+export function chapterTail(content, limit = 800) {
+  const text = String(content || '').trim()
+  return text.length > limit ? text.slice(-limit) : text
+}
+
+/**
+ * 续写提示词：本集事件卡（含本集出场）→ 卷快照 → 前情摘要 → 出场人物设定 → 上一章末尾 → 本集已有正文 → 作者要求。
+ * 卷快照优先；没有快照时台账兜底，且台账按出场人物筛选。
+ */
+export function continuationPrompt({ title, chapterNo, outline, ledger, volumes, prevChapter, prevSummaries, currentContent, requirement }) {
+  const card = episodeCardFrom(outline, title, chapterNo)
+  const cast = episodeCastFrom(card)
+  const volumeText = volumeSnapshotBlock(volumes, chapterNo)
+  const ledgerText = ledgerPromptBlockByCast(ledger, cast)
+  const parts = [`请续写“${title || '本集'}”，只写这一集，以动作和对白推进，700-900 字，结尾留一个具体钩子。`]
+  if (card) parts.push(`【本集事件卡】\n${card}`)
+  if (volumeText) parts.push(volumeText)
+  if (prevSummaries) parts.push(prevSummaries)
+  if (ledgerText) parts.push(ledgerText)
+  const prev = chapterTail(prevChapter)
+  if (prev) parts.push(`【上一章末尾（承接语气与处境，勿重复）】\n${prev}`)
+  const current = documentText(currentContent)
+  if (current) parts.push(`【本集已有正文（从末尾接着写）】\n${chapterTail(current, 1500)}`)
+  if (String(requirement || '').trim()) parts.push(`【本集要求】\n${String(requirement).trim()}`)
+  return parts.join('\n\n')
+}
+
+/**
+ * 规则版生成后核查（模型档暂缓）：只提示、不阻断。
+ * 覆盖：大纲集号连续与重复、每集五项是否齐全、正文空/过短。
+ */
+export function checkGenerationRules({ outline, chapters, ledger }) {
+  const issues = []
+  const heads = []
+  const re = /^第\s*(\d{1,3})\s*集[：:]/gm
+  const source = String(outline || '')
+  let match
+  while ((match = re.exec(source))) heads.push(Number(match[1]))
+  if (!heads.length) {
+    issues.push('大纲里没有识别到「第N集：」标题，正文会缺少事件卡依据')
+  } else {
+    if (new Set(heads).size !== heads.length) issues.push('大纲存在重复集号')
+    heads.forEach((no, index) => { if (no !== index + 1) issues.push(`大纲集号不连续：第 ${index + 1} 个标题是第 ${no} 集`) })
+    const blocks = source.split(/^第\s*\d{1,3}\s*集[：:]/gm).slice(1)
+    blocks.forEach((block, index) => {
+      ;['本集事件', '冲突与推进', '结果或反转', '结尾钩子'].forEach(label => {
+        if (!block.includes(label)) issues.push(`第 ${heads[index] || index + 1} 集缺少「${label}」`)
+      })
+    })
+  }
+  ;(chapters || []).forEach((chapter, index) => {
+    const text = documentText(chapter.content)
+    if (!text.trim()) issues.push(`第 ${index + 1} 集正文为空`)
+    else if (text.length < 500) issues.push(`第 ${index + 1} 集正文偏短（${text.length} 字）`)
+  })
+  if (!ledger || !String(ledger.characters || '').trim()) issues.push('人物卡为空，续写时没有人物口径可注入')
+  return issues
+}
+
+// ── 人/事/物一致性：提示词铁律 + 生成后核查 ──
+
+const NAME_PATTERN = /([\u4e00-\u9fa5]{2,3})[（(][0-9]{1,3}\s*岁/g
+
+// 常见姓氏：只用于「正文是否冒出名单外的人名」的粗筛，命中只提示、不改写正文。
+const COMMON_SURNAMES = '王李张刘陈杨黄赵吴周徐孙马朱胡郭何高林罗郑梁谢宋唐许韩冯邓曹彭曾肖田董袁潘蒋蔡余杜叶程苏魏吕丁任沈姚卢姜崔钟谭陆汪范金石廖贾夏韦付方白邹孟熊秦邱江尹薛段雷侯龙史陶黎贺顾毛郝龚邵万钱严覃武戴莫孔向汤'
+const NOT_A_NAME = /[家老院子屋门窗柜墙寨村店铺时候里上下前后之间们位个条面只把件]/
+
+/** 从人物设定里提取正式人名（优先认「顾守山（62岁/男）」这种写法）。 */
+export function rosterFromCharacters(characters) {
+  const text = Array.isArray(characters) ? characters.join('\n') : String(characters || '')
+  const names = []
+  const push = (name) => {
+    const value = String(name || '').trim()
+    if (value.length >= 2 && value.length <= 4 && !names.includes(value)) names.push(value)
+  }
+  let match
+  NAME_PATTERN.lastIndex = 0
+  while ((match = NAME_PATTERN.exec(text))) push(match[1])
+  return names.slice(0, 20)
+}
+
+/** 正文里出现、但不在人物名单里的疑似人名。 */
+export function unknownNames(text, roster) {
+  const body = String(text || '')
+  const known = new Set((roster || []).filter(Boolean))
+  // 已知人名在正文里的所有占位区间：落在区间内的窗口一律跳过，免得从「赵金凤」里切出「金凤在」。
+  const spans = []
+  known.forEach(name => {
+    let index = body.indexOf(name)
+    while (index >= 0) { spans.push([index, index + name.length]); index = body.indexOf(name, index + 1) }
+  })
+  const found = []
+  for (let i = 0; i + 3 <= body.length; i += 1) {
+    if (!COMMON_SURNAMES.includes(body[i])) continue
+    if (spans.some(([start, end]) => i >= start && i < end)) continue
+    const candidate = body.slice(i, i + 3)
+    if (known.has(candidate) || found.includes(candidate)) continue
+    if (NOT_A_NAME.test(candidate[1])) continue
+    found.push(candidate)
+  }
+  return found.slice(0, 8)
+}
+
+/**
+ * 人/事/物铁律：人物只能来自名单、物件状态冻结、事件只承接。
+ * 实测模型会在末尾自造「面具丢了一面」「抽屉里有根麻绳」这类前文没有的状态，必须显式禁止。
+ */
+export function stateGuardBlock({ roster, items, timeline, limit = 1000 }) {
+  const names = (roster || []).filter(Boolean)
+  const clip = (text, size) => (String(text || '').trim().length > size ? String(text).trim().slice(-size) : String(text || '').trim())
+  const itemText = clip(items, 280)
+  const eventText = clip(timeline, 320)
+  const lines = ['【铁律·人/事/物不得自造，违反即本集不合格】']
+  lines.push(names.length
+    ? `人物：主要角色只能写这些名字——${names.join('、')}；不得改名、不得另造主要角色、不得让不在场的人凭空到场。`
+    : '人物：只能写前文已出场的人；不得改名、不得另造主要角色、不得让人凭空到场。')
+  lines.push('配角：允许无名群众或只在本集露面的临时角色烘托气氛（如“吴德贵带来的年轻人”“米粉店里的食客”），但他们只能说闲话、围观、被支使，不得掌握关键线索、不得替主角做决定、不得推动主线、不得跨集复用；凡要承担主线动作或连续多集出现的人，必须已在人物列表里。')
+  lines.push('物件：数量、所在位置、完好状态一律沿用下文清单；本集事件卡没写“丢失/拿走/损坏/交出”，正文不得把它写丢了、写坏了、写少了；不得引用前文从未出现过的道具。')
+  if (itemText) lines.push(`物品与位置（沿用）：\n${itemText}`)
+  lines.push('事件：只承接下列已发生的事实；本集事件卡规定的进程不得跳过，已发生的事不得再写一遍。')
+  if (eventText) lines.push(`已发生事件（沿用）：\n${eventText}`)
+  const text = lines.join('\n')
+  return text.length > limit ? text.slice(0, limit) : text
+}
+
+/**
+ * 生成后核查：出场名单是否都写到、名单外人物是否已影响主线。只提示、不改写。
+ *
+ * 名单外人物分两级：只在本集出现一次的视为临时配角（允许烘托气氛，不报）；
+ * 同一名字跨两集以上复用的，说明模型已经把它当固定角色在写，会挤占主线，必须提示补进人物便签或删掉。
+ * strangerUsage 传一个跨集复用的 Map<name, 已出现集数>，本函数负责累加。
+ */
+export function auditEpisodeState({ text, cast, roster, strangerUsage }) {
+  const body = String(text || '')
+  const issues = []
+  ;(cast || []).filter(Boolean).forEach(name => {
+    if (!body.includes(name)) issues.push(`出场名单里的「${name}」在正文中没出现`)
+  })
+  const strangers = unknownNames(body, roster)
+  if (strangers.length) {
+    const repeated = strangers.filter(name => (Number(strangerUsage?.get(name)) || 0) >= 2)
+    if (repeated.length) issues.push(`名单外人物跨集复用，已挤进主线：${repeated.join('、')}（请加入人物便签或删掉）`)
+    if (strangerUsage) strangers.forEach(name => strangerUsage.set(name, (Number(strangerUsage.get(name)) || 0) + 1))
+  }
+  return issues
+}
+
+// ── 生成后兜底：去跨章重复、压字数、补出场名单 ──
+
+/** 单集正文失控阈值：提示词要求 700-900 字，超过 1500 视为续写拼接失控。 */
+export const EPISODE_TEXT_MAX = 1500
+
+/**
+ * 去掉与本集结尾重复的「上一章末尾」。
+ * 模型会把注入的上一章末尾原样抄进本集收尾，只在重合段 ≥24 字时裁剪，避免误删自然的短句承接。
+ */
+export function stripRepeatedTail(text, prevTail, min = 24) {
+  const body = String(text || '')
+  const prev = String(prevTail || '').trim()
+  if (!body.trim() || !prev) return body
+  const max = Math.min(prev.length, body.length, 400)
+  for (let len = max; len >= min; len -= 1) {
+    if (body.endsWith(prev.slice(-len))) {
+      const kept = body.slice(0, body.length - len)
+      if (kept.trim()) return kept.replace(/\s+$/, '')
+    }
+  }
+  return body
+}
+
+/** 续写返回的开头若重复了已有正文末尾，去掉重复前缀，避免同一段出现两次。 */
+export function stripRepeatedHead(text, existing, min = 16) {
+  const body = String(text || '')
+  const base = String(existing || '').trim()
+  if (!body.trim() || !base) return body
+  const max = Math.min(200, body.length, base.length)
+  for (let len = max; len >= min; len -= 1) {
+    if (base.endsWith(body.slice(0, len))) return body.slice(len).replace(/^[\s，。；：]+/, '')
+  }
+  return body
+}
+
+/** 超长正文按句号/换行收到上限，不留半句；未超长原样返回。 */
+export function clampEpisodeText(text, max = EPISODE_TEXT_MAX) {
+  const body = String(text || '').trim()
+  if (body.length <= max) return body
+  const slice = body.slice(0, max)
+  const cut = Math.max(
+    slice.lastIndexOf('。'), slice.lastIndexOf('！'), slice.lastIndexOf('？'),
+    slice.lastIndexOf('”'), slice.lastIndexOf('\n'),
+  )
+  return (cut > max / 2 ? slice.slice(0, cut + 1) : slice).trim()
+}
+
+/**
+ * 「本集出场」缺失时的兜底：从人物卡里取姓名，用本集事件卡里实际出现的名字。
+ * 人物卡格式「姓名（年龄/性别）：…」，也兼容行首「姓名：」。
+ */
+export function castFromCharacters(characters, card) {
+  const source = String(characters || '')
+  const names = []
+  const re = /(?:^|\n)\s*([\u4e00-\u9fa5]{2,4})\s*[（(：:]/g
+  let match
+  while ((match = re.exec(source))) names.push(match[1])
+  const text = String(card || '')
+  const unique = []
+  names.forEach(name => {
+    if (!unique.includes(name) && text.includes(name)) unique.push(name)
+  })
+  return unique.slice(0, 6)
+}
+
+/**
+ * 把 AI 剧本结果拆成「故事简介 / 人物便签 / 剧本大纲」三块。
+ * 标题前缀兼容 Markdown（##、**）、书名号【】『』「」，模型三种写法都会出现；
+ * 从第一个「第N集：」起全部归大纲，避免设定段落混进事件卡。
+ */
+export function splitOutlineSections(content) {
+  const src = String(content || '').replace(/\r\n?/g, '\n')
+  const lines = src.split('\n')
+  const heads = [
+    { key: 'summary', re: /^[\s#*>【\[『「]*故事简介[】\]』」*]{0,3}\s*[：:]?\s*(.*)$/ },
+    { key: 'people', re: /^[\s#*>【\[『「]*主要人物[】\]』」*]{0,3}\s*[：:]?\s*(.*)$/ },
+    { key: 'relation', re: /^[\s#*>【\[『「]*人物关系[】\]』」*]{0,3}\s*[：:]?\s*(.*)$/ },
+    { key: 'notes', re: /^[\s#*>【\[『「]*人物便签[】\]』」*]{0,3}\s*[：:]?\s*(.*)$/ },
+  ]
+  const episodeHead = /^[\s#>*]*第\d{1,3}[集章][：:]/
+  const buckets = { summary: [], people: [], relation: [], notes: [] }
+  let current = null
+  let episodeIndex = -1
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i].trim()
+    if (episodeHead.test(line)) { episodeIndex = i; break }
+    const hit = heads.find(item => item.re.test(line))
+    if (hit) {
+      current = hit.key
+      const rest = line.replace(hit.re, '$1').trim()
+      if (rest) buckets[current].push(rest)
+      continue
+    }
+    if (current) buckets[current].push(line)
+  }
+  const summary = buckets.summary.join('\n').trim()
+  const people = buckets.people.join('\n').trim()
+  const relation = buckets.relation.join('\n').trim()
+  const notes = buckets.notes.join('\n').trim()
+  const characterParts = []
+  if (notes) characterParts.push(notes)
+  if (people) characterParts.push('主要人物\n' + people)
+  if (relation) characterParts.push('人物关系\n' + relation)
+  return {
+    summary,
+    characters: characterParts.join('\n\n').trim(),
+    outline: episodeIndex >= 0 ? lines.slice(episodeIndex).join('\n').trim() : '',
+  }
 }

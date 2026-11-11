@@ -45,8 +45,8 @@
               <label class="reg-row">
                 <span class="reg-key">集数</span>
                 <span class="reg-inline">
-                  <input v-model.number="setup.episodes" class="reg-count" aria-label="集数" type="number" min="1" max="200" />
-                  <span class="reg-hint">集，1–200</span>
+                  <input v-model.number="setup.episodes" class="reg-count" aria-label="集数" type="number" min="1" max="50" />
+                  <span class="reg-hint">集，1–50</span>
                 </span>
               </label>
               <label class="reg-row">
@@ -313,7 +313,7 @@ import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { usePortal } from '../../utils/portal.js'
 import { dateText, outlineChapters, outlineToText, wordCount } from '../../utils/creator.js'
-import { outlineInspiration, outlineSummary, listOutlineChapters, locateOutlineRange, outlineContext, outlineRevisePrompt, previewPassage, stripEchoedHeading, chapterWritePrompt, chapterContinuePrompt, parseAiCreateOutlineInput, buildAiCreateSession, groupAiCreateRecords, markAiCreatePrompt, AI_CREATE_MARK } from '../../utils/creatorAi.js'
+import { outlineInspiration, outlineSummary, listOutlineChapters, locateOutlineRange, outlineContext, outlineRevisePrompt, previewPassage, stripEchoedHeading, chapterWritePrompt, chapterContinuePrompt, parseAiCreateOutlineInput, buildAiCreateSession, groupAiCreateRecords, markAiCreatePrompt, AI_CREATE_MARK, stripRepeatedHead, clampEpisodeText, EPISODE_TEXT_MAX, rosterFromCharacters, stateGuardBlock, episodeCastFrom, auditEpisodeState } from '../../utils/creatorAi.js'
 import { documentText } from '../../utils/document.js'
 import LoadState from '../../components/LoadState.vue'
 import '../../assets/styles/creation.css'
@@ -518,7 +518,7 @@ async function generateOutline() {
 async function goOutline() {
   if (!setup.title.trim()) return (error.value = '请输入书名')
   if (!setup.idea.trim()) return (error.value = '请先输入故事灵感或主题')
-  if (!Number.isInteger(Number(setup.episodes)) || Number(setup.episodes) < 1 || Number(setup.episodes) > 200) return (error.value = '集数需为 1–200 的整数')
+  if (!Number.isInteger(Number(setup.episodes)) || Number(setup.episodes) < 1 || Number(setup.episodes) > 50) return (error.value = '集数需为 1–50 的整数')
   if (!canCreate.value) return
   error.value = ''
   step.value = 2
@@ -734,7 +734,11 @@ async function callWrite(chapter, prompt) {
 }
 // 按大纲生成单章，达到长度上限时询问续写（与创作工作台一致）。
 async function generateChapterContent(chapter) {
-  let output = await callWrite(chapter, markAiCreatePrompt(chapterWritePrompt({ title: chapter.title, summary: chapter.summary, outline: outline.value })))
+  // 人/事/物铁律：此处没有台账，先锁人名（取自大纲里带年龄括号的人物段落），生成后再核查。
+  const roster = rosterFromCharacters(outline.value)
+  const guard = stateGuardBlock({ roster })
+  const cast = episodeCastFrom(chapter.summary)
+  let output = await callWrite(chapter, markAiCreatePrompt(chapterWritePrompt({ title: chapter.title, summary: chapter.summary, outline: outline.value, guard })))
   let generated = output.content
   while (output.truncated) {
     try {
@@ -742,10 +746,14 @@ async function generateChapterContent(chapter) {
     } catch {
       return generated
     }
-    output = await callWrite(chapter, markAiCreatePrompt(chapterContinuePrompt({ title: chapter.title, summary: chapter.summary, outline: outline.value, basedOnText: generated.slice(-8000) })))
-    generated += output.content
+    output = await callWrite(chapter, markAiCreatePrompt(chapterContinuePrompt({ title: chapter.title, summary: chapter.summary, outline: outline.value, basedOnText: generated.slice(-3000), guard })))
+    // 续写常把已有正文末段重写一遍，先削掉重复前缀再拼，否则单章会越拼越长。
+    generated += stripRepeatedHead(output.content, generated)
   }
-  return generated
+  const text = clampEpisodeText(generated, EPISODE_TEXT_MAX)
+  const issues = auditEpisodeState({ text, cast, roster })
+  if (issues.length) ElMessage.warning(`「${chapter.title}」人/事/物需复核：${issues.join('；')}`)
+  return text
 }
 async function saveChapterContent(chapter, content) {
   // 只有已落库的章节才带 chapterId 走更新；从历史记录恢复的章节是占位编号，按新建保存。

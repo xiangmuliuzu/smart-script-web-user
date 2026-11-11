@@ -206,3 +206,10 @@
 .ai-embedded .field input, .ai-embedded .field select, .ai-embedded .field textarea { background: #FCFBF8; border-radius: 2px; border-color: var(--rule-2); }
 .ai-embedded .compose-form > .btn { border-radius: 2px; }
 @media (min-width: 1700px) { .creation-ai .ai-panel-head { margin: -28px -24px 18px; } }
+
+/* 创作台账：人物便签页下方的五类台账编辑区（跨端共享，续写时注入） */
+.ledger-block { margin-top: 20px; padding-top: 16px; border-top: 1px dashed var(--rule-2); }
+.ledger-block h3 { margin: 0 0 6px; font-size: 15px; color: var(--indigo); letter-spacing: .04em; }
+.ledger-block .cost { margin: 0 0 12px; }
+.ledger-block .field { display: grid; gap: 6px; margin-bottom: 12px; }
+.ledger-block textarea { min-height: 64px; }

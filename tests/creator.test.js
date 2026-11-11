@@ -4,6 +4,7 @@ import { safeRedirect, request, getToken } from '../src/auth.js'
 import { portal } from '../src/portal.js'
 import * as api from '../src/api/creator.js'
 import { canEdit, validateWork, validateChapter, validateFile, wordCount, dateText, quotaTip, outlineToText, outlineChapters, matchOutlineChapter, planOutlineChapters } from '../src/utils/creator.js'
+import { stripRepeatedTail, stripRepeatedHead, clampEpisodeText, castFromCharacters, chapterTail, splitOutlineSections, rosterFromCharacters, unknownNames, stateGuardBlock, auditEpisodeState } from '../src/utils/creatorAi.js'
 const storage = new Map([[portal.tokenKey, 'test-user-token']])
 test('chapter outlines are split by explicit episode headings without inventing chapters', () => {
   assert.deepEqual(outlineChapters('书名：故事\n第一集：相遇\n两人在车站相遇。\n第二集：告别\n两人分别。'), [
@@ -39,6 +40,18 @@ test('outline plan checks actual sequence, names, and safe append order', () => 
   assert.equal(planOutlineChapters(outlineChapters('第二集：相遇\n剧情'), [{ chapterId: 1, chapterNo: 1, chapterTitle: '第一集：相遇', content: '' }])[0].action, 'conflict')
   assert.equal(planOutlineChapters(outlineChapters('第一集：相遇\n剧情'), [{ chapterId: 1, chapterNo: 2, chapterTitle: '第一集：相遇', content: '' }])[0].action, 'conflict')
   assert.equal(planOutlineChapters(outlineChapters('第一集：相遇\n剧情'), [{ chapterTitle: '自定义章节', content: '' }])[0].action, 'conflict')
+})
+test('repeated episode names still parse, duplicate numbers and mixed formats are rejected', () => {
+  const repeated = outlineChapters('第2集：记者进寨\n她进寨采访。\n第11集：记者进寨\n她再次追问。')
+  assert.deepEqual(repeated.map(x => x.title), ['第2集：记者进寨', '第11集：记者进寨'])
+  assert.deepEqual(outlineChapters('第2集：记者进寨\n甲\n第2集：记者进寨\n乙'), [])
+  assert.deepEqual(outlineChapters('第2集：记者进寨\n甲\n2. 主角到站\n乙'), [])
+})
+test('episode headings glued to the end of a paragraph are split out', () => {
+  assert.deepEqual(outlineChapters('第1集：相遇\n剧情一。第2集：告别\n剧情二'), [
+    { title: '第1集：相遇', summary: '剧情一。' },
+    { title: '第2集：告别', summary: '剧情二' }
+  ])
 })
 globalThis.localStorage = { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) }
 
@@ -79,11 +92,25 @@ test('chapter trial flags round-trip through authenticated saves without changin
   assert.equal(detail.chapters[0].isFree, '1')
   assert.equal(detail.chapters[1].isFree, '0')
   await api.saveChapter(17, { chapterTitle: ' 新试读章 ', content: '正文', isFree: '1' })
-  await api.saveChapter(17, { chapterId: 8, chapterTitle: '取消试读', content: '原文', isFree: '0' })
+  await api.saveChapter(17, { chapterId: 8, chapterTitle: '取消试读', content: '原文', isFree: '0', summary: '第8集摘要' })
   assert.deepEqual(JSON.parse(calls[1].options.body), { chapterTitle: '新试读章', content: '正文', isFree: '1' })
-  assert.deepEqual(JSON.parse(calls[2].options.body), { chapterTitle: '取消试读', content: '原文', isFree: '0' })
+  assert.deepEqual(JSON.parse(calls[2].options.body), { chapterTitle: '取消试读', content: '原文', isFree: '0', summary: '第8集摘要' })
   assert.equal(calls[2].options.method, 'PUT')
   assert.equal(calls[2].options.headers.Authorization, 'Bearer test-user-token')
+})
+test('work ledger reads and writes the shared content ledger endpoint', async t => {
+  const calls = []
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url, options })
+    return { ok: true, json: async () => ({ code: 200, data: { workId: 17, characters: '顾守山' } }) }
+  })
+  const ledger = await api.getWorkLedger(17)
+  assert.equal(ledger.characters, '顾守山')
+  assert.ok(calls[0].url.endsWith('/api/v1/content/works/17/ledger'))
+  await api.saveWorkLedger(17, { storySummary: '简介', characters: '顾守山', relations: '父子', foreshadow: '铜铃', timeline: '雨夜', items: '房梁', threads: '照片' })
+  assert.equal(calls[1].options.method, 'PUT')
+  assert.ok(calls[1].url.endsWith('/api/v1/content/works/17/ledger'))
+  assert.deepEqual(JSON.parse(calls[1].options.body), { storySummary: '简介', characters: '顾守山', relations: '父子', foreshadow: '铜铃', timeline: '雨夜', items: '房梁', threads: '照片' })
 })
 test('publishing a chapter updates only its visibility status', async t => {
   let call
@@ -355,4 +382,111 @@ test('generateStream rejects a truncated response without losing delivered text'
   const deltas = []
   await assert.rejects(api.generateStream('write', { prompt: '故事' }, text => deltas.push(text)), /中断/)
   assert.deepEqual(deltas, ['已经生成的内容'])
+})
+
+test('an episode that copies the previous chapter tail is trimmed back', () => {
+  const stolen = '屋里静下来。\n顾守山已经跨出院门，头也不回。顾守山：二十年前就没有回头路了。敲！'
+  const prev = '顾守山已经跨出院门，头也不回。顾守山：二十年前就没有回头路了。敲！'
+  assert.equal(stripRepeatedTail(stolen, chapterTail(prev, 500)).trim(), '屋里静下来。')
+  // 自然衔接的短句不能删
+  assert.equal(stripRepeatedTail('阿月推门进来，把碗放下。', '他把碗推回灶台。'), '阿月推门进来，把碗放下。')
+})
+
+test('a continuation that reopens the existing text loses its repeated prefix', () => {
+  const existing = '屋里静下来。他把锣挂在墙上。雷老幺抱着锣，手抖得厉害，半天没出声。'
+  assert.equal(stripRepeatedHead('雷老幺抱着锣，手抖得厉害，半天没出声。锣声在寨子里滚开。', existing), '锣声在寨子里滚开。')
+  assert.equal(stripRepeatedHead('全新的段落。', existing), '全新的段落。')
+})
+
+test('over-long episode text is cut back at a sentence boundary', () => {
+  const body = '甲。'.repeat(1000)
+  const out = clampEpisodeText(body, 1500)
+  assert.ok(out.length <= 1500)
+  assert.ok(out.endsWith('。'))
+  assert.equal(clampEpisodeText('乙。', 1500), '乙。')
+})
+
+test('missing cast line is recovered from the character notes by name hit', () => {
+  const characters = '顾守山（52岁/男）：族长｜守戏\n小满（19岁/女）：学徒\n周老板（45岁/男）：商人'
+  const card = '第3集：三叔说项\n本集事件：顾守山在小满面前提到周老板。'
+  assert.deepEqual(castFromCharacters(characters, card), ['顾守山', '小满', '周老板'])
+  assert.deepEqual(castFromCharacters(characters, '第4集：无事\n本集事件：无关的人走过。'), [])
+})
+
+test('markdown or bracket headings still split the outline into settings and episode cards', () => {
+  const raw = [
+    '## 故事简介',
+    '守夜人守住十二面面具，也守住一场大火。',
+    '',
+    '**主要人物**',
+    '顾守山（52岁/男）：族长｜守戏',
+    '',
+    '『人物关系』',
+    '顾守山 ↔ 小满：师徒，瞒着面具下落。',
+    '',
+    '## 第1集：夜半面具',
+    '本集事件：面具少了一面。',
+  ].join('\n')
+  const parts = splitOutlineSections(raw)
+  assert.equal(parts.summary, '守夜人守住十二面面具，也守住一场大火。')
+  assert.ok(parts.characters.includes('顾守山（52岁/男）：族长｜守戏'))
+  assert.ok(parts.characters.includes('顾守山 ↔ 小满：师徒，瞒着面具下落。'))
+  assert.equal(parts.outline.startsWith('## 第1集：夜半面具'), true)
+  assert.equal(parts.outline.includes('故事简介'), false)
+})
+
+test('character roster is read from the age-tagged character notes', () => {
+  const characters = '主要人物\n顾守山（62岁/男）：地戏掌坛师｜背微驼\n雷老幺（48岁/男）：村民\n林小禾（26岁/女）：记者\n顾守山 ↔ 雷老幺：老邻居'
+  assert.deepEqual(rosterFromCharacters(characters), ['顾守山', '雷老幺', '林小禾'])
+  assert.deepEqual(rosterFromCharacters(['顾守山（62岁/男）：掌坛师']), ['顾守山'])
+  assert.deepEqual(rosterFromCharacters(''), [])
+})
+
+test('names outside the roster are flagged but the roster itself is clean', () => {
+  const roster = ['顾守山', '雷老幺', '林小禾', '赵金凤', '吴德贵', '顾长顺']
+  const text = '顾守山把面具摆开。赵金凤在旁边骂。忽然顾长庚挤进来。'
+  assert.deepEqual(unknownNames(text, roster), ['顾长庚'])
+  assert.deepEqual(unknownNames('林小禾举着录音笔，顾守山蹲在门槛。', roster), [])
+  // 家宅、院子一类不是人名
+  assert.deepEqual(unknownNames('林家老宅院墙外头，雷家院子静下来。', roster), [])
+})
+
+test('the state guard block freezes people, items and events', () => {
+  const block = stateGuardBlock({
+    roster: ['顾守山', '雷老幺'],
+    items: '十二面地戏面具全部锁在樟木柜，铜钥匙在顾守山贴身口袋。',
+    timeline: '第1集：午后，面具齐全。第2集：夜里，柜门被撬未失窃。',
+  })
+  assert.ok(block.includes('人/事/物不得自造'))
+  assert.ok(block.includes('顾守山、雷老幺'))
+  assert.ok(block.includes('十二面地戏面具全部锁在樟木柜'))
+  assert.ok(block.includes('柜门被撬未失窃'))
+  assert.ok(block.includes('不得引用前文从未出现过的道具'))
+  // 允许一次性临时配角烘托气氛，但禁止其承担主线或跨集复用
+  assert.ok(block.includes('临时角色'))
+  assert.ok(block.includes('不得推动主线'))
+})
+
+test('episode state audit catches missing cast, and flags strangers only when reused across episodes', () => {
+  const roster = ['顾守山', '雷老幺', '林小禾']
+  // 只在本集露面一次的陌生人物：视为临时配角，不报
+  assert.deepEqual(auditEpisodeState({
+    text: '顾守山锁了柜子，林小禾在门外录。顾长庚喊了句闲话就走了。',
+    cast: ['顾守山', '林小禾'],
+    roster,
+    strangerUsage: new Map(),
+  }), [])
+  // 跨两集以上复用：已经挤进主线，必须提示
+  const usage = new Map([['顾长庚', 2]])
+  const issues = auditEpisodeState({
+    text: '顾守山锁了柜子。顾长庚又来敲门。',
+    cast: ['顾守山', '雷老幺'],
+    roster,
+    strangerUsage: usage,
+  })
+  assert.equal(issues.length, 2)
+  assert.ok(issues[0].includes('雷老幺'))
+  assert.ok(issues[1].includes('顾长庚'))
+  assert.equal(usage.get('顾长庚'), 3)
+  assert.deepEqual(auditEpisodeState({ text: '顾守山对雷老幺说完，林小禾点头。', cast: ['顾守山', '雷老幺'], roster }), [])
 })
