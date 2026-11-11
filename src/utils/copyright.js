@@ -1,13 +1,34 @@
 /** 版权申请 / 电子证书文案与材料辅助（对齐 App copyright_models）。 */
 
 export const APPLY_STATUS = {
-  pending: '待审核',
-  approved: '待提交',
-  submitted: '待提交到第三方',
+  unpaid: '待付款',
+  pending: '审核中',
+  approved: '审核中',
+  submitted: '审核中',
   reviewing: '审核中',
+  need_supplement: '待补正',
+  supplement_overdue: '逾期待驳回',
   certificated: '已发证',
   rejected: '已驳回'
 }
+
+/** 列表筛选项（与 App 对齐；合并审核中，单独「待补正」）。 */
+export const APPLY_STATUS_FILTERS = [
+  { value: '', label: '全部状态' },
+  { value: 'unpaid', label: '待付款' },
+  { value: 'need_supplement', label: '待补正' },
+  { value: 'reviewing', label: '审核中' },
+  { value: 'certificated', label: '已通过' },
+  { value: 'rejected', label: '已拒绝' }
+]
+
+export const ID_DOC_TYPES = [
+  { value: 'id_card', label: '居民身份证' },
+  { value: 'passport', label: '护照' },
+  { value: 'hk_macau_pass', label: '港澳通行证' },
+  { value: 'taiwan_pass', label: '台湾通行证' },
+  { value: 'other', label: '其他' }
+]
 
 export const CERT_STATUS = {
   pending: '申请中',
@@ -41,10 +62,13 @@ export const shelfStatusTone = status => ({
 export const canToggleShelf = item => item?.status === 'on_shelf' || item?.status === 'off_shelf'
 
 export const applyStatusTone = status => ({
+  unpaid: 'wait',
   pending: 'wait',
   approved: 'wait',
   submitted: 'wait',
   reviewing: 'wait',
+  need_supplement: 'warn',
+  supplement_overdue: 'bad',
   certificated: 'ok',
   rejected: 'bad'
 }[status] || 'off')
@@ -55,10 +79,63 @@ export const certStatusTone = status => ({
   expired: 'off'
 }[status] || 'off')
 
-export const canResubmit = item => item?.status === 'rejected'
-export const canDeleteApply = item => item?.status === 'pending'
-export const isCertificated = item => item?.status === 'certificated'
+/** 优先 displayStatus，与 App / Admin 同口径。 */
+export const resolveApplyStatus = item =>
+  String(item?.displayStatus || item?.status || '').trim()
+
+export const isUnpaid = item => resolveApplyStatus(item) === 'unpaid'
+export const canPay = item => {
+  const payOrderId = Number(item?.payOrderId || 0)
+  return isUnpaid(item) && payOrderId > 0
+}
+export const canResubmit = item => resolveApplyStatus(item) === 'rejected'
+export const canDeleteApply = item => resolveApplyStatus(item) === 'pending'
+export const isCertificated = item => resolveApplyStatus(item) === 'certificated'
+export const canSupplement = item => resolveApplyStatus(item) === 'need_supplement'
+export const canSyncStatus = item => {
+  const status = resolveApplyStatus(item)
+  return ['reviewing', 'submitted', 'pending', 'approved', 'need_supplement'].includes(status)
+}
+export const formatFeeAmount = amount => {
+  if (amount == null || amount === '') return ''
+  const num = Number(amount)
+  if (Number.isNaN(num)) return String(amount)
+  return `¥${num.toFixed(2)}`
+}
+export const listItemKey = item =>
+  item?.applyId ? `apply-${item.applyId}` : `pay-${item?.payOrderId || item?.payNo || Math.random()}`
 export const isCertIssued = item => item?.status === 'issued'
+export const idDocTypeLabel = type =>
+  ID_DOC_TYPES.find(item => item.value === type)?.label || type || '—'
+
+export function hasSupplementInfo(item) {
+  if (!item) return false
+  const status = resolveApplyStatus(item)
+  return canSupplement(item)
+    || status === 'supplement_overdue'
+    || !!(item.supplementNotice && String(item.supplementNotice).trim())
+    || !!(item.openSupplement && typeof item.openSupplement === 'object')
+}
+
+export function supplementNoticeText(item) {
+  if (!item) return ''
+  if (item.supplementNotice && String(item.supplementNotice).trim()) return String(item.supplementNotice).trim()
+  const open = item.openSupplement
+  if (open && typeof open === 'object') {
+    return String(open.requirementText || open.notice || '').trim()
+  }
+  return ''
+}
+
+export function supplementDeadlineText(item) {
+  if (!item) return ''
+  if (item.supplementDeadline) return String(item.supplementDeadline)
+  const open = item.openSupplement
+  if (open && typeof open === 'object') {
+    return String(open.deadlineTime || open.deadline || '').trim()
+  }
+  return ''
+}
 
 /**
  * 版权交割状态（对齐 App + 现行交易流程）：
@@ -123,16 +200,33 @@ export function deliveryActionMeta(item, userId) {
 
 export function applyStatusDescription(item) {
   if (!item) return ''
-  switch (item.status) {
-    case 'pending': return '平台正在审核您的申请，请耐心等待'
-    case 'approved': return '审核通过，等待提交到版权中心'
-    case 'submitted': return '等待提交到版权中心'
-    case 'reviewing': return `已提交到${item.centerName || '版权中心'}，正在审核中`
-    case 'certificated': return '恭喜！版权证书已签发'
-    case 'rejected': return item.rejectReason || '申请被驳回'
-    default: return ''
+  const status = resolveApplyStatus(item)
+  switch (status) {
+    case 'unpaid':
+      return item.feeAmount != null
+        ? `待支付登记费 ¥${Number(item.feeAmount).toFixed(2)}，付款后提交版权中心`
+        : '待支付登记费，付款后提交版权中心'
+    case 'need_supplement':
+      return supplementNoticeText(item)
+        || '版权中心要求补充材料，请在截止日前补正（不重交官费）'
+    case 'supplement_overdue':
+      return '补正已超时，本轮可能不予登记'
+    case 'pending':
+    case 'approved':
+    case 'submitted':
+    case 'reviewing':
+      return `已提交到${item.centerName || '版权中心'}，正在审核中`
+    case 'certificated':
+      return '恭喜！版权证书已签发'
+    case 'rejected':
+      return item.rejectReason || '申请被驳回，费用不退，可重新缴费申请'
+    default:
+      return ''
   }
 }
+
+export const applyStatusLabelOf = item => applyStatusLabel(resolveApplyStatus(item))
+export const applyStatusToneOf = item => applyStatusTone(resolveApplyStatus(item))
 
 /** 材料项：兼容 App JSON 数组 [{url,filename,fileType}] / 逗号 URL / 纯数组。 */
 export function copyrightMaterialItems(value) {

@@ -59,10 +59,35 @@ export const listCopyrightApplications = (params = {}) =>
   data(copyrightBase + '/application/list' + qs({ pageNum: 1, pageSize: 50, ...params }))
 export const getCopyrightApplication = id =>
   data(copyrightBase + '/application/' + encodeURIComponent(id))
-export const submitCopyrightApplication = form =>
-  data(copyrightBase + '/application/apply', { method: 'POST', body: form })
-export const resubmitCopyrightApplication = form =>
-  data(copyrightBase + '/application/resubmit', { method: 'POST', body: form })
+/** 登记费询价（支付前）。 */
+export const quoteCopyrightFee = (workId, copyrightCenter) =>
+  data(copyrightBase + '/application/fee-quote' + qs({ workId, copyrightCenter }))
+/** 创建待支付单（付完后才建申请）；兼容旧路径 /application/apply。 */
+export const createCopyrightPayOrder = form =>
+  data(copyrightBase + '/application/pay-order', { method: 'POST', body: form })
+export const submitCopyrightApplication = form => createCopyrightPayOrder(form)
+/** 驳回后重新缴费下单；兼容旧路径 /application/resubmit。 */
+export const createCopyrightResubmitPayOrder = form =>
+  data(copyrightBase + '/application/pay-order/resubmit', { method: 'POST', body: form })
+export const resubmitCopyrightApplication = form => createCopyrightResubmitPayOrder(form)
+export const getCopyrightPayOrder = payOrderId =>
+  data(copyrightBase + '/application/pay-order/' + encodeURIComponent(payOrderId))
+/** 临时直付：跳过支付宝沙箱，直接履约建申请并提交第三方。 */
+export const directPayCopyrightOrder = payOrderId =>
+  data(copyrightBase + '/application/pay-order/' + encodeURIComponent(payOrderId) + '/direct-pay', {
+    method: 'POST',
+    body: {}
+  })
+export const submitCopyrightSupplement = (applyId, form) =>
+  data(copyrightBase + '/application/' + encodeURIComponent(applyId) + '/supplement', {
+    method: 'POST',
+    body: form
+  })
+export const syncCopyrightApplicationStatus = applyId =>
+  data(copyrightBase + '/application/' + encodeURIComponent(applyId) + '/sync-status', {
+    method: 'POST',
+    body: {}
+  })
 export const deleteCopyrightApplication = id =>
   data(copyrightBase + '/application/' + encodeURIComponent(id), { method: 'DELETE' })
 export const listCopyrightCerts = (params = {}) =>
