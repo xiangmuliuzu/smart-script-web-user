@@ -25,7 +25,7 @@
         <div class="editor-location"><span>{{ section === 'summary' ? '作品资料 / 故事简介' : section === 'outline' ? '作品资料 / 剧本大纲' : section === 'characters' ? '作品资料 / 人物便签' : '正文分集 / 第 ' + (activeChapter + 1) + ' 集' }}</span><span>{{ wordCount(currentText).toLocaleString() }} 字</span><div class="view-mode" role="group" aria-label="创作模式"><button type="button" :aria-pressed="!readOnly" :disabled="busy" @click="readOnly = false">编辑</button><button type="button" :aria-pressed="readOnly" :disabled="busy" @click="readOnly = true">阅读</button></div></div>
         <div v-if="section === 'chapter'" class="chapter-trial-setting"><el-switch v-model="currentChapter.isFree" active-value="1" inactive-value="0" aria-label="设为试读章节（免费阅读）" :disabled="busy || !editable || readOnly" /><span>设为试读章节（免费阅读）</span><small>保存后请在作品详情发布章节，作品通过审核后读者可免费阅读</small></div>
         <ScriptEditor v-if="section === 'chapter'" ref="scriptEditor" :key="currentChapter.draftId" v-model="currentChapter.content" v-model:title="currentChapter.chapterTitle" :disabled="busy || !editable" :read-only="readOnly" />
-        <div v-else class="script-paper notes-paper"><h2>{{ section === 'summary' ? '故事简介' : section === 'outline' ? '剧本大纲' : '人物便签' }}</h2><p class="notes-description">{{ section === 'summary' ? '用一段话讲清人物、冲突与故事走向，保存时同步至作品简介。' : section === 'outline' ? 'AI 剧本生成的每集事件卡会存到这里：可在此直接修改，再回到 AI 面板按这份大纲生成各章。大纲随保存草稿在本机存档。' : '记录人物关系、动机与成长线，保存时同步到作品台账（PC 与 App 共用）。' }}</p><textarea v-if="section === 'summary'" v-model="form.summary" aria-label="故事简介" :disabled="busy || !editable" :readonly="readOnly" placeholder="这个故事从谁开始，又将走向哪里？" /><textarea v-else-if="section === 'outline'" v-model="scriptOutline" class="outline-textarea" aria-label="剧本大纲" :disabled="busy || !editable" :readonly="readOnly" placeholder="AI 剧本生成的分集事件卡会出现在这里，也可以自己写一份骨架：第1集：事件名 / 本集事件 / 冲突与推进 / 结果或反转 / 结尾钩子" /><textarea v-else v-model="characters" aria-label="人物便签" :disabled="busy || !editable" :readonly="readOnly" placeholder="姓名 / 身份 / 性格 / 人物关系…" /><div v-if="section === 'characters'" class="ledger-block"><h3>创作台账（其余五类）</h3><p class="cost">台账存服务器、三端共用；续写与「按大纲生成各章」时自动注入，避免后文与前面设定冲突。伏笔请写明埋在哪一集、是否已回收。</p><label class="field">人物关系<textarea v-model="ledger.relations" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：顾守山—顾星宇：父子，因旧案生隙" /></label><label class="field">伏笔（埋在哪集/是否回收）<textarea v-model="ledger.foreshadow" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第3集铜铃——第9集已回收" /></label><label class="field">时间线<textarea v-model="ledger.timeline" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第1集 雨夜；第2集 次日清晨" /></label><label class="field">物品位置<textarea v-model="ledger.items" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：铜铃在顾星宇房梁上" /></label><label class="field">未解线索<textarea v-model="ledger.threads" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：老照片背面的人是谁" /></label></div><div v-if="section === 'outline'" class="row top-gap"><button class="btn ghost sm" :disabled="!scriptOutline.trim()" @click="copyOutline">复制大纲</button><button class="btn ghost sm" :disabled="busy || !editable || readOnly || !scriptOutline.trim()" @click="clearOutline">清空</button><button class="btn sm" style="margin-left:auto" :disabled="busy || !editable || readOnly || !scriptOutline.trim() || planningOutline || generatingChapters" @click="fillOutline(scriptOutline)">根据当前剧本大纲生成各章</button></div><button v-if="section === 'characters'" class="btn ghost sm" :disabled="!characters.trim()" @click="exportNotes()">导出人物便签</button><details v-if="section === 'characters' && noteBackups.length" class="notes-backups"><summary>已保存作品的便签存档</summary><button v-for="note in noteBackups" :key="note.title" @click="exportNotes(note.characters, note.title)">下载 · {{ note.title }}</button></details></div>
+        <div v-else class="script-paper notes-paper"><h2>{{ section === 'summary' ? '故事简介' : section === 'outline' ? '剧本大纲' : '人物便签' }}</h2><p class="notes-description">{{ section === 'summary' ? '用一段话讲清人物、冲突与故事走向，保存时同步至作品简介。' : section === 'outline' ? 'AI 剧本生成的每集事件卡会存到这里：可在此直接修改，再回到 AI 面板按这份大纲生成各章。大纲随保存草稿在本机存档。' : '记录人物关系、动机与成长线，保存时同步到作品台账（PC 与 App 共用）。' }}</p><textarea v-if="section === 'summary'" v-model="form.summary" aria-label="故事简介" :disabled="busy || !editable" :readonly="readOnly" placeholder="这个故事从谁开始，又将走向哪里？" /><textarea v-else-if="section === 'outline'" v-model="scriptOutline" class="outline-textarea" aria-label="剧本大纲" :disabled="busy || !editable" :readonly="readOnly" placeholder="AI 剧本生成的分集事件卡会出现在这里，也可以自己写一份骨架：第1集：事件名 / 本集事件 / 冲突与推进 / 结果或反转 / 结尾钩子" /><textarea v-else v-model="characters" aria-label="人物便签" :disabled="busy || !editable" :readonly="readOnly" placeholder="姓名 / 身份 / 性格 / 人物关系…" /><div v-if="section === 'characters'" class="ledger-block"><h3>创作台账（其余七类）</h3><p class="cost">台账存服务器、三端共用；续写与「按大纲生成各章」时自动注入。道具档案的件数与「已交付给谁」是全书唯一依据，写法基线一旦定下就不要改，否则读者会觉得换了写手。</p><label class="field">人物关系<textarea v-model="ledger.relations" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：顾守山—顾星宇：父子，因旧案生隙" /></label><label class="field">伏笔（埋在哪集/是否回收）<textarea v-model="ledger.foreshadow" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第3集铜铃——第9集已回收" /></label><label class="field">时间线<textarea v-model="ledger.timeline" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第1集 雨夜；第2集 次日清晨" /></label><label class="field">物品位置<textarea v-model="ledger.items" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：铜铃在顾星宇房梁上" /></label><label class="field">重要道具档案（名称｜件数｜持有人｜状态｜外观）<textarea v-model="ledger.props" :disabled="busy || !editable" :readonly="readOnly" placeholder="一行一件，例如：傩面具｜十二面｜顾守山｜在手｜明代木雕；铜钥匙｜1把｜雷老幺｜已交付给吴德贵｜黄铜" /></label><label class="field">写法基线（人称/句式/对白比例/禁用写法）<textarea v-model="ledger.styleGuide" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第三人称限知；短句为主；对白占六成；不用全角括号补叙，不写场景头" /></label><label class="field">未解线索<textarea v-model="ledger.threads" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：老照片背面的人是谁" /></label></div><div v-if="section === 'outline'" class="row top-gap"><button class="btn ghost sm" :disabled="!scriptOutline.trim()" @click="copyOutline">复制大纲</button><button class="btn ghost sm" :disabled="busy || !editable || readOnly || !scriptOutline.trim()" @click="clearOutline">清空</button><button class="btn sm" style="margin-left:auto" :disabled="busy || !editable || readOnly || !scriptOutline.trim() || planningOutline || generatingChapters" @click="fillOutline(scriptOutline)">根据当前剧本大纲生成各章</button></div><button v-if="section === 'characters'" class="btn ghost sm" :disabled="!characters.trim()" @click="exportNotes()">导出人物便签</button><details v-if="section === 'characters' && noteBackups.length" class="notes-backups"><summary>已保存作品的便签存档</summary><button v-for="note in noteBackups" :key="note.title" @click="exportNotes(note.characters, note.title)">下载 · {{ note.title }}</button></details></div>
         <footer class="editor-footer"><span>{{ readOnly ? '阅读模式 · 内容不可编辑' : section === 'chapter' ? '格式随正文保存 · Ctrl+Z 撤销 · Ctrl+B 加粗' : '让故事的骨架更清晰' }}</span><span>共 {{ chapters.length }} 集 · {{ totalWords.toLocaleString() }} 字</span></footer>
       </div>
       <aside class="creation-ai" aria-label="AI 编剧助手"><AiStudio v-if="!compactAi" :key="workspaceRevision" embedded :workspace-state="aiState" :insert-disabled="busy || !editable || readOnly" :current-content="currentChapter.content" :outline="scriptOutline" :ledger="ledger" :volumes="volumes" :prev-chapter="prevChapterText" :prev-summaries="prevSummaries" :chapter-no="activeChapter + 1" :work-id="createdId" @insert="insertAi" @fill-outline="fillOutline" @create-outline="applyOutline" /></aside>
@@ -66,7 +66,7 @@ const chapters = ref([newChapter(1)])
 const characters = ref('')
 // 创作台账（跨端共享，落 sys_work_ledger）：故事简介 / 主要人物 / 人物关系 / 伏笔 / 时间线 / 物品位置 / 未解线索。
 // 故事简介与人物走上面的编辑区，其余四类在本页「人物便签」下方的台账区直接编辑。
-const ledger = reactive({ storySummary: '', characters: '', relations: '', foreshadow: '', timeline: '', items: '', threads: '' })
+const ledger = reactive({ storySummary: '', characters: '', relations: '', foreshadow: '', timeline: '', items: '', props: '', styleGuide: '', threads: '' })
 // 卷级状态快照（每 10 集一卷）：续写时注入「本卷 + 上卷」，替代整份台账。
 const volumes = ref([])
 // 批量成章后待验收的集数：保存成功后据此逐集跑验收与卷末快照。
@@ -186,6 +186,8 @@ async function loadLedger(id) {
     ledger.foreshadow = remote.foreshadow || ''
     ledger.timeline = remote.timeline || ''
     ledger.items = remote.items || ''
+    ledger.props = remote.props || ''
+    ledger.styleGuide = remote.styleGuide || ''
     ledger.threads = remote.threads || ''
     if (ledger.storySummary && !form.summary.trim()) form.summary = ledger.storySummary
     if (ledger.characters && !characters.value.trim()) characters.value = ledger.characters
@@ -204,6 +206,8 @@ async function saveLedger() {
       foreshadow: ledger.foreshadow,
       timeline: ledger.timeline,
       items: ledger.items,
+      props: ledger.props,
+      styleGuide: ledger.styleGuide,
       threads: ledger.threads,
     })
     ledger.storySummary = form.summary
@@ -445,22 +449,22 @@ async function fillOutline(outline) {
       const cast = episodeCastFrom(card)
       const castList = cast.length ? cast : castFromCharacters(characters.value || ledger.characters, card)
       const ledgerText = ledgerPromptBlockByCast(ledger, castList)
-      const guardBlock = stateGuardBlock({ roster: rosterNames, items: ledger.items, timeline: ledger.timeline })
+      const guardBlock = stateGuardBlock({ roster: rosterNames, items: ledger.items, props: ledger.props, timeline: ledger.timeline, styleGuide: ledger.styleGuide })
       // 卷级快照优先于整份台账，50 集量级下只注入本卷与上卷。
       const volumeText = volumeSnapshotBlock(volumes.value, episodeNo)
-      // 上一章末尾只作「避免撞车」的锚点，并明令不得照抄；生成后还有去重兜底。
+      // 上一章末尾是「本集开场要接着写的起点」，不是要避开的雷区：先给正面承接要求，再给三种允许换场的例外。
       const prevText = completedCount > 0 ? chapterTail(chapters.value[chapters.value.length - 1]?.content, 500) : ''
       const summaryBlock = chapterSummaryBlock(chapters.value, episodeNo)
       const settingBlock = String(characters.value || '').trim()
         ? `【人物设定（姓名与身份固定，不得改名，不得新增未设定的人物）】\n${chapterTail(characters.value, 900)}`
         : ''
-      const prompt = `请把下面这集写成一集完整剧本：700-900 字（超过 1000 字即不合格），以动作和对白推进，对白用“角色：台词”；开头一句自然交代地点和时间，不要写场景头、镜号、景别、运镜；结尾留一个具体钩子，且钩子必须是本集新发生的事，不得重复前面出现过的台词或段落。只写这一集。\n集名：${item.title}\n全剧事件卡：\n${outline}\n本集事件卡：\n${item.summary}`
+      const prompt = `请把下面这集写成一集完整剧本：700-900 字（超过 1000 字即不合格），以动作和对白推进，对白用“角色：台词”；沿用台账里的写法基线（人称、句式、对白与叙述比例、标点一致），用叙述和动作补足信息，不要用全角括号补叙，不要写整段心理独白；开头一句自然交代地点和时间，不要写场景头、镜号、景别、运镜；结尾留一个具体钩子，且钩子必须是本集新发生的事。只写这一集。\n集名：${item.title}\n全剧事件卡：\n${outline}\n本集事件卡：\n${item.summary}`
         + (guardBlock ? '\n\n' + guardBlock : '')
         + (settingBlock ? '\n\n' + settingBlock : '')
         + (summaryBlock ? '\n\n' + summaryBlock : '')
         + (volumeText ? '\n\n' + volumeText : '')
         + (ledgerText ? '\n\n' + ledgerText : '')
-        + (prevText ? `\n\n【上一章末尾（仅供避免撞车，禁止照抄这段文字，禁止把它当成本集结尾）】\n${prevText}` : '')
+        + (prevText ? `\n\n【上一章结尾（本集第一段从这里往下接着写）】\n${prevText}\n本集开场直接承接上面最后一个动作或悬念，用它的结果往下推；人物、事件、道具的状态只能通过情节自然过渡变化。只有三种情况可以直接换场：上一集事件已经收束、本集开启另一个过渡事件、本集切到另一视角继续同一事件。` : '')
       let output = await api.value.generateStream('write', { prompt, workId: createdId.value || undefined, type: 'script' }, () => {})
       if (disposed) return
       let chapter = item.chapter
@@ -501,7 +505,7 @@ async function fillOutline(outline) {
       // 跨章兜底：本集结尾若抄了上一章末尾，裁掉重复段；超长按句收到上限。
       generated = clampEpisodeText(stripRepeatedTail(generated, prevText), EPISODE_TEXT_MAX)
       chapter.content = generated
-      auditEpisodeState({ text: generated, cast: castList, roster: rosterNames, strangerUsage })
+      auditEpisodeState({ text: generated, cast: castList, roster: rosterNames, props: ledger.props, strangerUsage })
         .forEach(issue => stateIssues.push(`${item.title}：${issue}`))
       // 每集一条摘要（≤500 字），随章节保存落库，供下一集续写注入。
       chapter.summary = summaryOfEpisode(item.title, episodeNo)
@@ -646,7 +650,7 @@ async function loadWorkspace() {
   loadedWork.value = null; createdId.value = null; originalChapters = new Map(); activeChapter.value = 0; section.value = 'chapter'
   directoryVisible.value = false; aiVisible.value = false; settingsVisible.value = false
   Object.assign(form, { title: '', summary: '', scriptUrl: '', scriptName: '', scriptSize: 0 })
-  chapters.value = [newChapter(1)]; characters.value = ''; scriptOutline.value = ''; Object.assign(ledger, { storySummary: '', characters: '', relations: '', foreshadow: '', timeline: '', items: '', threads: '' }); Object.assign(aiState, newAiState()); workspaceRevision.value++
+  chapters.value = [newChapter(1)]; characters.value = ''; scriptOutline.value = ''; Object.assign(ledger, { storySummary: '', characters: '', relations: '', foreshadow: '', timeline: '', items: '', props: '', styleGuide: '', threads: '' }); Object.assign(aiState, newAiState()); workspaceRevision.value++
   try {
     const legacy = !route.query.workId ? cachedDraft(draftBase) : null
     const rawId = route.query.workId || legacy?.createdId

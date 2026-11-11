@@ -242,32 +242,45 @@ export function groupAiCreateRecords(records) {
   return groups
 }
 
-// ── 创作台账与续写注入（跨端共享：人物卡/关系/伏笔/时间线/物品/未解线索） ──
+// ── 创作台账与续写注入（跨端共享：人物卡/关系/伏笔/时间线/道具/写法/未解线索） ──
 
 /**
- * 台账注入块：六类各取尾部（台账是追加式，最新事实在末尾，从头截只会注入第 1 集旧状态）。
- * 每类预算 = limit/6，超长标「（前略）」保留标签，避免只剩半句。
+ * 台账注入块：道具档案与写法基线整段前置（它们是「主数据」，截断会让件数与文风失锚），
+ * 其余流水类各取尾部（台账是追加式，最新事实在末尾，从头截只会注入第 1 集旧状态）。
+ * 每类预算 = 剩余额度/6，超长标「（前略）」保留标签，避免只剩半句。
  */
-export function ledgerPromptBlock(ledger, limit = 1600) {
+export function ledgerPromptBlock(ledger, limit = 2400) {
   const source = ledger || {}
+  const props = String(source.props || '').trim()
+  const styleGuide = String(source.styleGuide || '').trim()
+  const parts = []
+  if (props) {
+    parts.push(`【重要道具档案（件数、持有人、是否已交付以它为准，不得改数）】\n${props.length > 1400 ? props.slice(0, 1400) : props}`)
+  }
+  if (styleGuide) {
+    parts.push(`【写法基线（沿用既有文风，不得中途换叙述方式）】\n${styleGuide.length > 400 ? styleGuide.slice(0, 400) : styleGuide}`)
+  }
   const fields = [
     ['主要人物', source.characters],
     ['人物关系', source.relations],
     ['伏笔（埋在哪集/是否回收）', source.foreshadow],
     ['时间线', source.timeline],
-    ['物品位置', source.items],
+    ['物品位置（逐集去向）', source.items],
     ['未解线索', source.threads],
   ]
-  const perField = Math.max(120, Math.floor(limit / fields.length))
+  const remaining = Math.max(600, limit - props.length - styleGuide.length)
+  const perField = Math.max(120, Math.floor(remaining / fields.length))
   const lines = fields
     .filter(([, value]) => String(value || '').trim())
     .map(([label, value]) => {
       const text = String(value).trim()
       return `${label}：\n${text.length > perField ? '（前略）' + text.slice(-perField) : text}`
     })
-  if (!lines.length) return ''
-  const text = lines.join('\n\n')
-  return '【创作台账（已定事实，不得冲突）】\n' + (text.length > limit + 400 ? text.slice(-limit) : text)
+  if (!parts.length && !lines.length) return ''
+  if (lines.length) parts.push('【创作台账（已定事实，不得冲突）】\n' + lines.join('\n\n'))
+  const text = parts.join('\n\n')
+  // 截断保留头部：道具档案与写法基线在前，绝不能被尾部流水挤掉。
+  return text.length > limit + 400 ? text.slice(0, limit + 400) : text
 }
 
 /** 从本集事件卡里取「本集出场：A、B」名单。 */
@@ -304,12 +317,15 @@ export function ledgerPromptBlockByCast(ledger, cast, limit = 1600) {
     foreshadow: source.foreshadow,
     timeline: source.timeline,
     items: source.items,
+    props: source.props,
+    styleGuide: source.styleGuide,
     threads: source.threads,
-  }, Math.max(400, limit - 1100))
+  }, Math.max(900, limit - 900))
   if (rest) parts.push(rest)
   if (!parts.length) return ''
   const text = parts.join('\n\n')
-  return text.length > limit ? text.slice(-limit) : text
+  // 保留头部：出场人物与道具档案在前，不能被尾部的台账流水挤掉。
+  return text.length > limit ? text.slice(0, limit) : text
 }
 
 /**
@@ -481,35 +497,100 @@ export function unknownNames(text, roster) {
 }
 
 /**
- * 人/事/物铁律：人物只能来自名单、物件状态冻结、事件只承接。
- * 实测模型会在末尾自造「面具丢了一面」「抽屉里有根麻绳」这类前文没有的状态，必须显式禁止。
+ * 人/事/物/写法铁律：规则在前、数据在后，截断只会丢数据尾部，不会丢规则。
+ *
+ * 写法是正面约束：先要求「承接上一集最后一个动作」，再给出三种允许直接换场的例外
+ * （上集已收束 / 开启新的过渡事件 / 切换视角），而不是只说「禁止照抄」——
+ * 纯负面约束会让模型把上一集结尾当成要避开的东西，反而写断。
  */
-export function stateGuardBlock({ roster, items, timeline, limit = 1000 }) {
+export function stateGuardBlock({ roster, items, props, timeline, styleGuide, limit = 1600 }) {
   const names = (roster || []).filter(Boolean)
-  const clip = (text, size) => (String(text || '').trim().length > size ? String(text).trim().slice(-size) : String(text || '').trim())
-  const itemText = clip(items, 280)
+  const clip = (text, size) => (String(text || '').trim().length > size ? String(text).trim().slice(0, size) : String(text || '').trim())
+  const propText = clip(props, 1100)
+  const itemText = clip(items, 240)
   const eventText = clip(timeline, 320)
-  const lines = ['【铁律·人/事/物不得自造，违反即本集不合格】']
+  const styleText = clip(styleGuide, 400)
+  const lines = ['【铁律·人/事/物与写法必须连贯，违反即本集不合格】']
   lines.push(names.length
     ? `人物：主要角色只能写这些名字——${names.join('、')}；不得改名、不得另造主要角色、不得让不在场的人凭空到场。`
     : '人物：只能写前文已出场的人；不得改名、不得另造主要角色、不得让人凭空到场。')
   lines.push('配角：允许无名群众或只在本集露面的临时角色烘托气氛（如“吴德贵带来的年轻人”“米粉店里的食客”），但他们只能说闲话、围观、被支使，不得掌握关键线索、不得替主角做决定、不得推动主线、不得跨集复用；凡要承担主线动作或连续多集出现的人，必须已在人物列表里。')
-  lines.push('物件：数量、所在位置、完好状态一律沿用下文清单；本集事件卡没写“丢失/拿走/损坏/交出”，正文不得把它写丢了、写坏了、写少了；不得引用前文从未出现过的道具。')
-  if (itemText) lines.push(`物品与位置（沿用）：\n${itemText}`)
+  lines.push('道具：件数、持有人、完好状态一律沿用下面的道具档案，不得改数、不得凭空多出或少掉；'
+    + '档案里已写「已交付给某某」的道具，本集不得再交付一次，也不得在没有「退回/夺回/丢失」情节的情况下回到原主手里；'
+    + '本集事件卡没写“丢失/拿走/损坏/交出”，正文不得改变它的状态。')
+  lines.push('状态过渡：本集开场必须接着上一集结尾最后一个动作或悬念往下写，人物、事件、道具的状态只能通过情节自然过渡发生变化；'
+    + '只有三种情况可以直接换场——上一集事件已经收束、本集开启另一个过渡事件、本集切到另一视角继续同一事件；'
+    + '除这三种，不得让人物立场、伤势、在场关系或道具归属在没有过渡的情况下突变。')
   lines.push('事件：只承接下列已发生的事实；本集事件卡规定的进程不得跳过，已发生的事不得再写一遍。')
-  if (eventText) lines.push(`已发生事件（沿用）：\n${eventText}`)
+  lines.push('写法：沿用下面的写法基线（人称、句式、对白比例、标点、段落），不得中途改成括注体、整段心理独白、场景头或镜头术语；'
+    + '文风一旦变化，读者会以为换了写手。')
+  const data = []
+  if (propText) data.push(`【重要道具档案（件数与归属以它为准）】\n${propText}`)
+  if (itemText) data.push(`【物品位置（逐集去向）】\n${itemText}`)
+  if (eventText) data.push(`【已发生事件（沿用）】\n${eventText}`)
+  if (styleText) data.push(`【写法基线（沿用）】\n${styleText}`)
+  if (data.length) lines.push('', ...data)
   const text = lines.join('\n')
   return text.length > limit ? text.slice(0, limit) : text
 }
 
+/** 中文/阿拉伯数字转数值（覆盖 1–999 常用写法；解析不出返回 0）。 */
+export function cnToNumber(raw) {
+  const text = String(raw || '').trim()
+  if (/^\d{1,4}$/.test(text)) return Number(text)
+  if (!text || !/^[零一二三四五六七八九十百]+$/.test(text)) return 0
+  const DIGITS = { 零: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 }
+  let section = 0
+  let num = 0
+  for (const ch of text) {
+    if (ch === '百') { section += (num || 1) * 100; num = 0 }
+    else if (ch === '十') { section += (num || 1) * 10; num = 0 }
+    else num = DIGITS[ch] ?? 0
+  }
+  return section + num
+}
+
 /**
- * 生成后核查：出场名单是否都写到、名单外人物是否已影响主线。只提示、不改写。
+ * 解析重要道具档案：一行一件，「名称｜件数｜持有人｜状态｜外观」。
+ * 手写时也容忍空格分隔或不带分隔符的单行，解析不出的字段留空。
+ */
+export function parseProps(props) {
+  return String(props || '')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const cells = line.split(/[｜|]/).map(cell => cell.trim())
+      return {
+        name: cells[0] || '',
+        count: cells[1] || '',
+        holder: cells[2] || '',
+        status: cells[3] || '',
+        raw: line,
+      }
+    })
+    .filter(prop => prop.name)
+}
+
+/** 从「十二面」「1把」里取数字与单位。 */
+export function countOfProp(countText) {
+  const text = String(countText || '')
+  const number = text.match(/[零一二三四五六七八九十百0-9]+/)
+  const unit = text.match(/[面把件张个只副口箱份套本页]/)
+  return {
+    value: number ? cnToNumber(number[0]) : 0,
+    unit: unit ? unit[0] : '',
+  }
+}
+
+/**
+ * 生成后核查：出场名单、名单外人物、道具件数与重复交付、写法漂移。只提示、不改写。
  *
  * 名单外人物分两级：只在本集出现一次的视为临时配角（允许烘托气氛，不报）；
  * 同一名字跨两集以上复用的，说明模型已经把它当固定角色在写，会挤占主线，必须提示补进人物便签或删掉。
  * strangerUsage 传一个跨集复用的 Map<name, 已出现集数>，本函数负责累加。
  */
-export function auditEpisodeState({ text, cast, roster, strangerUsage }) {
+export function auditEpisodeState({ text, cast, roster, props, strangerUsage }) {
   const body = String(text || '')
   const issues = []
   ;(cast || []).filter(Boolean).forEach(name => {
@@ -520,6 +601,34 @@ export function auditEpisodeState({ text, cast, roster, strangerUsage }) {
     const repeated = strangers.filter(name => (Number(strangerUsage?.get(name)) || 0) >= 2)
     if (repeated.length) issues.push(`名单外人物跨集复用，已挤进主线：${repeated.join('、')}（请加入人物便签或删掉）`)
     if (strangerUsage) strangers.forEach(name => strangerUsage.set(name, (Number(strangerUsage.get(name)) || 0) + 1))
+  }
+  // 道具：件数必须与档案一致；已交付过的道具不得再演一次交付。
+  const sentences = body.split(/[。！？\n]/).map(line => line.trim()).filter(Boolean)
+  parseProps(props).forEach(prop => {
+    const { value, unit } = countOfProp(prop.count)
+    if (value && unit) {
+      const hits = sentences
+        .filter(line => line.includes(prop.name))
+        .flatMap(line => Array.from(line.matchAll(new RegExp(`([零一二三四五六七八九十百0-9]{1,4})${unit}`, 'g'))))
+        .map(match => cnToNumber(match[1]))
+        .filter(number => number && number !== value)
+      if (hits.length) {
+        issues.push(`道具件数与档案不符：${prop.name} 档案记 ${value}${unit}，正文出现 ${Array.from(new Set(hits)).join('/')}${unit}`)
+      }
+    }
+    if (/已交付|已交给|已还/.test(prop.status)) {
+      const delivered = sentences.some(line => line.includes(prop.name) && /交给|递给|塞给|交到|交付给|还给/.test(line))
+      if (delivered) issues.push(`道具重复交付：${prop.name} 台账已记「${prop.status}」，本集又出现一次交付动作`)
+    }
+  })
+  // 写法：场景头/镜头术语、括注体，都是换写手感的典型信号。
+  if (/^\s*(内景|外景|场景|镜号|景别|时间|地点)[：:]/m.test(body)) {
+    issues.push('出现场景头或镜头术语，写法基线要求以动作与对白推进')
+  }
+  const brackets = (body.match(/（[^）]{4,}）/g) || []).length
+  const lines = body.split('\n').filter(line => line.trim())
+  if (brackets >= 4 && lines.length && brackets / lines.length > 0.25) {
+    issues.push('疑似括注体：多段用全角括号补叙述，与写法基线不一致')
   }
   return issues
 }

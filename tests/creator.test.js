@@ -451,17 +451,30 @@ test('names outside the roster are flagged but the roster itself is clean', () =
   assert.deepEqual(unknownNames('林家老宅院墙外头，雷家院子静下来。', roster), [])
 })
 
-test('the state guard block freezes people, items and events', () => {
+test('the state guard block keeps people, props and writing style continuous', () => {
   const block = stateGuardBlock({
     roster: ['顾守山', '雷老幺'],
     items: '十二面地戏面具全部锁在樟木柜，铜钥匙在顾守山贴身口袋。',
+    props: '傩面具｜十二面｜顾守山｜在手｜明代木雕\n铜钥匙｜1把｜雷老幺｜已交付给吴德贵｜黄铜',
     timeline: '第1集：午后，面具齐全。第2集：夜里，柜门被撬未失窃。',
+    styleGuide: '第三人称限知；短句为主；对白占六成',
   })
-  assert.ok(block.includes('人/事/物不得自造'))
+  assert.ok(block.includes('人/事/物与写法必须连贯'))
   assert.ok(block.includes('顾守山、雷老幺'))
   assert.ok(block.includes('十二面地戏面具全部锁在樟木柜'))
   assert.ok(block.includes('柜门被撬未失窃'))
-  assert.ok(block.includes('不得引用前文从未出现过的道具'))
+  assert.ok(block.includes('十二面｜顾守山'), '道具档案要整段注入，件数不能被截掉')
+  assert.ok(block.includes('不得改数'))
+  // 正面要求：开场要接着上一集最后一个动作写，并给出三种允许换场的例外
+  assert.ok(block.includes('本集开场必须接着上一集结尾最后一个动作或悬念往下写'))
+  assert.ok(block.includes('上一集事件已经收束'))
+  assert.ok(block.includes('本集切到另一视角继续同一事件'))
+  // 已交付的道具不得再演一次交付
+  assert.ok(block.includes('已交付给吴德贵'))
+  assert.ok(block.includes('不得再交付一次'))
+  // 写法要沿用基线，不能中途换叙述方式
+  assert.ok(block.includes('第三人称限知；短句为主'))
+  assert.ok(block.includes('括注体'))
   // 允许一次性临时配角烘托气氛，但禁止其承担主线或跨集复用
   assert.ok(block.includes('临时角色'))
   assert.ok(block.includes('不得推动主线'))
