@@ -7,7 +7,7 @@
       <div class="creation-selectors">
         <select class="creation-work-select" aria-label="选择作品" :value="route.query.workId || createdId || ''" :disabled="busy || !!worksError" @change="switchWork"><option value="">新建作品</option><option v-if="createdId && !works.some(work => work.workId === createdId)" :value="createdId">{{ form.title || '未命名作品' }}</option><option v-for="work in works" :key="work.workId" :value="work.workId">{{ work.workId === createdId ? form.title || work.title : work.title }}</option></select>
       </div>
-      <span class="creation-save-state" role="status" :class="{ bad: storageFailed }">{{ generatingChapters ? draftStatus : busy ? (importing ? '正在导入…' : '正在保存…') : draftStatus }}</span>
+      <span class="creation-save-state" role="status" :class="{ bad: storageFailed }">{{ busy ? (importing ? '正在导入…' : '正在保存…') : draftStatus }}</span>
       <div class="creation-actions">
         <button class="btn quiet sm" :disabled="busy || !editable || readOnly" @click="settingsVisible = true"><el-icon><Setting /></el-icon> 作品设置</button>
         <button class="btn quiet sm" :disabled="busy || !editable || readOnly" @click="fileInput.click()"><el-icon><Upload /></el-icon> 导入剧本</button>
@@ -32,14 +32,14 @@
         <div class="editor-location"><span>{{ section === 'summary' ? '作品资料 / 故事简介' : section === 'outline' ? '作品资料 / 剧本大纲' : section === 'characters' ? '作品资料 / 人物便签' : '正文分集 / 第 ' + (activeChapter + 1) + ' 集' }}</span><span>{{ wordCount(currentText).toLocaleString() }} 字</span><div class="view-mode" role="group" aria-label="创作模式"><button type="button" :aria-pressed="!readOnly" :disabled="busy" @click="readOnly = false">编辑</button><button type="button" :aria-pressed="readOnly" :disabled="busy" @click="readOnly = true">阅读</button></div></div>
         <div v-if="section === 'chapter'" class="chapter-trial-setting"><el-switch v-model="currentChapter.isFree" active-value="1" inactive-value="0" aria-label="设为试读章节（免费阅读）" :disabled="busy || !editable || readOnly" /><span>设为试读章节（免费阅读）</span><small>保存后请在作品详情发布章节，作品通过审核后读者可免费阅读</small></div>
         <ScriptEditor v-if="section === 'chapter'" ref="scriptEditor" :key="currentChapter.draftId" v-model="currentChapter.content" v-model:title="currentChapter.chapterTitle" :disabled="busy || !editable" :read-only="readOnly" />
-        <div v-else class="script-paper notes-paper"><h2>{{ section === 'summary' ? '故事简介' : section === 'outline' ? '剧本大纲' : '人物便签' }}</h2><p class="notes-description">{{ section === 'summary' ? '用一段话讲清人物、冲突与故事走向，保存时同步至作品简介。' : section === 'outline' ? 'AI 剧本生成的每集事件卡会存到这里：可在此直接修改，再回到 AI 面板按这份大纲生成各章。大纲随保存草稿在本机存档。' : '记录人物关系、动机与成长线，保存时同步到作品台账（PC 与 App 共用）。' }}</p><textarea v-if="section === 'summary'" v-model="form.summary" aria-label="故事简介" :disabled="busy || !editable" :readonly="readOnly" placeholder="这个故事从谁开始，又将走向哪里？" /><textarea v-else-if="section === 'outline'" v-model="scriptOutline" class="outline-textarea" aria-label="剧本大纲" :disabled="busy || !editable" :readonly="readOnly" placeholder="AI 剧本生成的分集事件卡会出现在这里，也可以自己写一份骨架：第1集：事件名 / 本集事件 / 冲突与推进 / 结果或反转 / 结尾钩子" /><textarea v-else v-model="characters" aria-label="人物便签" :disabled="busy || !editable" :readonly="readOnly" placeholder="姓名 / 身份 / 性格 / 人物关系…" /><div v-if="section === 'characters'" class="ledger-block"><h3>创作台账（其余七类）</h3><p class="cost">台账存服务器、三端共用；续写与「按大纲生成各章」时自动注入。道具档案的件数与「已交付给谁」是全书唯一依据，写法基线一旦定下就不要改，否则读者会觉得换了写手。</p><label class="field">人物关系<textarea v-model="ledger.relations" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：顾守山—顾星宇：父子，因旧案生隙" /></label><label class="field">伏笔（埋在哪集/是否回收）<textarea v-model="ledger.foreshadow" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第3集铜铃——第9集已回收" /></label><label class="field">时间线<textarea v-model="ledger.timeline" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第1集 雨夜；第2集 次日清晨" /></label><label class="field">物品位置<textarea v-model="ledger.items" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：铜铃在顾星宇房梁上" /></label><label class="field">重要道具档案（名称｜件数｜持有人｜状态｜外观）<textarea v-model="ledger.props" :disabled="busy || !editable" :readonly="readOnly" placeholder="一行一件，例如：傩面具｜十二面｜顾守山｜在手｜明代木雕；铜钥匙｜1把｜雷老幺｜已交付给吴德贵｜黄铜" /></label><label class="field">写法基线（人称/句式/对白比例/禁用写法）<textarea v-model="ledger.styleGuide" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第三人称限知；短句为主；对白占六成；不用全角括号补叙，不写场景头" /></label><label class="field">未解线索<textarea v-model="ledger.threads" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：老照片背面的人是谁" /></label></div><div v-if="section === 'outline'" class="row top-gap"><button class="btn ghost sm" :disabled="!scriptOutline.trim()" @click="copyOutline">复制大纲</button><button class="btn ghost sm" :disabled="busy || !editable || readOnly || !scriptOutline.trim()" @click="clearOutline">清空</button><button class="btn sm" style="margin-left:auto" :disabled="busy || !editable || readOnly || oneClickRunning" title="按题材与你的要求自动起草大纲、台账与全部集，逐集跑完" @click="startOneClickJob">{{ oneClickRunning ? '正在起草…' : '一键生成整部' }}</button><button class="btn ghost sm" :disabled="busy || !editable || readOnly || !scriptOutline.trim() || !createdId || oneClickRunning" title="提交后台队列逐集跑完，关闭页面也不中断" @click="startBackgroundJob">后台生成全部</button><button class="btn sm" :disabled="busy || !editable || readOnly || !scriptOutline.trim() || planningOutline || generatingChapters" @click="fillOutline(scriptOutline)">根据当前剧本大纲生成各章</button></div><button v-if="section === 'characters'" class="btn ghost sm" :disabled="!characters.trim()" @click="exportNotes()">导出人物便签</button><details v-if="section === 'characters' && noteBackups.length" class="notes-backups"><summary>已保存作品的便签存档</summary><button v-for="note in noteBackups" :key="note.title" @click="exportNotes(note.characters, note.title)">下载 · {{ note.title }}</button></details></div>
+        <div v-else class="script-paper notes-paper"><h2>{{ section === 'summary' ? '故事简介' : section === 'outline' ? '剧本大纲' : '人物便签' }}</h2><p class="notes-description">{{ section === 'summary' ? '用一段话讲清人物、冲突与故事走向，保存时同步至作品简介。' : section === 'outline' ? 'AI 剧本生成的每集事件卡会存到这里：可在此直接修改，再点「根据大纲生成各章」把正文写出来。大纲随保存草稿在本机存档。' : '记录人物关系、动机与成长线，保存时同步到作品台账（PC 与 App 共用）。' }}</p><textarea v-if="section === 'summary'" v-model="form.summary" aria-label="故事简介" :disabled="busy || !editable" :readonly="readOnly" placeholder="这个故事从谁开始，又将走向哪里？" /><textarea v-else-if="section === 'outline'" v-model="scriptOutline" class="outline-textarea" aria-label="剧本大纲" :disabled="busy || !editable" :readonly="readOnly" placeholder="AI 剧本生成的分集事件卡会出现在这里，也可以自己写一份骨架：第1集：事件名 / 本集事件 / 冲突与推进 / 结果或反转 / 结尾钩子" /><textarea v-else v-model="characters" aria-label="人物便签" :disabled="busy || !editable" :readonly="readOnly" placeholder="姓名 / 身份 / 性格 / 人物关系…" /><div v-if="section === 'characters'" class="ledger-block"><h3>创作台账（其余七类）</h3><p class="cost">台账存服务器、三端共用；续写与「根据大纲生成各章」时自动注入。道具档案的件数与「已交付给谁」是全书唯一依据，写法基线一旦定下就不要改，否则读者会觉得换了写手。</p><label class="field">人物关系<textarea v-model="ledger.relations" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：顾守山—顾星宇：父子，因旧案生隙" /></label><label class="field">伏笔（埋在哪集/是否回收）<textarea v-model="ledger.foreshadow" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第3集铜铃——第9集已回收" /></label><label class="field">时间线<textarea v-model="ledger.timeline" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第1集 雨夜；第2集 次日清晨" /></label><label class="field">物品位置<textarea v-model="ledger.items" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：铜铃在顾星宇房梁上" /></label><label class="field">重要道具档案（名称｜件数｜持有人｜状态｜外观）<textarea v-model="ledger.props" :disabled="busy || !editable" :readonly="readOnly" placeholder="一行一件，例如：傩面具｜十二面｜顾守山｜在手｜明代木雕；铜钥匙｜1把｜雷老幺｜已交付给吴德贵｜黄铜" /></label><label class="field">写法基线（人称/句式/对白比例/禁用写法）<textarea v-model="ledger.styleGuide" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第三人称限知；短句为主；对白占六成；不用全角括号补叙，不写场景头" /></label><label class="field">未解线索<textarea v-model="ledger.threads" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：老照片背面的人是谁" /></label></div><div v-if="section === 'outline'" class="row top-gap"><button class="btn ghost sm" :disabled="!scriptOutline.trim()" @click="copyOutline">复制大纲</button><button class="btn ghost sm" :disabled="busy || !editable || readOnly || !scriptOutline.trim()" @click="clearOutline">清空</button><button class="btn sm" style="margin-left:auto" :disabled="busy || !editable || readOnly || !scriptOutline.trim() || !createdId || genJobRunning" title="把当前大纲逐集写成正文：提交后台队列，关闭页面也不中断，失败可续跑" @click="startBackgroundJob()">{{ genJobRunning ? '正在生成…' : '根据大纲生成各章' }}</button></div><button v-if="section === 'characters'" class="btn ghost sm" :disabled="!characters.trim()" @click="exportNotes()">导出人物便签</button><details v-if="section === 'characters' && noteBackups.length" class="notes-backups"><summary>已保存作品的便签存档</summary><button v-for="note in noteBackups" :key="note.title" @click="exportNotes(note.characters, note.title)">下载 · {{ note.title }}</button></details></div>
         <footer class="editor-footer"><span>{{ readOnly ? '阅读模式 · 内容不可编辑' : section === 'chapter' ? '格式随正文保存 · Ctrl+Z 撤销 · Ctrl+B 加粗' : '让故事的骨架更清晰' }}</span><span>共 {{ chapters.length }} 集 · {{ totalWords.toLocaleString() }} 字</span></footer>
       </div>
-      <aside class="creation-ai" aria-label="AI 编剧助手"><AiStudio v-if="!compactAi" :key="workspaceRevision" embedded :workspace-state="aiState" :insert-disabled="busy || !editable || readOnly" :current-content="currentChapter.content" :outline="scriptOutline" :ledger="ledger" :volumes="volumes" :prev-chapter="prevChapterText" :prev-summaries="prevSummaries" :chapter-no="activeChapter + 1" :work-id="createdId" @insert="insertAi" @fill-outline="fillOutline" @create-outline="applyOutline" /></aside>
+      <aside class="creation-ai" aria-label="AI 编剧助手"><AiStudio v-if="!compactAi" :key="workspaceRevision" embedded :workspace-state="aiState" :insert-disabled="busy || !editable || readOnly" :current-content="currentChapter.content" :outline="scriptOutline" :ledger="ledger" :volumes="volumes" :prev-chapter="prevChapterText" :prev-summaries="prevSummaries" :chapter-no="activeChapter + 1" :work-id="createdId" @insert="insertAi" @fill-outline="startBackgroundJob" @create-outline="applyOutline" /></aside>
     </div>
     <input ref="fileInput" class="sr-only creation-file-input" type="file" accept=".docx,.txt,.md" :disabled="busy || !editable || readOnly" @change="importFile($event.target.files[0]); $event.target.value = ''" />
     <PortalLayer v-model="directoryVisible" title="分集与资料" size="min(300px, 92vw)"><div class="creation-directory directory-drawer"><DirectoryContents /></div></PortalLayer>
-    <PortalLayer v-model="aiVisible" title="AI 编剧助手" size="min(370px, 96vw)"><div class="creation-ai ai-drawer"><AiStudio v-if="compactAi" :key="workspaceRevision" embedded :workspace-state="aiState" :insert-disabled="busy || !editable || readOnly" :current-content="currentChapter.content" :outline="scriptOutline" :ledger="ledger" :volumes="volumes" :prev-chapter="prevChapterText" :prev-summaries="prevSummaries" :chapter-no="activeChapter + 1" :work-id="createdId" @insert="insertAi" @fill-outline="fillOutline" @create-outline="applyOutline" /></div></PortalLayer>
+    <PortalLayer v-model="aiVisible" title="AI 编剧助手" size="min(370px, 96vw)"><div class="creation-ai ai-drawer"><AiStudio v-if="compactAi" :key="workspaceRevision" embedded :workspace-state="aiState" :insert-disabled="busy || !editable || readOnly" :current-content="currentChapter.content" :outline="scriptOutline" :ledger="ledger" :volumes="volumes" :prev-chapter="prevChapterText" :prev-summaries="prevSummaries" :chapter-no="activeChapter + 1" :work-id="createdId" @insert="insertAi" @fill-outline="startBackgroundJob" @create-outline="applyOutline" /></div></PortalLayer>
     <PortalLayer v-model="settingsVisible" title="作品设置" size="min(480px, 96vw)"><div class="panel-content"><label class="field">书名<input v-model="form.title" maxlength="100" :disabled="busy" /></label><label class="field">简介<textarea v-model="form.summary" :disabled="busy" /></label><p class="cost">封面可在保存草稿后的作品详情中补充。提交审核后，作品将在审核期间锁定编辑。</p><button class="btn sm" @click="settingsVisible = false">完成设置</button></div></PortalLayer>
   </section>
 </template>
@@ -102,10 +102,8 @@ const editable = computed(() => canCreate.value && !workLoadFailed.value && (!lo
 const error = ref('')
 const saving = ref(false)
 const importing = ref(false)
-const generatingChapters = ref(false)
-const planningOutline = ref(false)
 const initializing = ref(true)
-const busy = computed(() => saving.value || importing.value || initializing.value || generatingChapters.value || planningOutline.value)
+const busy = computed(() => saving.value || importing.value || initializing.value)
 const fileInput = ref(null)
 const scriptEditor = ref(null)
 const directoryVisible = ref(false)
@@ -419,7 +417,6 @@ async function clearOutline() {
   scriptOutline.value = ''; cacheDraft()
 }
 // ──── 后台生成队列：点一次提交，后端逐集跑完；关页/断网不中断，失败可续跑 ────
-const oneClickRunning = ref(false)
 const genJob = ref(null)
 let genTimer = null
 const GEN_ACTIVE = ['queued', 'running']
@@ -443,123 +440,44 @@ function episodesFromPlan(outlineText, plan) {
     return { no, title: item.title, card: episodeCardFrom(outlineText, item.title, no) || item.summary || '' }
   })
 }
-/**
- * 一键生成整部：用户只给题材与要求，其余全自动。
- * 无大纲则先起草（简介/人物/事件卡一并落位），保存后提交队列；
- * 台账的 props/styleGuide/characters 由后端按同一组输入与同一模型起草。
- */
-async function startOneClickJob() {
-  if (busy.value || !editable.value || readOnly.value || oneClickRunning.value) return
-  const genre = (aiState.form.genre || '').trim()
-  const want = (aiState.form.prompt || '').trim()
-  const planned = Number(aiState.form.episodes) || 12
-  if (!form.title.trim()) { ElMessage.warning('先填作品名'); return }
-  if (!genre && !want) { ElMessage.warning('先填题材或你的要求，AI 才知道写什么'); return }
-  oneClickRunning.value = true
-  error.value = ''
-  const tip = ElMessage({ message: '正在按你的题材与要求起草整部大纲…', type: 'info', duration: 0 })
-  try {
-    let outlineText = scriptOutline.value.trim()
-    if (!outlineText) {
-      const output = await api.value.generate('outline', {
-        inspiration: want, genre, style: `共 ${planned} 集`,
-        workId: createdId.value || undefined, model: aiState.form.model || '', skillId: aiState.form.skillId || '',
-      })
-      const raw = output?.outline ?? output?.content ?? ''
-      // 分集大纲：模型直接给 episodes（后端按「共 N 集」出稿），转成行首「第N集：」文本给后续解析；
-      // 旧结构（acts/章节）仍走 outlineToText。
-      let text = ''
-      if (raw && typeof raw === 'object') {
-        const episodes = Array.isArray(raw.episodes) ? raw.episodes : []
-        if (episodes.length) {
-          const logline = String(raw.logline || raw.summary || '').trim()
-          if (logline && !form.summary) form.summary = logline
-          const castText = (Array.isArray(raw.characters) ? raw.characters : [])
-            .filter(item => item && (item.name || item.role))
-            .map(item => `${String(item.name || '').trim()}${item.role ? '：' + String(item.role).trim() : ''}`)
-            .join('\n')
-          if (castText && !characters.value) characters.value = castText
-          text = episodes.map((item, index) => {
-            const no = Number(item.no) || index + 1
-            const name = String(item.title || '').replace(/^第\s*\d+\s*集\s*[：:·\s]*/, '').trim() || `第${no}集`
-            return `第${no}集：${name}\n${String(item.card || item.summary || '').trim()}`
-          }).join('\n')
-        } else {
-          text = outlineToText(raw)
-        }
-      } else {
-        text = String(raw || '')
-      }
-      if (!text.trim()) throw new Error('AI 未返回可用的大纲，请重试')
-      const parts = splitOutlineSections(text)
-      if (parts.summary) form.summary = parts.summary
-      if (parts.characters) characters.value = parts.characters
-      outlineText = (parts.outline || (!parts.summary && !parts.characters ? text : '')).trim()
-      if (!outlineText) throw new Error('大纲里没有分集事件卡，请重试')
-      scriptOutline.value = outlineText
-      cacheDraft()
-    }
-    const items = outlineChapters(outlineText)
-    if (!items.length) throw new Error('大纲里没有识别到「第N集：事件」，请重试')
-    await save(false, { navigate: false, review: false })
-    if (error.value) throw new Error(error.value)
-    const plan = planOutlineChapters(items, chapters.value)
-    const pending = plan.filter(item => item.action === 'fill' || item.action === 'create')
-    if (!pending.length) { ElMessage.info('当前大纲对应的分集都已存在，无需生成'); return }
-    const episodes = episodesFromPlan(outlineText, pending)
-    const roster = rosterFromCharacters(characters.value || ledger.characters)
-    const job = await api.value.createGenJob(createdId.value, {
-      outline: outlineText,
-      characters: characters.value || ledger.characters || '',
-      roster: roster.join('、'),
-      genre,
-      userPrompt: want,
-      model: aiState.form.model || '',
-      episodes,
-    })
-    genJob.value = job
-    ElMessage.success(`已提交 ${episodes.length} 集：后台先起草台账，再逐集跑完，可以关闭页面`)
-    pollGenJob(createdId.value, job?.jobId)
-  } catch (failure) {
-    error.value = failure.message || '一键生成失败'
-    await handleError(failure)
-  } finally {
-    tip.close()
-    oneClickRunning.value = false
+async function startBackgroundJob(outlineOverride) {
+  if (busy.value || !editable.value || readOnly.value || genJobRunning.value) return
+  // 浮层「根据大纲生成各章」可直接传本次 AI 输出：先取分集段落到剧本大纲，再统一按大纲提交。
+  if (typeof outlineOverride === 'string' && outlineOverride.trim()) {
+    const parts = splitAiOutline(outlineOverride)
+    const body = (parts.outline || '').trim()
+    if (body) { scriptOutline.value = body; cacheDraft() }
   }
-}
-async function startBackgroundJob() {
-  if (busy.value || !editable.value || readOnly.value) return
   const outlineText = scriptOutline.value
   const items = outlineChapters(outlineText)
-  if (!items.length) { ElMessage.warning('大纲章节不完整、编号重复或混有编号列表，无法提交后台生成'); return }
-  if (!createdId.value) { ElMessage.warning('请先保存作品：后台队列按服务器上已保存的章节往下续写'); return }
+  if (!items.length) { ElMessage.warning('大纲章节不完整、编号重复或混有编号列表，请先改好剧本大纲再生成正文'); return }
+  if (!createdId.value) { ElMessage.warning('请先点「保存草稿」：后台队列按服务器上已保存的章节往下写'); return }
   const plan = planOutlineChapters(items, chapters.value)
   const pending = plan.filter(item => item.action === 'fill' || item.action === 'create')
-  if (!pending.length) { ElMessage.info('没有需要生成的章节'); return }
+  if (!pending.length) { ElMessage.info('当前大纲对应的分集都已有正文，没有需要生成的章节'); return }
   try {
-    await ElMessageBox.confirm(`将提交 ${pending.length} 集到后台队列。提交前会先保存当前草稿；之后可以关闭页面，后端逐集生成并落库，失败可续跑。每集按实际 token 扣积分。`, '后台生成全部', { confirmButtonText: '提交并开始', cancelButtonText: '取消' })
+    await ElMessageBox.confirm(`将把当前大纲的 ${pending.length} 集写成正文。提交前会先保存草稿；之后可以关闭页面，后端逐集生成并落库，失败可续跑。每集按实际 token 扣积分。`, '根据大纲生成各章', { confirmButtonText: '提交并开始', cancelButtonText: '取消' })
   } catch { return }
   // 队列每集从库里读上一集正文与最新台账，所以必须先把手上的草稿存成章节。
   await save(false, { navigate: false, review: false })
   if (error.value) return
-  const episodes = pending.map(item => {
-    const no = Number((item.title.match(/第\s*(\d{1,3})\s*集/) || [])[1]) || chapters.value.length + pending.indexOf(item) + 1
-    return { no, title: item.title, card: episodeCardFrom(outlineText, item.title, no) || item.summary || '' }
-  })
+  const episodes = episodesFromPlan(outlineText, pending)
   const roster = rosterFromCharacters(characters.value || ledger.characters)
   try {
     const job = await api.value.createGenJob(createdId.value, {
       outline: outlineText,
       characters: characters.value || ledger.characters || '',
       roster: roster.join('、'),
+      genre: (aiState.form.genre || '').trim(),
+      userPrompt: (aiState.form.prompt || '').trim(),
+      model: aiState.form.model || '',
       episodes,
     })
     genJob.value = job
-    ElMessage.success('已提交后台生成，可以关闭页面，进度会自动刷新')
+    ElMessage.success(`已提交 ${episodes.length} 集，可以关闭页面；进度会自动刷新`)
     pollGenJob(createdId.value, job?.jobId)
   } catch (failure) {
-    error.value = failure.message || '提交后台生成失败'
+    error.value = failure.message || '提交生成失败'
     await handleError(failure)
   }
 }
@@ -585,122 +503,6 @@ async function syncChaptersFromJob() {
   try { await ElMessageBox.confirm('重新从服务器加载章节？本页尚未保存的修改会丢失。', '同步后台生成结果', { confirmButtonText: '重新加载', cancelButtonText: '取消' }) } catch { return }
   await loadWorkspace()
   ElMessage.success('已同步后台生成的最新章节')
-}
-async function fillOutline(outline) {
-  if (busy.value || !editable.value || readOnly.value) return
-  const items = outlineChapters(outline)
-  if (!items.length) { ElMessage.warning('大纲章节不完整、编号重复或混有编号列表，请使用统一的分集标题格式重新生成'); return }
-  planningOutline.value = true
-  if (createdId.value) {
-    try {
-      const detail = await api.value.getWork(createdId.value)
-      const remote = detail.chapters || []
-      const saved = chapters.value.filter(chapter => chapter.chapterId)
-      if (!canEdit(user.value, detail.work) || remote.length !== saved.length || saved.some(chapter => {
-        const current = remote.find(row => Number(row.chapterId) === Number(chapter.chapterId))
-        const original = originalChapters.get(Number(chapter.chapterId))
-        return !current || !original || Number(current.chapterNo) !== Number(chapter.chapterNo) || !sameChapter(current, original)
-      })) throw new Error('作品或章节已在其他页面变更，请刷新确认后再生成')
-    } catch (failure) { planningOutline.value = false; error.value = failure.message || '无法核对作品章节，请重试'; await handleError(failure); return }
-  }
-  const plan = planOutlineChapters(items, chapters.value)
-  const pending = plan.filter(item => item.action === 'fill' || item.action === 'create')
-  const preview = h('div', { style: 'max-height: 45vh; overflow-y: auto; white-space: pre-wrap' }, [
-    h('p', `请核对识别结果及章节序号。将生成 ${pending.length} 章，每章按实际 token 扣除积分；单章超出字数上限时可确认续写。生成后请检查并保存草稿。`),
-    h('p', '纯编号格式可能与剧情列表混淆，请逐项核对。'),
-    ...plan.map(item => h('p', `${item.title}：${item.action === 'conflict' ? '冲突，跳过' : item.action === 'skip' ? '跳过' : item.action === 'fill' ? '填充' : '新建'} — ${item.reason}`))
-  ])
-  if (!pending.length) { try { await ElMessageBox.alert(preview, '章节匹配结果', { confirmButtonText: '知道了' }) } catch { /* 关闭对话框 */ } finally { planningOutline.value = false }; return }
-  try { await ElMessageBox.confirm(preview, '确认章节匹配结果', { confirmButtonText: '开始生成', cancelButtonText: '取消' }) } catch { planningOutline.value = false; return }
-  generatingChapters.value = true
-  planningOutline.value = false
-  let completedCount = 0
-  // 人物白名单与「人/事/物」铁律：清单在循环外算一次，每集都注入，生成后再核查。
-  const rosterNames = rosterFromCharacters(characters.value || ledger.characters)
-  const stateIssues = []
-  // 名单外人物跨集计数：只在单集露面的临时配角允许存在，跨两集以上复用才算挤进主线。
-  const strangerUsage = new Map()
-  try {
-    for (const item of pending) {
-      draftStatus.value = `正在生成 ${completedCount + 1}/${pending.length}：${item.title}`
-      // 本集事件卡与出场名单：只注入本集出场者的人物设定，避免模型自由改名换人。
-      const episodeNo = Number((item.title.match(/第\s*(\d{1,3})\s*集/) || [])[1]) || completedCount + 1
-      const card = episodeCardFrom(outline, item.title, episodeNo) || item.summary || ''
-      const cast = episodeCastFrom(card)
-      const castList = cast.length ? cast : castFromCharacters(characters.value || ledger.characters, card)
-      const ledgerText = ledgerPromptBlockByCast(ledger, castList)
-      const guardBlock = stateGuardBlock({ roster: rosterNames, items: ledger.items, props: ledger.props, timeline: ledger.timeline, styleGuide: ledger.styleGuide })
-      // 卷级快照优先于整份台账，50 集量级下只注入本卷与上卷。
-      const volumeText = volumeSnapshotBlock(volumes.value, episodeNo)
-      // 上一章末尾是「本集开场要接着写的起点」，不是要避开的雷区：先给正面承接要求，再给三种允许换场的例外。
-      const prevText = completedCount > 0 ? chapterTail(chapters.value[chapters.value.length - 1]?.content, 500) : ''
-      const summaryBlock = chapterSummaryBlock(chapters.value, episodeNo)
-      const settingBlock = String(characters.value || '').trim()
-        ? `【人物设定（姓名与身份固定，不得改名，不得新增未设定的人物）】\n${chapterTail(characters.value, 900)}`
-        : ''
-      const prompt = `请把下面这集写成一集完整剧本：700-900 字（超过 1000 字即不合格），以动作和对白推进，对白用“角色：台词”；沿用台账里的写法基线（人称、句式、对白与叙述比例、标点一致），用叙述和动作补足信息，不要用全角括号补叙，不要写整段心理独白；开头一句自然交代地点和时间，不要写场景头、镜号、景别、运镜；结尾留一个具体钩子，且钩子必须是本集新发生的事。只写这一集。\n集名：${item.title}\n全剧事件卡：\n${outline}\n本集事件卡：\n${item.summary}`
-        + (guardBlock ? '\n\n' + guardBlock : '')
-        + (settingBlock ? '\n\n' + settingBlock : '')
-        + (summaryBlock ? '\n\n' + summaryBlock : '')
-        + (volumeText ? '\n\n' + volumeText : '')
-        + (ledgerText ? '\n\n' + ledgerText : '')
-        + (prevText ? `\n\n【上一章结尾（本集第一段从这里往下接着写）】\n${prevText}\n本集开场直接承接上面最后一个动作或悬念，用它的结果往下推；人物、事件、道具的状态只能通过情节自然过渡变化。只有三种情况可以直接换场：上一集事件已经收束、本集开启另一个过渡事件、本集切到另一视角继续同一事件。` : '')
-      let output = await api.value.generateStream('write', { prompt, workId: createdId.value || undefined, type: 'script' }, () => {})
-      if (disposed) return
-      let chapter = item.chapter
-      if (chapter && !chapter.chapterId && chapters.value.length === 1 && chapter.chapterTitle === '第 1 集' && !documentText(chapter.content).trim()) chapter.chapterTitle = item.title
-      if (!chapter) {
-        const placeholder = chapters.value.length === 1 && !chapters.value[0].chapterId && chapters.value[0].chapterTitle === '第 1 集' && !documentText(chapters.value[0].content).trim()
-        chapter = placeholder ? chapters.value[0] : newChapter(chapters.value.length + 1)
-        chapter.chapterTitle = item.title
-        if (!placeholder) chapters.value.push(chapter)
-      }
-      let generated = output.content
-      let continueRounds = 0
-      while (true) {
-        chapter.content = generated
-        cacheDraft()
-        if (storageFailed.value) throw new Error('本机草稿保存失败，请先保存已生成内容')
-        if (!output.truncated) break
-        // 最多续写 2 次：再多就是模型在扩写，字数必然失控（实测单集可到 5000 字）。
-        if (continueRounds >= 2) break
-        try {
-          await ElMessageBox.confirm(`「${item.title}」达到单次生成长度上限，已有内容已保存在本机。续写会再按实际 token 扣一次积分，是否继续？`, '章节需要续写', { confirmButtonText: '续写本章', cancelButtonText: '暂时停止' })
-        } catch {
-          error.value = `「${item.title}」尚未写完，已保留已生成的内容；后续章节尚未生成。`
-          return
-        }
-        continueRounds += 1
-        draftStatus.value = `正在续写：${item.title}`
-        const continuation = `请从已有正文末尾接着写完“${item.title}”这一集剧本，700-900 字，保持动作与对白推进，不要重复已有正文、不要写场景头或镜头术语。\n全剧事件卡：\n${outline}\n本集事件卡：\n${item.summary}\n已有正文末尾：\n${generated.slice(-3000)}`
-          + (guardBlock ? '\n\n' + guardBlock : '')
-          + (settingBlock ? '\n\n' + settingBlock : '')
-          + (summaryBlock ? '\n\n' + summaryBlock : '')
-          + (ledgerText ? '\n\n' + ledgerText : '')
-        output = await api.value.generateStream('write', { prompt: continuation, workId: createdId.value || undefined, type: 'script' }, () => {})
-        if (disposed) return
-        // 续写常把已有正文末尾重写一遍，先去掉重复前缀再拼接。
-        generated += stripRepeatedHead(output.content, generated)
-      }
-      // 跨章兜底：本集结尾若抄了上一章末尾，裁掉重复段；超长按句收到上限。
-      generated = clampEpisodeText(stripRepeatedTail(generated, prevText), EPISODE_TEXT_MAX)
-      chapter.content = generated
-      auditEpisodeState({ text: generated, cast: castList, roster: rosterNames, props: ledger.props, strangerUsage })
-        .forEach(issue => stateIssues.push(`${item.title}：${issue}`))
-      // 每集一条摘要（≤500 字），随章节保存落库，供下一集续写注入。
-      chapter.summary = summaryOfEpisode(item.title, episodeNo)
-      completedCount++
-    }
-    batchPendingReview.value = completedCount
-    if (stateIssues.length) {
-      ElMessage.warning(`已生成 ${completedCount} 章；人/事/物核查发现 ${stateIssues.length} 处需复核：${stateIssues.slice(0, 3).join('；')}${stateIssues.length > 3 ? '…' : ''}`)
-    } else {
-      ElMessage.success(`已生成 ${completedCount} 章，请检查后保存草稿（保存时会逐集验收并补卷快照）`)
-    }
-  } catch (failure) {
-    error.value = `已生成 ${completedCount} 章，后续生成中止，已保留收到的正文：${failure.message || '请稍后重试'}`
-    await handleError(failure)
-  } finally { generatingChapters.value = false; cacheDraft() }
 }
 function exportNotes(content = characters.value, title = form.title) {
   const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }))
