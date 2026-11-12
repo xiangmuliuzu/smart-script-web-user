@@ -412,6 +412,8 @@ export function continuationPrompt({ title, chapterNo, outline, ledger, volumes,
   if (volumeText) parts.push(volumeText)
   if (prevSummaries) parts.push(prevSummaries)
   if (ledgerText) parts.push(ledgerText)
+  const schedule = threadScheduleBlock(ledger && ledger.threads, chapterNo)
+  if (schedule) parts.push(schedule)
   const prev = chapterTail(prevChapter)
   if (prev) parts.push(`【上一章末尾（承接语气与处境，勿重复）】\n${prev}`)
   const current = documentText(currentContent)
@@ -518,7 +520,8 @@ export function stateGuardBlock({ roster, items, props, timeline, styleGuide, li
   lines.push('道具：件数、持有人、完好状态一律沿用下面的道具档案，不得改数、不得凭空多出或少掉；'
     + '档案里已写「已交付给某某」的道具，本集不得再交付一次，也不得在没有「退回/夺回/丢失」情节的情况下回到原主手里；'
     + '本集事件卡没写“丢失/拿走/损坏/交出”，正文不得改变它的状态。')
-  lines.push('状态过渡：本集开场必须接着上一集结尾最后一个动作或悬念往下写，人物、事件、道具的状态只能通过情节自然过渡发生变化；'
+  lines.push('状态过渡：本集开场必须回应上一集结尾最后一个动作或悬念（给出结果、推进到下一步，或用一句话交代它为何被搁置），不能当作没发生过；'
+    + '允许该悬念跨集延续，不要求在本集收尾；人物、事件、道具的状态只能通过情节自然过渡发生变化；'
     + '只有三种情况可以直接换场——上一集事件已经收束、本集开启另一个过渡事件、本集切到另一视角继续同一事件；'
     + '除这三种，不得让人物立场、伤势、在场关系或道具归属在没有过渡的情况下突变。')
   lines.push('事件：只承接下列已发生的事实；本集事件卡规定的进程不得跳过，已发生的事不得再写一遍。')
@@ -532,6 +535,37 @@ export function stateGuardBlock({ roster, items, props, timeline, styleGuide, li
   if (data.length) lines.push('', ...data)
   const text = lines.join('\n')
   return text.length > limit ? text.slice(0, limit) : text
+}
+
+/**
+ * 悬念排期：把未解线索按「计划兑现点」分成「本集必须处理」与「背景（不得提前解决）」。
+ *
+ * 兑现点统一写成「第N集」，取行内最后一个集号；无集号或未写「已结」的条目只作背景，
+ * 长线悬念（如三年之约）不会因为写到了下一集就被迫收线。
+ */
+export function threadScheduleBlock(threads, currentNo) {
+  const lines = String(threads || '').split('\n').map(line => line.trim()).filter(Boolean)
+  if (!lines.length) return ''
+  const due = []
+  const later = []
+  lines.forEach(raw => {
+    const line = raw.replace(/^(未解线索|线索)[：:]/, '').trim()
+    if (!line || line.includes('已结') || line.includes('已回收') || line.includes('已兑现')) return
+    const matches = [...line.matchAll(/第\s*(\d{1,3})\s*集/g)]
+    const dueNo = matches.length ? Number(matches[matches.length - 1][1]) : 0
+    if (dueNo > 0 && dueNo <= Number(currentNo || 0)) due.push(line)
+    else later.push(line)
+  })
+  const parts = []
+  if (due.length) {
+    parts.push(`【本集必须处理（已到期未结的悬念/约定）】\n${due.map(line => `- ${line}`).join('\n')}\n`
+      + '这些项在本集必须给出进展或结果，不能整集不提；若本集事件卡没安排，就用一到两句交代推进到哪一步。')
+  }
+  if (later.length) {
+    parts.push(`【背景悬念（未到期，不得提前解决）】\n${later.map(line => `- ${line}`).join('\n')}\n`
+      + '这些项只需保持存在感（可提一句、可作动机），不得在本集提前收线或给出答案。')
+  }
+  return parts.join('\n\n')
 }
 
 /** 中文/阿拉伯数字转数值（覆盖 1–999 常用写法；解析不出返回 0）。 */
