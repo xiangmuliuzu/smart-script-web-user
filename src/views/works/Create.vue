@@ -15,6 +15,13 @@
         <button class="btn sm" :disabled="busy || !editable || readOnly" @click="save(true)">提交审核</button>
       </div>
     </header>
+    <div v-if="genJob" class="creation-error note" role="status">
+      后台生成：{{ genStatusText }} · 已完成 {{ genJob.doneCount }}/{{ genJob.total }} 集<span v-if="genJob.currentNo">（正在写第 {{ genJob.currentNo }} 集：{{ genJob.currentTitle }}）</span><span v-if="genJob.lastError"> · {{ genJob.lastError }}</span>
+      <button v-if="genJob.status === 'paused' || genJob.status === 'cancelled'" class="text-button" @click="resumeGenJob">续跑</button>
+      <button v-if="genJobRunning" class="text-button" @click="cancelGenJob">取消</button>
+      <button v-if="!genJobRunning" class="text-button" @click="syncChaptersFromJob">同步章节</button>
+      <button v-if="genJob.status === 'succeeded'" class="text-button" @click="genJob = null">关闭</button>
+    </div>
     <div v-if="error" class="creation-error note bad" role="alert">{{ error }}</div>
     <div v-if="worksError" class="creation-error note bad" role="alert">{{ worksError }}<button class="text-button" @click="loadWorks">重新加载作品</button></div>
     <div v-if="loadedWork?.status === 'reviewing'" class="creation-error note info" role="status">作品正在审核中，暂不可编辑；你可以选择其他作品继续创作。</div>
@@ -25,7 +32,7 @@
         <div class="editor-location"><span>{{ section === 'summary' ? '作品资料 / 故事简介' : section === 'outline' ? '作品资料 / 剧本大纲' : section === 'characters' ? '作品资料 / 人物便签' : '正文分集 / 第 ' + (activeChapter + 1) + ' 集' }}</span><span>{{ wordCount(currentText).toLocaleString() }} 字</span><div class="view-mode" role="group" aria-label="创作模式"><button type="button" :aria-pressed="!readOnly" :disabled="busy" @click="readOnly = false">编辑</button><button type="button" :aria-pressed="readOnly" :disabled="busy" @click="readOnly = true">阅读</button></div></div>
         <div v-if="section === 'chapter'" class="chapter-trial-setting"><el-switch v-model="currentChapter.isFree" active-value="1" inactive-value="0" aria-label="设为试读章节（免费阅读）" :disabled="busy || !editable || readOnly" /><span>设为试读章节（免费阅读）</span><small>保存后请在作品详情发布章节，作品通过审核后读者可免费阅读</small></div>
         <ScriptEditor v-if="section === 'chapter'" ref="scriptEditor" :key="currentChapter.draftId" v-model="currentChapter.content" v-model:title="currentChapter.chapterTitle" :disabled="busy || !editable" :read-only="readOnly" />
-        <div v-else class="script-paper notes-paper"><h2>{{ section === 'summary' ? '故事简介' : section === 'outline' ? '剧本大纲' : '人物便签' }}</h2><p class="notes-description">{{ section === 'summary' ? '用一段话讲清人物、冲突与故事走向，保存时同步至作品简介。' : section === 'outline' ? 'AI 剧本生成的每集事件卡会存到这里：可在此直接修改，再回到 AI 面板按这份大纲生成各章。大纲随保存草稿在本机存档。' : '记录人物关系、动机与成长线，保存时同步到作品台账（PC 与 App 共用）。' }}</p><textarea v-if="section === 'summary'" v-model="form.summary" aria-label="故事简介" :disabled="busy || !editable" :readonly="readOnly" placeholder="这个故事从谁开始，又将走向哪里？" /><textarea v-else-if="section === 'outline'" v-model="scriptOutline" class="outline-textarea" aria-label="剧本大纲" :disabled="busy || !editable" :readonly="readOnly" placeholder="AI 剧本生成的分集事件卡会出现在这里，也可以自己写一份骨架：第1集：事件名 / 本集事件 / 冲突与推进 / 结果或反转 / 结尾钩子" /><textarea v-else v-model="characters" aria-label="人物便签" :disabled="busy || !editable" :readonly="readOnly" placeholder="姓名 / 身份 / 性格 / 人物关系…" /><div v-if="section === 'characters'" class="ledger-block"><h3>创作台账（其余七类）</h3><p class="cost">台账存服务器、三端共用；续写与「按大纲生成各章」时自动注入。道具档案的件数与「已交付给谁」是全书唯一依据，写法基线一旦定下就不要改，否则读者会觉得换了写手。</p><label class="field">人物关系<textarea v-model="ledger.relations" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：顾守山—顾星宇：父子，因旧案生隙" /></label><label class="field">伏笔（埋在哪集/是否回收）<textarea v-model="ledger.foreshadow" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第3集铜铃——第9集已回收" /></label><label class="field">时间线<textarea v-model="ledger.timeline" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第1集 雨夜；第2集 次日清晨" /></label><label class="field">物品位置<textarea v-model="ledger.items" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：铜铃在顾星宇房梁上" /></label><label class="field">重要道具档案（名称｜件数｜持有人｜状态｜外观）<textarea v-model="ledger.props" :disabled="busy || !editable" :readonly="readOnly" placeholder="一行一件，例如：傩面具｜十二面｜顾守山｜在手｜明代木雕；铜钥匙｜1把｜雷老幺｜已交付给吴德贵｜黄铜" /></label><label class="field">写法基线（人称/句式/对白比例/禁用写法）<textarea v-model="ledger.styleGuide" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第三人称限知；短句为主；对白占六成；不用全角括号补叙，不写场景头" /></label><label class="field">未解线索<textarea v-model="ledger.threads" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：老照片背面的人是谁" /></label></div><div v-if="section === 'outline'" class="row top-gap"><button class="btn ghost sm" :disabled="!scriptOutline.trim()" @click="copyOutline">复制大纲</button><button class="btn ghost sm" :disabled="busy || !editable || readOnly || !scriptOutline.trim()" @click="clearOutline">清空</button><button class="btn sm" style="margin-left:auto" :disabled="busy || !editable || readOnly || !scriptOutline.trim() || planningOutline || generatingChapters" @click="fillOutline(scriptOutline)">根据当前剧本大纲生成各章</button></div><button v-if="section === 'characters'" class="btn ghost sm" :disabled="!characters.trim()" @click="exportNotes()">导出人物便签</button><details v-if="section === 'characters' && noteBackups.length" class="notes-backups"><summary>已保存作品的便签存档</summary><button v-for="note in noteBackups" :key="note.title" @click="exportNotes(note.characters, note.title)">下载 · {{ note.title }}</button></details></div>
+        <div v-else class="script-paper notes-paper"><h2>{{ section === 'summary' ? '故事简介' : section === 'outline' ? '剧本大纲' : '人物便签' }}</h2><p class="notes-description">{{ section === 'summary' ? '用一段话讲清人物、冲突与故事走向，保存时同步至作品简介。' : section === 'outline' ? 'AI 剧本生成的每集事件卡会存到这里：可在此直接修改，再回到 AI 面板按这份大纲生成各章。大纲随保存草稿在本机存档。' : '记录人物关系、动机与成长线，保存时同步到作品台账（PC 与 App 共用）。' }}</p><textarea v-if="section === 'summary'" v-model="form.summary" aria-label="故事简介" :disabled="busy || !editable" :readonly="readOnly" placeholder="这个故事从谁开始，又将走向哪里？" /><textarea v-else-if="section === 'outline'" v-model="scriptOutline" class="outline-textarea" aria-label="剧本大纲" :disabled="busy || !editable" :readonly="readOnly" placeholder="AI 剧本生成的分集事件卡会出现在这里，也可以自己写一份骨架：第1集：事件名 / 本集事件 / 冲突与推进 / 结果或反转 / 结尾钩子" /><textarea v-else v-model="characters" aria-label="人物便签" :disabled="busy || !editable" :readonly="readOnly" placeholder="姓名 / 身份 / 性格 / 人物关系…" /><div v-if="section === 'characters'" class="ledger-block"><h3>创作台账（其余七类）</h3><p class="cost">台账存服务器、三端共用；续写与「按大纲生成各章」时自动注入。道具档案的件数与「已交付给谁」是全书唯一依据，写法基线一旦定下就不要改，否则读者会觉得换了写手。</p><label class="field">人物关系<textarea v-model="ledger.relations" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：顾守山—顾星宇：父子，因旧案生隙" /></label><label class="field">伏笔（埋在哪集/是否回收）<textarea v-model="ledger.foreshadow" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第3集铜铃——第9集已回收" /></label><label class="field">时间线<textarea v-model="ledger.timeline" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第1集 雨夜；第2集 次日清晨" /></label><label class="field">物品位置<textarea v-model="ledger.items" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：铜铃在顾星宇房梁上" /></label><label class="field">重要道具档案（名称｜件数｜持有人｜状态｜外观）<textarea v-model="ledger.props" :disabled="busy || !editable" :readonly="readOnly" placeholder="一行一件，例如：傩面具｜十二面｜顾守山｜在手｜明代木雕；铜钥匙｜1把｜雷老幺｜已交付给吴德贵｜黄铜" /></label><label class="field">写法基线（人称/句式/对白比例/禁用写法）<textarea v-model="ledger.styleGuide" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第三人称限知；短句为主；对白占六成；不用全角括号补叙，不写场景头" /></label><label class="field">未解线索<textarea v-model="ledger.threads" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：老照片背面的人是谁" /></label></div><div v-if="section === 'outline'" class="row top-gap"><button class="btn ghost sm" :disabled="!scriptOutline.trim()" @click="copyOutline">复制大纲</button><button class="btn ghost sm" :disabled="busy || !editable || readOnly || !scriptOutline.trim()" @click="clearOutline">清空</button><button class="btn ghost sm" style="margin-left:auto" :disabled="busy || !editable || readOnly || !scriptOutline.trim() || !createdId" title="提交后台队列逐集跑完，关闭页面也不中断" @click="startBackgroundJob">后台生成全部</button><button class="btn sm" :disabled="busy || !editable || readOnly || !scriptOutline.trim() || planningOutline || generatingChapters" @click="fillOutline(scriptOutline)">根据当前剧本大纲生成各章</button></div><button v-if="section === 'characters'" class="btn ghost sm" :disabled="!characters.trim()" @click="exportNotes()">导出人物便签</button><details v-if="section === 'characters' && noteBackups.length" class="notes-backups"><summary>已保存作品的便签存档</summary><button v-for="note in noteBackups" :key="note.title" @click="exportNotes(note.characters, note.title)">下载 · {{ note.title }}</button></details></div>
         <footer class="editor-footer"><span>{{ readOnly ? '阅读模式 · 内容不可编辑' : section === 'chapter' ? '格式随正文保存 · Ctrl+Z 撤销 · Ctrl+B 加粗' : '让故事的骨架更清晰' }}</span><span>共 {{ chapters.length }} 集 · {{ totalWords.toLocaleString() }} 字</span></footer>
       </div>
       <aside class="creation-ai" aria-label="AI 编剧助手"><AiStudio v-if="!compactAi" :key="workspaceRevision" embedded :workspace-state="aiState" :insert-disabled="busy || !editable || readOnly" :current-content="currentChapter.content" :outline="scriptOutline" :ledger="ledger" :volumes="volumes" :prev-chapter="prevChapterText" :prev-summaries="prevSummaries" :chapter-no="activeChapter + 1" :work-id="createdId" @insert="insertAi" @fill-outline="fillOutline" @create-outline="applyOutline" /></aside>
@@ -406,6 +413,81 @@ async function clearOutline() {
   try { await ElMessageBox.confirm('清空剧本大纲？此操作不可撤销。', '清空剧本大纲', { confirmButtonText: '清空', cancelButtonText: '取消' }) } catch { return }
   scriptOutline.value = ''; cacheDraft()
 }
+// ──── 后台生成队列：点一次提交，后端逐集跑完；关页/断网不中断，失败可续跑 ────
+const genJob = ref(null)
+let genTimer = null
+const GEN_ACTIVE = ['queued', 'running']
+const genJobRunning = computed(() => GEN_ACTIVE.includes(genJob.value?.status))
+const genStatusText = computed(() => ({ queued: '排队中', running: '后台执行中', paused: '已暂停，可续跑', succeeded: '已全部完成', cancelled: '已取消' }[genJob.value?.status] || ''))
+function stopGenPolling() { clearTimeout(genTimer); genTimer = null }
+async function pollGenJob(workId, jobId) {
+  stopGenPolling()
+  if (!workId || !api.value?.getLatestGenJob) return
+  try {
+    const result = jobId ? await api.value.getGenJob(workId, jobId) : await api.value.getLatestGenJob(workId)
+    if (disposed) return
+    genJob.value = result || null
+    if (genJobRunning.value) genTimer = setTimeout(() => pollGenJob(workId, genJob.value.jobId), 3000)
+  } catch { if (!disposed) genTimer = setTimeout(() => pollGenJob(workId, jobId), 5000) }
+}
+async function startBackgroundJob() {
+  if (busy.value || !editable.value || readOnly.value) return
+  const outlineText = scriptOutline.value
+  const items = outlineChapters(outlineText)
+  if (!items.length) { ElMessage.warning('大纲章节不完整、编号重复或混有编号列表，无法提交后台生成'); return }
+  if (!createdId.value) { ElMessage.warning('请先保存作品：后台队列按服务器上已保存的章节往下续写'); return }
+  const plan = planOutlineChapters(items, chapters.value)
+  const pending = plan.filter(item => item.action === 'fill' || item.action === 'create')
+  if (!pending.length) { ElMessage.info('没有需要生成的章节'); return }
+  try {
+    await ElMessageBox.confirm(`将提交 ${pending.length} 集到后台队列。提交前会先保存当前草稿；之后可以关闭页面，后端逐集生成并落库，失败可续跑。每集按实际 token 扣积分。`, '后台生成全部', { confirmButtonText: '提交并开始', cancelButtonText: '取消' })
+  } catch { return }
+  // 队列每集从库里读上一集正文与最新台账，所以必须先把手上的草稿存成章节。
+  await save(false, { navigate: false, review: false })
+  if (error.value) return
+  const episodes = pending.map(item => {
+    const no = Number((item.title.match(/第\s*(\d{1,3})\s*集/) || [])[1]) || chapters.value.length + pending.indexOf(item) + 1
+    return { no, title: item.title, card: episodeCardFrom(outlineText, item.title, no) || item.summary || '' }
+  })
+  const roster = rosterFromCharacters(characters.value || ledger.characters)
+  try {
+    const job = await api.value.createGenJob(createdId.value, {
+      outline: outlineText,
+      characters: characters.value || ledger.characters || '',
+      roster: roster.join('、'),
+      episodes,
+    })
+    genJob.value = job
+    ElMessage.success('已提交后台生成，可以关闭页面，进度会自动刷新')
+    pollGenJob(createdId.value, job?.jobId)
+  } catch (failure) {
+    error.value = failure.message || '提交后台生成失败'
+    await handleError(failure)
+  }
+}
+async function resumeGenJob() {
+  if (!createdId.value || !genJob.value || busy.value) return
+  try {
+    const job = await api.value.resumeGenJob(createdId.value, genJob.value.jobId)
+    genJob.value = job; pollGenJob(createdId.value, job?.jobId)
+    ElMessage.success('已续跑，未完成的集继续生成')
+  } catch (failure) { error.value = failure.message || '续跑失败'; await handleError(failure) }
+}
+async function cancelGenJob() {
+  if (!createdId.value || !genJob.value) return
+  try { await ElMessageBox.confirm('取消后台生成？当前这一集写完即停，已生成的章节保留。', '取消后台生成', { confirmButtonText: '取消任务', cancelButtonText: '继续运行' }) } catch { return }
+  try {
+    genJob.value = await api.value.cancelGenJob(createdId.value, genJob.value.jobId)
+    stopGenPolling()
+    ElMessage.info('已取消，已生成的章节保留')
+  } catch (failure) { error.value = failure.message || '取消失败'; await handleError(failure) }
+}
+async function syncChaptersFromJob() {
+  if (!createdId.value) return
+  try { await ElMessageBox.confirm('重新从服务器加载章节？本页尚未保存的修改会丢失。', '同步后台生成结果', { confirmButtonText: '重新加载', cancelButtonText: '取消' }) } catch { return }
+  await loadWorkspace()
+  ElMessage.success('已同步后台生成的最新章节')
+}
 async function fillOutline(outline) {
   if (busy.value || !editable.value || readOnly.value) return
   const items = outlineChapters(outline)
@@ -526,7 +608,8 @@ function exportNotes(content = characters.value, title = form.title) {
   const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }))
   const link = document.createElement('a'); link.href = url; link.download = (title.trim() || '未命名剧本') + '-人物便签.txt'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
-async function save(submit) {
+async function save(submit, options = {}) {
+  const { navigate = true, review = true } = options
   if (!editable.value || busy.value) return
   error.value = validateWork(form)
   if (!error.value) {
@@ -603,7 +686,7 @@ async function save(submit) {
     savedSnapshot = snapshot(); cacheDraft(); draftStatus.value = '作品已保存'
     ElMessage.success(submit ? '已提交内容审核' : '草稿已保存至作品')
     // 批量生成的章节落库后才拿得到 chapterId，验收与卷快照必须在这之后补跑。
-    if (batchPendingReview.value) {
+    if (review && batchPendingReview.value) {
       const count = batchPendingReview.value
       batchPendingReview.value = 0
       try {
@@ -611,7 +694,8 @@ async function save(submit) {
         await runBatchReview(count)
       } catch { ElMessage.info('已跳过逐集验收，可在单集「更新摘要」时单独验收') }
     }
-    completed = true; storage.removeItem(draftKey); await goWork(createdId.value)
+    completed = true
+    if (navigate) { storage.removeItem(draftKey); await goWork(createdId.value) }
   } catch (failure) { error.value = '保存未完成，已保留内容，请重试。' + failure.message; cacheDraft(); await handleError(failure) }
   finally { saving.value = false }
 }
@@ -690,7 +774,7 @@ async function loadWorkspace() {
       activeChapter.value = index
     }
   } catch (failure) { workLoadFailed.value = true; error.value = failure.message || '作品加载失败，请重新选择作品'; if (failure.code) await handleError(failure) }
-  finally { if (!disposed) { ready = true; initializing.value = false } }
+  finally { if (!disposed) { ready = true; initializing.value = false; if (createdId.value) pollGenJob(createdId.value) } }
 }
 watch(() => [route.query.workId, route.query.chapterId], () => { if (ready && !normalizingRoute) loadWorkspace() })
 function resizeAi() { compactAi.value = media.matches; if (!media.matches) aiVisible.value = false }
@@ -707,5 +791,5 @@ onMounted(async () => {
   window.addEventListener('beforeunload', protectUnload)
   await Promise.all([loadWorks(), loadWorkspace()])
 })
-onBeforeUnmount(() => { cacheDraft(); disposed = true; ready = false; clearTimeout(timer); media?.removeEventListener('change', resizeAi); window.removeEventListener('beforeunload', protectUnload) })
+onBeforeUnmount(() => { cacheDraft(); disposed = true; ready = false; clearTimeout(timer); stopGenPolling(); media?.removeEventListener('change', resizeAi); window.removeEventListener('beforeunload', protectUnload) })
 </script>

@@ -120,6 +120,16 @@ export const deleteSeal = id => data(sealPath(id), { method: 'DELETE' })
 // AI 生成耗时可能超过默认 30s（大纲尤甚，需等待模型完整输出），单独放长到 120s。
 export const generate = (type, form) => data('/api/v1/content/ai/' + type, { method: 'POST', body: form, timeout: 120000 })
 
+// ──── 后台生成队列：点一次提交，后端逐集跑完（关页/断网不影响，可续跑） ────
+// 与「按大纲生成各章」的区别：队列在后端执行并逐集落库，接口立即返回任务；
+// 每集执行时后端自行从库读最新台账与上一集正文，因此提交前本地章节必须已保存。
+const genBase = id => '/api/v1/content/works/' + encodeURIComponent(id) + '/gen-jobs'
+export const createGenJob = (workId, body) => data(genBase(workId), { method: 'POST', body })
+export const getLatestGenJob = workId => data(genBase(workId) + '/latest')
+export const getGenJob = (workId, jobId) => data(genBase(workId) + '/' + encodeURIComponent(jobId))
+export const resumeGenJob = (workId, jobId) => data(genBase(workId) + '/' + encodeURIComponent(jobId) + '/resume', { method: 'POST' })
+export const cancelGenJob = (workId, jobId) => data(genBase(workId) + '/' + encodeURIComponent(jobId) + '/cancel', { method: 'POST' })
+
 // ──── 创作台账（跨端共享：故事简介 / 主要人物 / 人物关系 / 伏笔 / 时间线 / 物品位置 / 未解线索） ────
 // 与 App 同一接口 /api/v1/content/works/{workId}/ledger；作品归属由后端校验（非本人 403）。
 const ledgerPath = id => '/api/v1/content/works/' + encodeURIComponent(id) + '/ledger'
