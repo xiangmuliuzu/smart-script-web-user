@@ -14,10 +14,15 @@
           <span class="sc-status">{{ stageStatusLabel(stage) }}</span>
         </div>
         <p class="cost">时限 {{ durationText(stage) }}<template v-if="extendedHoursOf(stage) > 0"> · 已延时 {{ formatHours(extendedHoursOf(stage)) }}</template> · <span :class="dueClass(stage)">截止 {{ timeText(stage.dueAt) }}</span><template v-if="stage.startedAt"> · 开始于 {{ timeText(stage.startedAt) }}</template></p>
-        <template v-if="stage.workId || stage.deliverableDesc">
-          <p class="cost">交付作品：《{{ stage.workTitle || ('作品#' + stage.workId) }}》<template v-if="stage.submittedAt"> · 提交于 {{ timeText(stage.submittedAt) }}</template></p>
+        <!-- 分镜类交付可以只交文件与说明（不关联作品），所以判断条件带 deliverableUrl -->
+        <template v-if="stage.workId || stage.deliverableDesc || stage.deliverableUrl">
+          <p class="cost">
+            <template v-if="stage.workId">交付作品：《{{ stage.workTitle || ('作品#' + stage.workId) }}》</template>
+            <template v-else>交付分镜（未关联作品）</template>
+            <template v-if="stage.submittedAt"> · 提交于 {{ timeText(stage.submittedAt) }}</template>
+          </p>
           <p v-if="stage.deliverableDesc" class="sc-desc">{{ stage.deliverableDesc }}</p>
-          <a v-if="stage.deliverableUrl" class="sc-link" :href="stage.deliverableUrl" target="_blank" rel="noopener">交付物链接 ↗</a>
+          <a v-if="stage.deliverableUrl" class="sc-link" :href="mediaUrl(stage.deliverableUrl)" target="_blank" rel="noopener">交付物链接 ↗</a>
         </template>
         <p v-if="stage.aiScore != null" class="cost">AI 审核 {{ stage.aiScore }} 分：{{ aiBrief(stage.aiResult) }}（{{ timeText(stage.aiReviewedAt) }}）</p>
         <p v-if="stage.status === 'ai_reviewing'" class="cost sc-warn">交付物正在 AI 审核中，本轮计时已暂停，结果出来后自动流转。</p>
@@ -49,15 +54,23 @@
 
     <PortalLayer v-model="deliverVisible" :title="`提交交付物 - 第 ${current?.stageOrder || ''} 轮`" modal>
       <div class="dialog-body">
-        <label class="field">交付作品
-          <select v-model.number="deliverForm.workId">
-            <option :value="null">选择作品（仅本人未上架售卖的作品可交付）</option>
-            <option v-for="work in works" :key="work.workId" :value="Number(work.workId)">{{ work.title || ('作品#' + work.workId) }}（{{ workStatusLabel(work.status) }}）</option>
-          </select>
+        <label class="field">
+          <template v-if="isStoryboard">交付作品（可选）
+            <select v-model.number="deliverForm.workId">
+              <option :value="null">不关联作品，只交分镜文件与说明</option>
+              <option v-for="work in works" :key="work.workId" :value="Number(work.workId)">{{ work.title || ('作品#' + work.workId) }}（{{ workStatusLabel(work.status) }}）</option>
+            </select>
+          </template>
+          <template v-else>交付作品
+            <select v-model.number="deliverForm.workId">
+              <option :value="null">选择作品（仅本人未上架售卖的作品可交付）</option>
+              <option v-for="work in works" :key="work.workId" :value="Number(work.workId)">{{ work.title || ('作品#' + work.workId) }}（{{ workStatusLabel(work.status) }}）</option>
+            </select>
+          </template>
         </label>
-        <label class="field">交付说明<textarea v-model="deliverForm.deliverableDesc" rows="4" placeholder="本轮完成的集数、主要内容与待确认事项…"></textarea></label>
-        <label class="field">交付物链接（可选）<input v-model="deliverForm.deliverableUrl" placeholder="网盘/文档链接"></label>
-        <p class="cost">提交后本轮计时暂停，先走 AI 审核再进入发布者验收。</p>
+        <label class="field">交付说明<textarea v-model="deliverForm.deliverableDesc" rows="4" :placeholder="isStoryboard ? '本轮分镜覆盖的集数、场次拆分口径与待确认事项…' : '本轮完成的集数、主要内容与待确认事项…'"></textarea></label>
+        <label class="field">交付物链接（{{ isStoryboard ? '与说明至少填一项' : '可选' }}）<input v-model="deliverForm.deliverableUrl" placeholder="网盘/文档链接"></label>
+        <p class="cost">{{ isStoryboard ? '分镜类任务不做 AI 剧本审核，提交后直接进入发布者人工验收，本轮计时暂停至验收出结果。' : '提交后本轮计时暂停，先走 AI 审核再进入发布者验收。' }}</p>
         <div class="dialog-foot"><button class="btn" :disabled="busy" @click="doDeliver">{{ busy ? '提交中…' : '确认提交' }}</button></div>
       </div>
     </PortalLayer>
@@ -82,7 +95,10 @@ import LoadState from '../LoadState.vue'
 import PortalLayer from '../PortalLayer.vue'
 import { money, timeText, countdown, durationText, stageStatusLabel, stageTone, isActiveStage, extendTypeLabel, extendStatusLabel, extendTone, aiBrief, dueTone, formatHours } from '../../utils/demand.js'
 import { shelfStatusLabel } from '../../utils/copyright.js'
+import { mediaUrl } from '../../utils/avatarUrl.js'
 const props = defineProps({ demand: { type: Object, required: true }, isOwner: Boolean })
+// 分镜类交付：作品可选、不做 AI 审核，校验口径与后端 deliverStage 保持一致
+const isStoryboard = computed(() => (props.demand.taskType || 'script') === 'storyboard')
 // 提交交付/延时动作后通知父页重拉任务详情（整单状态可能随之变化）
 const emit = defineEmits(['changed'])
 const { api, handleError } = usePortal()
@@ -145,13 +161,16 @@ function openExtend(stage) {
   extendVisible.value = true
 }
 async function doDeliver() {
-  if (!deliverForm.workId) { ElMessage.warning('请选择交付作品'); return }
-  if (!deliverForm.deliverableDesc?.trim()) { ElMessage.warning('请填写交付说明'); return }
+  const desc = deliverForm.deliverableDesc?.trim() || ''
+  const url = deliverForm.deliverableUrl?.trim() || ''
+  if (!deliverForm.workId && !isStoryboard.value) { ElMessage.warning('请选择交付作品'); return }
+  if (isStoryboard.value && !desc && !url) { ElMessage.warning('分镜交付请填写交付说明或上传/粘贴文件链接'); return }
+  if (!isStoryboard.value && !desc) { ElMessage.warning('请填写交付说明'); return }
   busy.value = true
   try {
-    await api.value.deliverStage(props.demand.demandId, current.value.stageId, { workId: deliverForm.workId, deliverableDesc: deliverForm.deliverableDesc.trim(), deliverableUrl: deliverForm.deliverableUrl?.trim() || undefined })
+    await api.value.deliverStage(props.demand.demandId, current.value.stageId, { workId: deliverForm.workId || undefined, deliverableDesc: desc || undefined, deliverableUrl: url || undefined })
     deliverVisible.value = false
-    ElMessage.success('交付已提交，等待 AI 审核与发布者验收')
+    ElMessage.success(isStoryboard.value ? '交付已提交，等待发布者验收' : '交付已提交，等待 AI 审核与发布者验收')
     await reload()
     emit('changed')
   } catch (failure) { await handleError(failure) } finally { busy.value = false }

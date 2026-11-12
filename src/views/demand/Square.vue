@@ -41,6 +41,14 @@
             <button v-if="genrePage < genrePageCount - 1" class="genre-arrow" type="button" aria-label="下一页题材" @click="turnGenrePage(1)">›</button>
           </div>
         </div>
+        <div class="filter-block type-block">
+          <p class="filter-label">任务类型</p>
+          <div class="genre-grid">
+            <button v-for="chip in typeChips" :key="String(chip.value)" type="button" class="chip-genre" :data-on="filters.taskType === chip.value" @click="pickType(chip.value)">
+              {{ chip.label }}<em>{{ chip.count }}</em>
+            </button>
+          </div>
+        </div>
         <div class="filter-block">
           <p class="filter-label">预算区间（元）</p>
           <div class="range-row">
@@ -87,7 +95,7 @@ import { usePortal } from '../../utils/portal.js'
 import LoadState from '../../components/LoadState.vue'
 import DemandTabs from '../../components/demand/DemandTabs.vue'
 import DemandCard from '../../components/demand/DemandCard.vue'
-import { money, genreOptions, genreLabel, SORT_OPTIONS } from '../../utils/demand.js'
+import { money, genreOptions, genreLabel, taskTypeOptions, taskTypeLabel, SORT_OPTIONS } from '../../utils/demand.js'
 const { api, goDemandDetail, handleError } = usePortal()
 // 分页口径与 APP 及 API 默认值一致
 const PAGE_SIZE = 20
@@ -97,12 +105,13 @@ const pageNum = ref(1)
 const pending = ref(false)
 const error = ref('')
 const stats = ref({})
-const filters = reactive({ keyword: '', genreId: null, budgetMinYuan: null, budgetMaxYuan: null, episodesMin: null, sort: 'created:desc' })
+const filters = reactive({ keyword: '', genreId: null, taskType: null, budgetMinYuan: null, budgetMaxYuan: null, episodesMin: null, sort: 'created:desc' })
 const filterOpen = ref(false)
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
-// 生效中的筛选条件数（题材/预算/集数），供按钮角标与提示条
-const filterCount = computed(() => (filters.genreId ? 1 : 0) + (Number(filters.budgetMinYuan) > 0 ? 1 : 0) + (Number(filters.budgetMaxYuan) > 0 ? 1 : 0) + (Number(filters.episodesMin) > 0 ? 1 : 0))
-const resultTitle = computed(() => (filters.genreId ? `征集中的任务 · ${genreLabel(filters.genreId)}` : '征集中的任务'))
+// 生效中的筛选条件数（题材/类型/预算/集数），供按钮角标与提示条
+const filterCount = computed(() => (filters.genreId ? 1 : 0) + (filters.taskType ? 1 : 0) + (Number(filters.budgetMinYuan) > 0 ? 1 : 0) + (Number(filters.budgetMaxYuan) > 0 ? 1 : 0) + (Number(filters.episodesMin) > 0 ? 1 : 0))
+const filterLabels = computed(() => [filters.genreId ? genreLabel(filters.genreId) : null, filters.taskType ? taskTypeLabel(filters.taskType) : null].filter(Boolean).join(' · '))
+const resultTitle = computed(() => (filterLabels.value ? `征集中的任务 · ${filterLabels.value}` : '征集中的任务'))
 // 奖池口径与列表一致（公开可接单），后端给的是分
 const prizePoolText = computed(() => money(stats.value.prizePoolFen))
 // 题材角标直接用后端的 genreCounts（按 genreId 聚合），字典只负责取名
@@ -111,6 +120,16 @@ const genreCounts = computed(() => {
   for (const row of stats.value.genreCounts || []) map[Number(row.genreId)] = Number(row.count) || 0
   return map
 })
+// 任务类型角标走后端 typeCounts（按 task_type 聚合，列有默认值不会为空）
+const typeCounts = computed(() => {
+  const map = {}
+  for (const row of stats.value.typeCounts || []) map[row.taskType] = Number(row.count) || 0
+  return map
+})
+const typeChips = computed(() => [
+  { value: null, label: '全部', count: Number(stats.value.availableCount) || 0 },
+  ...taskTypeOptions.map(option => ({ value: option.value, label: option.label, count: typeCounts.value[option.value] || 0 })),
+])
 // 题材收进筛选面板：横排自动换行，一页 40 项（8 列 × 5 行），多页时可左右滑或点箭头翻页，不显示页码
 const GENRE_PAGE_SIZE = 40
 const genrePage = ref(0)
@@ -142,6 +161,7 @@ async function load() {
   try {
     const result = await api.value.listDemands({
       genreId: filters.genreId || undefined,
+      taskType: filters.taskType || undefined,
       keyword: filters.keyword?.trim() || undefined,
       sortBy, order,
       budgetMin: toFen(filters.budgetMinYuan), budgetMax: toFen(filters.budgetMaxYuan),
@@ -157,9 +177,10 @@ async function loadMeta() {
 }
 function applyFilters() { pageNum.value = 1; load() }
 function pickGenre(genreId) { filters.genreId = genreId; applyFilters() }
+function pickType(taskType) { filters.taskType = taskType; applyFilters() }
 // 清空只重置筛选条件，保留搜索词与排序（与 APP 筛选弹层的“清空”口径一致）
 function resetFilters() {
-  Object.assign(filters, { genreId: null, budgetMinYuan: null, budgetMaxYuan: null, episodesMin: null })
+  Object.assign(filters, { genreId: null, taskType: null, budgetMinYuan: null, budgetMaxYuan: null, episodesMin: null })
   applyFilters()
 }
 function clearFilters() { resetFilters() }
@@ -201,6 +222,7 @@ onMounted(async () => { await Promise.all([loadMeta(), load()]) })
 .filter-panel { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px 24px; padding: 16px 0 4px; border-bottom: 1px solid var(--rule) }
 .filter-block { display: flex; flex-direction: column; gap: 6px; flex: 1 1 230px }
 .filter-block.genre-block { flex-basis: 100% }
+.filter-block.type-block { flex-basis: 100% }
 .filter-label { margin: 0; font-size: 12.5px; color: var(--ink-3) }
 .genre-pager { display: flex; align-items: flex-start; gap: 10px }
 .genre-grid { flex: 1; display: flex; flex-wrap: wrap; gap: 7px; min-width: 0 }

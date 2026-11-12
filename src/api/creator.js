@@ -289,6 +289,7 @@ export const sendFeedback = form => data('/api/v1/feedback', { method: 'POST', b
 // ──── C 交易域：询盘 / 报价 / 订单（后端金额单位：分） ────
 // 询盘
 export const listInquiries = (params) => data('/api/v1/trade/inquiry/list' + (params ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))).toString() : ''))
+export const getInquiry = id => data(`/api/v1/trade/inquiry/${encodeURIComponent(id)}`)
 export const acceptInquiry = id => data(`/api/v1/trade/inquiry/${encodeURIComponent(id)}/accept`, { method: 'PUT' })
 export const rejectInquiry = id => data(`/api/v1/trade/inquiry/${encodeURIComponent(id)}/reject`, { method: 'PUT' })
 export const createTradeChat = inquiryId => data('/api/v1/trade/inquiry/chat/sessions?' + new URLSearchParams({ inquiryId }).toString(), { method: 'POST' })
@@ -375,17 +376,20 @@ export const listWithdraws = (params = {}) =>
 const demandBase = '/api/v1/trade/demand'
 const demandPath = id => demandBase + '/' + encodeURIComponent(id)
 // 金额口径：入参 budget 与 budgetMin/budgetMax 为分，stages[].amount 为元，出参一律为分（展示时 /100）。
-export async function listDemands({ status, genreId, keyword, mine, sortBy, order, budgetMin, budgetMax, episodesMin, pageNum = 1, pageSize = 20 } = {}) {
-  const result = await data(demandBase + '/list' + qs({ status, genreId, keyword, mine, sortBy, order, budgetMin, budgetMax, episodesMin, pageNum, pageSize }))
+export async function listDemands({ status, genreId, taskType, keyword, mine, sortBy, order, budgetMin, budgetMax, episodesMin, pageNum = 1, pageSize = 20 } = {}) {
+  const result = await data(demandBase + '/list' + qs({ status, genreId, taskType, keyword, mine, sortBy, order, budgetMin, budgetMax, episodesMin, pageNum, pageSize }))
   return { total: Number(result?.total || 0), list: asList(result) }
 }
-// 广场统计：availableCount / prizePoolFen(分) / todayNewCount / genreCounts:[{genreId,count}]，公开可接单口径
+// 广场统计：availableCount / prizePoolFen(分) / todayNewCount / genreCounts:[{genreId,count}] / typeCounts:[{taskType,count}]，公开可接单口径
 export const demandStats = () => data(demandBase + '/stats')
 export const getDemand = id => data(demandPath(id))
+// 分镜类任务的源剧本（接单前评估用）：{ work?, chapters?, fileUrl?, fileName? }
+export const sourceScript = demandId => data(demandPath(demandId) + '/source-script')
 // 验收轮次（出参 amount 为分）；可交付作品=本人且非已上架售卖
 export const demandStages = demandId => data(demandPath(demandId) + '/stages')
 export const deliverableWorks = () => data(demandBase + '/deliverable-works')
-// 创作者提交本轮交付物：{ workId 必填, deliverableDesc, deliverableUrl }
+// 创作者提交本轮交付物：{ workId, deliverableDesc, deliverableUrl }
+// 剧本类（script/script_storyboard）workId 必填；「提供剧本做分镜」可只交分镜文件链接+说明，workId 可选
 export const deliverStage = (demandId, stageId, body) => data(`${demandPath(demandId)}/stage/${encodeURIComponent(stageId)}/deliver`, { method: 'POST', body })
 // 延时：创作者只能发起申请与查看记录，决定权在发布者
 export const requestStageExtend = (demandId, stageId, body) => data(`${demandPath(demandId)}/stage/${encodeURIComponent(stageId)}/extend/request`, { method: 'POST', body })
