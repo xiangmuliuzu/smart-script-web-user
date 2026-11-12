@@ -4,7 +4,7 @@
     <template v-else-if="user && api">
       <header class="topbar">
         <button class="brand" @click="goWorks"><b>剧云策</b><span>创作者中心</span></button>
-        <nav class="nav" aria-label="主导航"><button :aria-current="onWorks ? 'page' : undefined" @click="goWorks">工作台</button><button :aria-current="onDemand ? 'page' : undefined" @click="goDemand">任务广场</button></nav>
+        <nav class="nav" aria-label="主导航"><button :aria-current="onHome ? 'page' : undefined" @click="goHome">首页</button><button :aria-current="onWorks ? 'page' : undefined" @click="goWorks">工作台</button><button :aria-current="onDemand ? 'page' : undefined" @click="goDemand">任务广场</button></nav>
         <div class="topbar-right">
           <button v-if="realNameStatus && realNameStatus !== 'APPROVED'" class="chip verify-chip" @click="openPanel('account', 'profile')">⚠ 实名认证{{ realNameStatus === 'PENDING' ? '审核中' : '未完成' }}</button>
           <div class="nav-group" role="group" aria-label="交易链路">
@@ -72,6 +72,7 @@ const basePath = '/works'
 // 任务广场已提升为与工作台平级的顶级页签（/demand），不再走合作抽屉的 demand tab。
 const onWorks = computed(() => route.path === '/works' || route.path.startsWith('/works/'))
 const onDemand = computed(() => route.path === '/demand' || route.path.startsWith('/demand/'))
+const onHome = computed(() => route.path === '/')
 function openPanel(name, tab, keyword = '') { panelVisible.value = false; panel.value = name; panelTab.value = tab; panelOrderSearch.value = (tab === 'order') ? keyword : ''; panelKeyword.value = (tab === 'inquiry') ? keyword : ''; panelVisible.value = true }
 watch(panelVisible, visible => { if (!visible && panel.value === 'cooperation') workspace.value?.loadTodo?.() })
 async function openDeliveryByOrder(orderId) {
@@ -82,6 +83,7 @@ async function openDeliveryByOrder(orderId) {
   rightsPanelRef.value?.openDeliveryByOrder?.(orderId)
 }
 function goWorks() { panelVisible.value = false; return router.push(basePath) }
+function goHome() { panelVisible.value = false; return router.push('/') }
 function goWork(id) { panelVisible.value = false; return router.push(`${basePath}/${id}`) }
 function goDemand() { panelVisible.value = false; return router.push('/demand') }
 function goDemandDetail(id) { panelVisible.value = false; return router.push(`/demand/${id}`) }
@@ -112,7 +114,7 @@ async function accountCommand(command) {
   catch { ElMessage.warning('服务端退出未成功，已清理本地登录状态') }
   finally { user.value = null; panelVisible.value = false; await router.replace('/login'); leaving.value = false }
 }
-provide(portalKey, { api, user, canCreate, basePath, openPanel, openDeliveryByOrder, goWork, goWorks, goDemand, goDemandDetail, handleError, refreshUnread })
+provide(portalKey, { api, user, canCreate, basePath, openPanel, openDeliveryByOrder, goWork, goWorks, goHome, goDemand, goDemandDetail, handleError, refreshUnread })
 async function refreshRealName() { try { realNameStatus.value = (await api.value.getRealName())?.status || '' } catch (failure) { if (isAuthFailure(failure)) await handleError(failure) } }
 onMounted(load)
 </script>

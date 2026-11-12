@@ -5,6 +5,7 @@
       <el-icon><Right /></el-icon>
     </button>
     <aside class="login-aside">
+      <RouterLink class="home-link" to="/" aria-label="返回首页">← <span>首页</span></RouterLink>
       <div class="brand"><b>剧云策</b><span>创作者中心</span></div>
       <blockquote>好故事值得一份<br />盖章的凭证。<footer>创作 · 审核 · 确权 · 收益</footer></blockquote>
       <picture>
@@ -42,7 +43,7 @@
 <script setup>
 import { computed, reactive, ref, onMounted } from 'vue'
 import creatorIllustration from '../assets/images/login-creator-v2.webp'
-import { useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { User, Lock, Right } from '@element-plus/icons-vue'
 import { getCaptcha, login, safeRedirect } from '../auth.js'
 import { portal, portalSwitch, portalSwitchHref } from '../portal.js'
@@ -145,6 +146,9 @@ onMounted(refreshCaptcha)
   color: #292723;
   border-right: 1px solid #d8d0c4;
 }
+.home-link{display:inline-flex;align-items:center;gap:7px;margin:-10px 0 18px;padding:6px 9px;border-radius:7px;color:#716a60;text-decoration:none;font-size:13px;transition:background .15s,color .15s}
+.home-link:hover{background:#e7e0d5;color:#286b57}
+.home-link span{font-size:13px}
 .login-aside .brand b { color: #292723; font-size: 28px; }
 .login-aside .brand span { font-size: 14px; }
 .login-aside blockquote {
@@ -166,7 +170,7 @@ onMounted(refreshCaptcha)
   object-fit: contain;
 }
 @media (max-width: 820px) {
-  .login-aside { padding: 28px 26px; border-right: 0; border-bottom: 1px solid #d8d0c4; }
+  .login-aside { padding: 22px 26px; border-right: 0; border-bottom: 1px solid #d8d0c4; }
   .login-illustration { display: none; }
   .login-aside .brand b { font-size: 24px; }
   .login-aside .brand span { display: inline; font-size: 13px; }
