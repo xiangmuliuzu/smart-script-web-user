@@ -461,7 +461,30 @@ async function startOneClickJob() {
         workId: createdId.value || undefined, model: aiState.form.model || '', skillId: aiState.form.skillId || '',
       })
       const raw = output?.outline ?? output?.content ?? ''
-      const text = raw && typeof raw === 'object' ? outlineToText(raw) : String(raw || '')
+      // 分集大纲：模型直接给 episodes（后端按「共 N 集」出稿），转成行首「第N集：」文本给后续解析；
+      // 旧结构（acts/章节）仍走 outlineToText。
+      let text = ''
+      if (raw && typeof raw === 'object') {
+        const episodes = Array.isArray(raw.episodes) ? raw.episodes : []
+        if (episodes.length) {
+          const logline = String(raw.logline || raw.summary || '').trim()
+          if (logline && !form.summary) form.summary = logline
+          const castText = (Array.isArray(raw.characters) ? raw.characters : [])
+            .filter(item => item && (item.name || item.role))
+            .map(item => `${String(item.name || '').trim()}${item.role ? '：' + String(item.role).trim() : ''}`)
+            .join('\n')
+          if (castText && !characters.value) characters.value = castText
+          text = episodes.map((item, index) => {
+            const no = Number(item.no) || index + 1
+            const name = String(item.title || '').replace(/^第\s*\d+\s*集\s*[：:·\s]*/, '').trim() || `第${no}集`
+            return `第${no}集：${name}\n${String(item.card || item.summary || '').trim()}`
+          }).join('\n')
+        } else {
+          text = outlineToText(raw)
+        }
+      } else {
+        text = String(raw || '')
+      }
       if (!text.trim()) throw new Error('AI 未返回可用的大纲，请重试')
       const parts = splitOutlineSections(text)
       if (parts.summary) form.summary = parts.summary
