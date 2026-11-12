@@ -710,10 +710,12 @@ export function splitOutlineSections(content) {
     { key: 'summary', re: /^[\s#*>【\[『「]*故事简介[】\]』」*]{0,3}\s*[：:]?\s*(.*)$/ },
     { key: 'people', re: /^[\s#*>【\[『「]*主要人物[】\]』」*]{0,3}\s*[：:]?\s*(.*)$/ },
     { key: 'relation', re: /^[\s#*>【\[『「]*人物关系[】\]』」*]{0,3}\s*[：:]?\s*(.*)$/ },
+    { key: 'props', re: /^[\s#*>【\[『「]*(?:重要道具档案|道具档案)[】\]』」*]{0,3}\s*[：:]?\s*(.*)$/ },
+    { key: 'styleGuide', re: /^[\s#*>【\[『「]*写法基线[】\]』」*]{0,3}\s*[：:]?\s*(.*)$/ },
     { key: 'notes', re: /^[\s#*>【\[『「]*人物便签[】\]』」*]{0,3}\s*[：:]?\s*(.*)$/ },
   ]
   const episodeHead = /^[\s#>*]*第\d{1,3}[集章][：:]/
-  const buckets = { summary: [], people: [], relation: [], notes: [] }
+  const buckets = { summary: [], people: [], relation: [], props: [], styleGuide: [], notes: [] }
   let current = null
   let episodeIndex = -1
   for (let i = 0; i < lines.length; i += 1) {
@@ -731,6 +733,8 @@ export function splitOutlineSections(content) {
   const summary = buckets.summary.join('\n').trim()
   const people = buckets.people.join('\n').trim()
   const relation = buckets.relation.join('\n').trim()
+  const props = buckets.props.join('\n').trim()
+  const styleGuide = buckets.styleGuide.join('\n').trim()
   const notes = buckets.notes.join('\n').trim()
   const characterParts = []
   if (notes) characterParts.push(notes)
@@ -739,6 +743,8 @@ export function splitOutlineSections(content) {
   return {
     summary,
     characters: characterParts.join('\n\n').trim(),
+    props,
+    styleGuide,
     outline: episodeIndex >= 0 ? lines.slice(episodeIndex).join('\n').trim() : '',
   }
 }

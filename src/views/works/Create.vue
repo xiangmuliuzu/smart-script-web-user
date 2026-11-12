@@ -380,21 +380,26 @@ async function applyOutline(content) {
   const targets = []
   if (parts.summary) targets.push('故事简介')
   if (parts.characters) targets.push('人物便签')
+  if (parts.props) targets.push('道具档案')
+  if (parts.styleGuide) targets.push('写法基线')
   if (outlineText) targets.push('剧本大纲')
   if (!targets.length) { ElMessage.warning('AI 结果里没有可写入的内容'); return }
   const willOverwrite = (parts.summary && form.summary.trim()) || (parts.characters && characters.value.trim()) || (outlineText && scriptOutline.value.trim())
   if (willOverwrite) {
-    try { await ElMessageBox.confirm(`本次 AI 结果将分别写入${targets.join('、')}，其中已有内容会被覆盖，继续吗？`, '写入创作资料', { confirmButtonText: '覆盖', cancelButtonText: '取消' }) } catch { return }
+    try { await ElMessageBox.confirm(`本次 AI 结果将分别写入${targets.join('、')}；其中故事简介、人物便签、剧本大纲的已有内容会被覆盖，道具档案与写法基线只补空位。继续吗？`, '写入创作资料', { confirmButtonText: '覆盖', cancelButtonText: '取消' }) } catch { return }
   }
   if (parts.summary) form.summary = parts.summary
   if (parts.characters) characters.value = parts.characters
   if (outlineText) scriptOutline.value = outlineText
   // 三块设定同步进台账：人物卡与关系状态分开存，续写时分别注入。
   if (parts.summary) ledger.storySummary = parts.summary
-  const relationPart = (parts.characters.match(/人物关系\s*\n([\s\S]*?)(?:\n\n|$)/) || [])[1]
+  const relationPart = (parts.characters.match(/人物关系\s*\n([\s\S]*)$/) || [])[1]
   if (relationPart?.trim()) ledger.relations = relationPart.trim()
   // 人物卡只存「主要人物」段，关系已在 relations 单列，避免注入时重复。
   if (parts.characters) ledger.characters = parts.characters.replace(/人物关系\s*\n[\s\S]*$/, '').trim() || parts.characters
+  // 台账初始化：道具档案与写法基线随大纲一起生成，只填空值，用户手填的不覆盖。
+  if (parts.props && !String(ledger.props || '').trim()) ledger.props = parts.props
+  if (parts.styleGuide && !String(ledger.styleGuide || '').trim()) ledger.styleGuide = parts.styleGuide
   section.value = 'outline'
   aiVisible.value = false
   cacheDraft()
