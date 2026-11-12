@@ -15,12 +15,12 @@
         <button class="btn sm" :disabled="busy || !editable || readOnly" @click="save(true)">提交审核</button>
       </div>
     </header>
-    <div v-if="genJob" class="creation-error note" role="status">
+    <div v-if="genJob" class="creation-job-bar" :class="{ done: genJob.status === 'succeeded' }" role="status">
       后台生成：{{ genStatusText }} · 已完成 {{ genJob.doneCount }}/{{ genJob.total }} 集<span v-if="genJob.currentNo">（正在写第 {{ genJob.currentNo }} 集：{{ genJob.currentTitle }}）</span><span v-if="genJob.lastError"> · {{ genJob.lastError }}</span>
       <button v-if="genJob.status === 'paused' || genJob.status === 'cancelled'" class="text-button" @click="resumeGenJob">续跑</button>
       <button v-if="genJobRunning" class="text-button" @click="cancelGenJob">取消</button>
       <button v-if="!genJobRunning" class="text-button" @click="syncChaptersFromJob">同步章节</button>
-      <button v-if="genJob.status === 'succeeded'" class="text-button" @click="genJob = null">关闭</button>
+      <button v-if="genJob.status === 'succeeded'" class="text-button" @click="closeGenJob">关闭</button>
     </div>
     <div v-if="error" class="creation-error note bad" role="alert">{{ error }}</div>
     <div v-if="worksError" class="creation-error note bad" role="alert">{{ worksError }}<button class="text-button" @click="loadWorks">重新加载作品</button></div>
@@ -504,6 +504,16 @@ async function syncChaptersFromJob() {
   try { await ElMessageBox.confirm('重新从服务器加载章节？本页尚未保存的修改会丢失。', '同步后台生成结果', { confirmButtonText: '重新加载', cancelButtonText: '取消' }) } catch { return }
   await loadWorkspace()
   ElMessage.success('已同步后台生成的最新章节')
+}
+// 关闭提示前先确认是否已经同步：没同步时直接关掉，本页不会自动补正文。
+async function closeGenJob() {
+  try {
+    await ElMessageBox.confirm('关闭前确认：正文已经点过「同步章节」了吗？没同步的话，正文仍在服务器，但关掉这条提示后本页不会自动补进来。', '关闭后台生成提示', { confirmButtonText: '已同步，关闭', cancelButtonText: '还没同步，先同步', distinguishCancelAndClose: true, type: 'warning' })
+  } catch (action) {
+    if (action === 'cancel') await syncChaptersFromJob()
+    return
+  }
+  genJob.value = null
 }
 function exportNotes(content = characters.value, title = form.title) {
   const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }))
