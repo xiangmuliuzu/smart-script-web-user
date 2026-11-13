@@ -34,7 +34,7 @@
   </div>
 </template>
 <script setup>
-import { computed, nextTick, onMounted, provide, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Bell, ChatDotRound, ChatLineSquare, ChatRound, Document, Tickets, ArrowDown } from '@element-plus/icons-vue'
@@ -42,6 +42,7 @@ import { getInfo, isAuthFailure, logout } from '../auth.js'
 import { portalKey } from '../utils/portal.js'
 import { avatarUrl } from '../utils/avatarUrl.js'
 import { friendlyErrorMessage } from '../utils/friendly-error.js'
+import { connectRealtime, disconnectRealtime, isRealtimeConnected, onRealtime } from '../utils/realtime-socket.js'
 import LoadState from '../components/LoadState.vue'
 import MessagesPanel from '../views/panels/Messages.vue'
 import PlatformChatPanel from '../views/panels/PlatformChat.vue'
@@ -117,4 +118,32 @@ async function accountCommand(command) {
 provide(portalKey, { api, user, canCreate, basePath, openPanel, openDeliveryByOrder, goWork, goWorks, goHome, goDemand, goDemandDetail, handleError, refreshUnread })
 async function refreshRealName() { try { realNameStatus.value = (await api.value.getRealName())?.status || '' } catch (failure) { if (isAuthFailure(failure)) await handleError(failure) } }
 onMounted(load)
+
+// 长连接在线时角标无需定时轮询：帧到达即补拉一次；断开则退回 60s 兜底轮询。
+let realtimeOff = []
+let unreadTimer = null
+function applyUnreadCadence() {
+  const wanted = isRealtimeConnected() ? 60000 : 5000
+  if (unreadTimer && unreadTimer.__interval === wanted) return
+  clearInterval(unreadTimer)
+  unreadTimer = setInterval(refreshUnread, wanted)
+  unreadTimer.__interval = wanted
+}
+onMounted(() => {
+  connectRealtime()
+  applyUnreadCadence()
+  realtimeOff = [
+    onRealtime('connected', applyUnreadCadence),
+    onRealtime('disconnected', applyUnreadCadence),
+    onRealtime('reconnect', refreshUnread),
+    onRealtime('notification', refreshUnread),
+    onRealtime('chat', refreshUnread)
+  ]
+})
+onBeforeUnmount(() => {
+  realtimeOff.forEach(off => off())
+  realtimeOff = []
+  clearInterval(unreadTimer)
+  disconnectRealtime()
+})
 </script>

@@ -178,6 +178,7 @@ import { usePortal } from '../../utils/portal.js'
 import { avatarUrl, contractHtml } from '../../utils/avatarUrl.js'
 import { dateText, money, asList } from '../../utils/creator.js'
 import { orderStatusLabel } from '../../utils/orderTodo.js'
+import { isRealtimeConnected, onRealtime } from '../../utils/realtime-socket.js'
 
 const props = defineProps({ modelValue: Boolean, initialTab: String, orderSearch: { type: String, default: '' }, initialKeyword: { type: String, default: '' } })
 const emit = defineEmits(['update:modelValue'])
@@ -429,9 +430,13 @@ function scrollChatBottom() {
   const el = chatBodyEl.value
   if (el) el.scrollTop = el.scrollHeight
 }
+// 长连接在线时增量轮询只作兜底（60s）；连接不可用时退回 5s，保证行为不依赖单条链路。
+const CHAT_POLL_CONNECTED_MS = 60000
+const CHAT_POLL_DISCONNECTED_MS = 5000
 function startChatPoll() {
   stopChatPoll()
-  chatPollTimer = setInterval(() => { if (chatSessionId.value && tab.value === 'session') pollNewMessages() }, 5000)
+  const delay = isRealtimeConnected() ? CHAT_POLL_CONNECTED_MS : CHAT_POLL_DISCONNECTED_MS
+  chatPollTimer = setInterval(() => { if (chatSessionId.value && tab.value === 'session') pollNewMessages() }, delay)
 }
 function stopChatPoll() {
   if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null }
@@ -697,13 +702,23 @@ function applyOrderSearch(value) {
 }
 watch(() => props.orderSearch, applyOrderSearch)
 watch(() => props.modelValue, v => { if (v) { tab.value = props.initialTab || 'inquiry'; applyOrderSearch(props.orderSearch) } })
+let realtimeOff = []
 onMounted(() => {
   applyOrderSearch(props.orderSearch)
   if (tab.value === 'session') { templateVisible.value = true; loadTradeSessions() }
   else if (tab.value === 'order') loadOrders()
   else if (tab.value === 'inquiry') loadInquiries()
+  realtimeOff = [
+    onRealtime('connected', startChatPoll),
+    onRealtime('disconnected', startChatPoll),
+    onRealtime('chat', frame => {
+      if (tab.value !== 'session' || !chatSessionId.value) return
+      if (String(frame?.sessionId || '') === String(chatSessionId.value)) pollNewMessages()
+      else loadTradeSessions()
+    })
+  ]
 })
-onUnmounted(() => { stopChatPoll(); if (paymentRotateTimer) clearInterval(paymentRotateTimer) })
+onUnmounted(() => { realtimeOff.forEach(off => off()); realtimeOff = []; stopChatPoll(); if (paymentRotateTimer) clearInterval(paymentRotateTimer) })
 </script>
 <style scoped>
 /* ── 询盘手风琴 ── */

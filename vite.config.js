@@ -22,6 +22,13 @@ export default defineConfig(({ mode }) => {
         '/profile': {
           target,
           changeOrigin: true
+        },
+        // 实时通知长连接。ws:true 才会转发 Upgrade 握手；生产环境需 Nginx 配
+        // proxy_http_version 1.1 + Proxy Upgrade 头，否则浏览器只会拿到 SPA 的 HTML。
+        '/ws': {
+          target,
+          changeOrigin: true,
+          ws: true
         }
       }
     }

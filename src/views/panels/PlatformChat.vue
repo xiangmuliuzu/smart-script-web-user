@@ -53,9 +53,10 @@
   </section>
 </template>
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { usePortal } from '../../utils/portal.js'
+import { isRealtimeConnected, onRealtime } from '../../utils/realtime-socket.js'
 import LoadState from '../../components/LoadState.vue'
 // 平台客服面板：1:1 复刻企业端 ConversationPage 的居中浮层与左右两栏形态。
 // 只承载与平台管理员的 ADMIN 会话；与作者的 TRADE 会话在「我的合作 → 会话」。
@@ -167,12 +168,32 @@ async function markAllRead() {
     await refreshUnread()
   } finally { marking.value = false }
 }
-// 与企业端一致：面板打开期间 20s 轻量轮询保证新消息可见，关闭即停。
+// 面板打开期间保持刷新：长连接在线时只留 60s 兜底，断开时退回 5s 轮询。
+const POLL_CONNECTED_MS = 60000
+const POLL_DISCONNECTED_MS = 5000
+let realtimeOff = []
+function pollIntervalMs() { return isRealtimeConnected() ? POLL_CONNECTED_MS : POLL_DISCONNECTED_MS }
+function restartPoll() {
+  clearInterval(poll)
+  poll = props.modelValue ? setInterval(() => { loadMessages() }, pollIntervalMs()) : null
+}
 watch(() => props.modelValue, open => {
-  if (open) { load(); poll = setInterval(() => { loadMessages() }, 20000) }
-  else { clearInterval(poll); poll = null }
+  if (open) load()
+  restartPoll()
 }, { immediate: true })
-onBeforeUnmount(() => clearInterval(poll))
+onMounted(() => {
+  realtimeOff = [
+    onRealtime('connected', restartPoll),
+    onRealtime('disconnected', restartPoll),
+    onRealtime('reconnect', () => { load(); loadMessages() }),
+    onRealtime('chat', frame => { if (!props.modelValue) return; if (frame?.sessionId && String(frame.sessionId) !== String(activeId.value)) load(); else loadMessages() })
+  ]
+})
+onBeforeUnmount(() => {
+  realtimeOff.forEach(off => off())
+  realtimeOff = []
+  clearInterval(poll)
+})
 </script>
 <style scoped>
 /* 样式取自企业端 prototype.css + portal.css + workspace.css 三层叠加后的最终生效值（纸色主题），
