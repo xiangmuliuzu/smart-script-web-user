@@ -143,7 +143,7 @@
 .ai-embedded .compose-form { border: 0; background: transparent; padding: 0; width: 100%; }
 .ai-embedded .compose-form > h3 { display: none; }
 .ai-embedded .field { font-size: 12px; margin-bottom: 12px; }
-.ai-embedded .ai-outline-meta { display: grid; grid-template-columns: minmax(0, 1fr) 82px; gap: 12px; }
+.ai-embedded .ai-outline-meta { display: grid; grid-template-columns: minmax(0, 1fr) 72px 92px; gap: 12px; }
 .ai-embedded .ai-outline-meta .field { min-width: 0; }
 .ai-embedded .field input, .ai-embedded .field select, .ai-embedded .field textarea { font-size: 12px; padding: 8px 10px; border-radius: 5px; background: white; }
 .ai-embedded .field textarea { min-height: 112px; resize: vertical; }
