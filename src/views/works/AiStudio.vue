@@ -6,7 +6,7 @@
         <label class="field">导演(skill)<select aria-label="导演(skill)" v-model="form.skillId" :disabled="generating"><option value="">默认导演</option><option v-for="skill in visibleSkills" :key="skill.id" :value="skill.id">{{ skill.skillName }}</option></select></label>
         <label class="field">模型<select aria-label="模型" v-model="form.model" :disabled="generating"><option value="">默认模型</option><option v-for="opt in modelOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option></select></label>
         <label v-if="!embedded" class="field">作品<select aria-label="作品" v-model="form.workId" :disabled="generating"><option value="">选择作品（选填）</option><option v-for="work in works" :key="work.workId" :value="work.workId" :disabled="work.status === 'reviewing'">{{ work.title }}（{{ stateOf(work.status).label }}）</option></select></label>
-        <template v-if="tab === 'outline'"><div class="ai-outline-meta"><label class="field">题材<input v-model="form.genre" placeholder="例如：都市情感" /></label><label class="field">集数<input v-model="form.episodes" type="number" min="1" max="50" /></label></div><label class="field">你的要求<textarea v-model="form.prompt" placeholder="人物、故事线、希望埋下的反转…" /></label></template>
+        <template v-if="tab === 'outline'"><div class="ai-outline-meta"><label class="field">题材<input v-model="form.genre" placeholder="例如：都市情感" /></label><label class="field">集数<input v-model="form.episodes" type="number" min="1" max="50" /></label><label class="field">一集时长<select aria-label="一集时长" v-model.number="form.episodeMinutes"><option :value="1">1 分钟</option><option :value="1.5">1.5 分钟</option><option :value="2">2 分钟</option></select></label></div><label class="field">故事灵感<textarea v-model="form.idea" placeholder="这个故事大体讲了什么：谁、在什么处境、要解决什么…" /></label><label class="field">你的要求<textarea v-model="form.prompt" placeholder="写法上的要求，例如：节奏必须紧凑，前三集埋一个反转…" /></label></template>
         <template v-else-if="tab === 'write'"><label class="field">章节标题<input v-model="form.chapterTitle" placeholder="例如：第一集 · 深夜频率" /></label><label class="field">场景要求<textarea v-model="form.prompt" placeholder="地点、时间、人物与剧情走向…" /></label></template>
         <template v-else-if="tab === 'storyboard'"><div v-if="hasGeneratedText" class="row top-gap"><button class="text-button" type="button" :disabled="generating" @click="fillScriptFromResult">一键带入：用刚才的{{ lastGeneratedLabel }}当剧本文本</button></div><label class="field">剧本文本<textarea aria-label="剧本文本" v-model="form.script" placeholder="粘贴或带入 AI 剧本/正文，AI 将拆解为可直接出售的分镜脚本…" /></label><label class="field">分镜风格<select aria-label="分镜风格" v-model="form.sbStyle"><option>电影感</option><option>短剧竖屏</option><option>动漫风</option></select></label></template>
         <template v-else><button v-if="embedded" class="text-button ai-read-current" type="button" :disabled="generating || !currentContent.trim()" @click="form.content = documentText(currentContent)">读取当前分集正文</button><label class="field">要润色的原文<textarea v-model="form.content" placeholder="粘贴需要润色的片段" /></label><label class="field">润色方向<select v-model="form.style"><option>增强画面感</option><option>精简啰嗦</option><option>加强情绪</option></select></label></template>
@@ -60,7 +60,7 @@ const tab = props.workspaceState ? toRef(props.workspaceState, 'tab') : ref('out
 const tabs = [{ value: 'outline', label: 'AI 剧本' }, { value: 'write', label: props.embedded ? 'AI 续写' : 'AI 写正文' }, { value: 'polish', label: 'AI 润色' }, { value: 'storyboard', label: 'AI 分镜' }, { value: 'log', label: '生成记录' }]
 const typeLabels = { outline: 'AI 剧本', write: props.embedded ? 'AI 续写' : 'AI 写正文', polish: 'AI 润色', storyboard: 'AI 分镜' }
 const tabHeading = computed(() => tab.value === 'outline' ? '生成剧本大纲' : tab.value === 'write' ? '生成正文' : tab.value === 'storyboard' ? '生成分镜' : '润色片段')
-const form = props.workspaceState?.form || reactive({ workId: '', genre: '', episodes: 12, prompt: '', content: '', style: '增强画面感', chapterTitle: '', skillId: '', model: '', script: '', sbStyle: '电影感' })
+const form = props.workspaceState?.form || reactive({ workId: '', genre: '', episodes: 12, episodeMinutes: 1, idea: '', prompt: '', content: '', style: '增强画面感', chapterTitle: '', skillId: '', model: '', script: '', sbStyle: '电影感' })
 const results = props.workspaceState?.results || reactive({ outline: '', write: '', polish: '', storyboard: '' })
 const skills = ref([])
 const skillError = ref('')
@@ -146,8 +146,8 @@ async function generate(feedback = '') {
   // 去次数化：不再前端拦截次数，直接调用，积分是否足够由后端校验（不足返回积分不足提示）。
   const previous = (results[type] || '').trim()
   if (feedback && !previous) { error.value = '当前没有可修改的生成结果，请先完整生成一次'; return }
-  const required = type === 'polish' ? form.content : type === 'storyboard' ? form.script : form.prompt
-  if (!feedback && !(required || '').trim()) { error.value = type === 'polish' ? '请输入要润色的原文' : type === 'storyboard' ? '请输入剧本文本' : '请输入创作要求'; return }
+  const required = type === 'polish' ? form.content : type === 'storyboard' ? form.script : type === 'outline' ? (form.idea || form.prompt) : form.prompt
+  if (!feedback && !(required || '').trim()) { error.value = type === 'polish' ? '请输入要润色的原文' : type === 'storyboard' ? '请输入剧本文本' : type === 'outline' ? '请填写故事灵感（或你的要求）' : '请输入创作要求'; return }
   if (type === 'outline' && (!Number.isInteger(Number(form.episodes)) || Number(form.episodes) < 1 || Number(form.episodes) > 50)) { error.value = '集数需为 1–50 的整数'; return }
   generating.value = true
   results[type] = ''
@@ -155,14 +155,23 @@ async function generate(feedback = '') {
   try {
     const skillId = form.skillId || undefined
     const model = form.model || undefined
-    const episodeFormat = `请按下面格式写 ${form.episodes} 集分集事件卡，从第1集起连续编号：\n第1集：事件名\n本集事件：……\n冲突与推进：……\n结果或反转：……\n结尾钩子：……\n每集是一件完整的事（有开场、交锋、结果），结尾钩子要具体；不要写场景头、镜号、景别、运镜。`
+    const minutes = Number(form.episodeMinutes) || 1
+    const minuteText = `${minutes} 分钟`
+    const episodeFormat = `请按下面格式写 ${form.episodes} 集分集事件卡，从第1集起连续编号：\n第1集：事件名\n本集事件：……\n冲突与推进：……\n结果或反转：……\n结尾钩子：……\n每集是一件完整的事（有开场、交锋、结果），结尾钩子要具体；不要写场景头、镜号、景别、运镜。\n每集按一集 ${minuteText} 的短剧容量写：一集只承载一个场景或一次交锋，不要塞进多天多地的内容。`
     let body
     if (type === 'outline') {
+      // 故事灵感讲「讲什么」，你的要求讲「怎么写」：分开成段给模型，避免把写法要求当剧情。
+      const ideaText = (form.idea || '').trim()
+      const askText = (form.prompt || '').trim()
+      const brief = [
+        ideaText ? `故事灵感：\n${ideaText}` : '',
+        askText ? `写法要求：\n${askText}` : ''
+      ].filter(Boolean).join('\n')
       // 提意见重生成：带着上一版大纲和修改意见，让模型在原稿上改，而不是从零重写。
       const inspiration = feedback
-        ? `${form.prompt}\n上一版大纲（大体满意，请在保留整体结构与事件走向的前提下按修改意见调整）：\n${previous.slice(0, 12000)}\n修改意见：${feedback}\n${episodeFormat}`
-        : `${form.prompt}\n${episodeFormat}`
-      body = { inspiration, genre: form.genre, style: `共 ${form.episodes} 集`, workId: form.workId || undefined, skillId, model }
+        ? `${brief}\n上一版大纲（大体满意，请在保留整体结构与事件走向的前提下按修改意见调整）：\n${previous.slice(0, 12000)}\n修改意见：${feedback}\n${episodeFormat}`
+        : `${brief}\n${episodeFormat}`
+      body = { inspiration, genre: form.genre, style: `共 ${form.episodes} 集，每集 ${minuteText}`, workId: form.workId || undefined, skillId, model }
     } else if (type === 'polish') {
       const source = documentText(form.content) || previous
       body = feedback

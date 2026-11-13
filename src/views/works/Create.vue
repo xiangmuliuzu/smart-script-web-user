@@ -86,7 +86,7 @@ async function loadVolumes(id) {
 // 剧本大纲：AI 剧本生成的分集事件卡，与故事简介/人物便签并列，保存在本机并按作品区分。
 const scriptOutline = ref('')
 const noteBackups = ref([])
-const newAiState = () => ({ tab: 'outline', outlineIncomplete: false, form: { workId: '', genre: '', episodes: 12, prompt: '', content: '', style: '增强画面感', chapterTitle: '', skillId: '', script: '', sbStyle: '电影感' }, results: { outline: '', write: '', polish: '', storyboard: '' } })
+const newAiState = () => ({ tab: 'outline', outlineIncomplete: false, form: { workId: '', genre: '', episodes: 12, episodeMinutes: 1, idea: '', prompt: '', content: '', style: '增强画面感', chapterTitle: '', skillId: '', script: '', sbStyle: '电影感' }, results: { outline: '', write: '', polish: '', storyboard: '' } })
 const aiState = reactive(newAiState())
 const workspaceRevision = ref(0)
 const activeChapter = ref(0)
