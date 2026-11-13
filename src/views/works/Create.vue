@@ -18,6 +18,7 @@
     <div v-if="genJob" class="creation-job-bar" :class="{ done: genJob.status === 'succeeded' }" role="status">
       后台生成：{{ genStatusText }} · 已完成 {{ genJob.doneCount }}/{{ genJob.total }} 集<span v-if="genJob.currentNo">（正在写第 {{ genJob.currentNo }} 集：{{ genJob.currentTitle }}）</span><span v-if="genJob.lastError"> · {{ genJob.lastError }}</span>
       <button v-if="genJob.status === 'paused' || genJob.status === 'cancelled'" class="text-button" @click="resumeGenJob">续跑</button>
+      <button v-if="genJobRunning" class="text-button" @click="refreshGenJob()">刷新进度</button>
       <button v-if="genJobRunning" class="text-button" @click="cancelGenJob">取消</button>
       <button v-if="!genJobRunning" class="text-button" @click="syncChaptersFromJob">同步章节</button>
       <button v-if="genJob.status === 'succeeded'" class="text-button" @click="closeGenJob">关闭</button>
@@ -418,20 +419,16 @@ async function clearOutline() {
 }
 // ──── 后台生成队列：点一次提交，后端逐集跑完；关页/断网不中断，失败可续跑 ────
 const genJob = ref(null)
-let genTimer = null
 const GEN_ACTIVE = ['queued', 'running']
 const genJobRunning = computed(() => GEN_ACTIVE.includes(genJob.value?.status))
 const genStatusText = computed(() => ({ queued: '排队中', running: '后台执行中', paused: '已暂停，可续跑', succeeded: '已全部完成', cancelled: '已取消' }[genJob.value?.status] || ''))
-function stopGenPolling() { clearTimeout(genTimer); genTimer = null }
-async function pollGenJob(workId, jobId) {
-  stopGenPolling()
-  if (!workId || !api.value?.getLatestGenJob) return
+/** 不做实时轮询：进页面拉一次、点「刷新」拉一次，避免后台任务持续占用前端。 */
+async function refreshGenJob(workId = createdId.value, jobId) {
+  if (!workId) return
   try {
     const result = jobId ? await api.value.getGenJob(workId, jobId) : await api.value.getLatestGenJob(workId)
-    if (disposed) return
-    genJob.value = result || null
-    if (genJobRunning.value) genTimer = setTimeout(() => pollGenJob(workId, genJob.value.jobId), 3000)
-  } catch { if (!disposed) genTimer = setTimeout(() => pollGenJob(workId, jobId), 5000) }
+    if (!disposed) genJob.value = result || null
+  } catch { /* 拉取失败保留上次状态，下次进页面再拉 */ }
 }
 /** 计划项 → 队列集（集号从标题取，取不到按已有章节数顺延）。 */
 function episodesFromPlan(outlineText, plan) {
@@ -475,8 +472,8 @@ async function startBackgroundJob(outlineOverride) {
       episodes,
     })
     genJob.value = job
-    ElMessage.success(`已提交 ${episodes.length} 集，可以关闭页面；进度会自动刷新`)
-    pollGenJob(createdId.value, job?.jobId)
+    ElMessage.success(`已提交 ${episodes.length} 集，可以关闭页面；回来打开本页可查看进度`)
+    refreshGenJob(createdId.value, job?.jobId)
   } catch (failure) {
     error.value = failure.message || '提交生成失败'
     await handleError(failure)
@@ -486,7 +483,7 @@ async function resumeGenJob() {
   if (!createdId.value || !genJob.value || busy.value) return
   try {
     const job = await api.value.resumeGenJob(createdId.value, genJob.value.jobId)
-    genJob.value = job; pollGenJob(createdId.value, job?.jobId)
+    genJob.value = job; refreshGenJob(createdId.value, job?.jobId)
     ElMessage.success('已续跑，未完成的集继续生成')
   } catch (failure) { error.value = failure.message || '续跑失败'; await handleError(failure) }
 }
@@ -495,7 +492,6 @@ async function cancelGenJob() {
   try { await ElMessageBox.confirm('取消后台生成？当前这一集写完即停，已生成的章节保留。', '取消后台生成', { confirmButtonText: '取消任务', cancelButtonText: '继续运行' }) } catch { return }
   try {
     genJob.value = await api.value.cancelGenJob(createdId.value, genJob.value.jobId)
-    stopGenPolling()
     ElMessage.info('已取消，已生成的章节保留')
   } catch (failure) { error.value = failure.message || '取消失败'; await handleError(failure) }
 }
@@ -685,7 +681,7 @@ async function loadWorkspace() {
       activeChapter.value = index
     }
   } catch (failure) { workLoadFailed.value = true; error.value = failure.message || '作品加载失败，请重新选择作品'; if (failure.code) await handleError(failure) }
-  finally { if (!disposed) { ready = true; initializing.value = false; if (createdId.value) pollGenJob(createdId.value) } }
+  finally { if (!disposed) { ready = true; initializing.value = false; if (createdId.value) refreshGenJob(createdId.value) } }
 }
 watch(() => [route.query.workId, route.query.chapterId], () => { if (ready && !normalizingRoute) loadWorkspace() })
 function resizeAi() { compactAi.value = media.matches; if (!media.matches) aiVisible.value = false }
@@ -702,5 +698,5 @@ onMounted(async () => {
   window.addEventListener('beforeunload', protectUnload)
   await Promise.all([loadWorks(), loadWorkspace()])
 })
-onBeforeUnmount(() => { cacheDraft(); disposed = true; ready = false; clearTimeout(timer); stopGenPolling(); media?.removeEventListener('change', resizeAi); window.removeEventListener('beforeunload', protectUnload) })
+onBeforeUnmount(() => { cacheDraft(); disposed = true; ready = false; clearTimeout(timer); media?.removeEventListener('change', resizeAi); window.removeEventListener('beforeunload', protectUnload) })
 </script>
