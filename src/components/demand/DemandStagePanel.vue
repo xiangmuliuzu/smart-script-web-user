@@ -4,7 +4,7 @@
     <div v-if="!pending && !error && !stages.length" class="note">该任务未配置逐轮验收，接单后按整单时限（{{ formatHours(demand.durationHours) }}）交付。</div>
     <template v-else>
       <p v-if="activeRound" class="round-banner" :data-urgent="countdown(activeRound.dueAt).urgent">第 {{ activeRound.stageOrder }} 轮 · {{ countdown(activeRound.dueAt).text }}</p>
-      <p v-else-if="reviewable" class="round-banner wait">第 {{ reviewable.stageOrder }} 轮交付已提交，等待发布者验收</p>
+      <p v-else-if="reviewable" class="round-banner wait">第 {{ reviewable.stageOrder }} 轮交付已提交，等待平台验收</p>
       <p v-else-if="stages.length && stages.every(s => s.status === 'approved')" class="round-banner done">全部 {{ stages.length }} 轮已验收通过，款项已逐轮放出</p>
 
       <article v-for="stage in stages" :key="stage.stageId" class="stage-card" :data-tone="stageTone(stage)">
@@ -33,7 +33,7 @@
         <div v-if="isOwner && isActive(stage)" class="sc-actions">
           <button class="btn sm" :disabled="busy" @click="openDeliver(stage)">提交交付物</button>
           <button v-if="stage.extendStatus !== 'pending'" class="btn sm quiet" :disabled="busy" @click="openExtend(stage)">申请延时</button>
-          <span v-else class="cost sc-pending">延时申请待发布者处理（{{ formatHours((Number(stage.extendDays) || 0) * 24 + (Number(stage.extendHours) || 0)) }}）</span>
+          <span v-else class="cost sc-pending">延时申请待平台处理（{{ formatHours((Number(stage.extendDays) || 0) * 24 + (Number(stage.extendHours) || 0)) }}）</span>
         </div>
 
         <div class="sc-history">
@@ -70,7 +70,7 @@
         </label>
         <label class="field">交付说明<textarea v-model="deliverForm.deliverableDesc" rows="4" :placeholder="isStoryboard ? '本轮分镜覆盖的集数、场次拆分口径与待确认事项…' : '本轮完成的集数、主要内容与待确认事项…'"></textarea></label>
         <label class="field">交付物链接（{{ isStoryboard ? '与说明至少填一项' : '可选' }}）<input v-model="deliverForm.deliverableUrl" placeholder="网盘/文档链接"></label>
-        <p class="cost">{{ isStoryboard ? '分镜类任务不做 AI 剧本审核，提交后直接进入发布者人工验收，本轮计时暂停至验收出结果。' : '提交后本轮计时暂停，先走 AI 审核再进入发布者验收。' }}</p>
+        <p class="cost">{{ isStoryboard ? '分镜类任务不做 AI 剧本审核，提交后直接进入平台人工验收，本轮计时暂停至验收出结果。' : '提交后本轮计时暂停，先走 AI 审核再进入平台验收。' }}</p>
         <div class="dialog-foot"><button class="btn" :disabled="busy" @click="doDeliver">{{ busy ? '提交中…' : '确认提交' }}</button></div>
       </div>
     </PortalLayer>
@@ -80,8 +80,8 @@
         <div class="field-row">
           <label class="field">延长小时数<input v-model.number="extendForm.hours" type="number" min="1" max="720" placeholder="例如 24"></label>
         </div>
-        <label class="field">延时原因<textarea v-model="extendForm.reason" rows="3" placeholder="说明为什么需要延长（发布者可据此判断）…"></textarea></label>
-        <p class="cost">按小时填写，展示时自动折算为天。延时申请需发布者同意才会顺延截止时间；发布者超过 24 小时未处理将自动驳回。</p>
+        <label class="field">延时原因<textarea v-model="extendForm.reason" rows="3" placeholder="说明为什么需要延长（平台运营会据此判断）…"></textarea></label>
+        <p class="cost">按小时填写，展示时自动折算为天。延时申请需平台同意才会顺延截止时间；超过 24 小时未处理将由系统自动驳回。</p>
         <div class="dialog-foot"><button class="btn" :disabled="busy" @click="doRequestExtend">{{ busy ? '提交中…' : '提交申请' }}</button></div>
       </div>
     </PortalLayer>
@@ -125,7 +125,7 @@ const isActive = stage => props.isOwner && isActiveStage(stage)
 // 上下架两态复用版权域同一个 shelfStatusLabel，其余在本文件补齐，不再把英文枚举直接给用户看
 const WORK_STATUS_LABELS = { draft: '草稿', pending: '审核中', approved: '已通过' }
 const workStatusLabel = status => WORK_STATUS_LABELS[status] || shelfStatusLabel(status)
-// 已提交待发布者验收的轮次：面板顶部给「待验收」横幅，创作者知道现在轮到对方操作
+// 已提交待平台验收的轮次：面板顶部给「待验收」横幅，创作者知道现在轮到对方操作
 const reviewable = computed(() => stages.value.find(stage => stage.status === 'submitted') || null)
 // 当前活动轮：面板顶部的倒计时条只标这一轮，后续轮次的时限在各自卡片里展示
 const activeRound = computed(() => { void tick.value; return stages.value.find(stage => isActiveStage(stage)) || null })
@@ -170,7 +170,7 @@ async function doDeliver() {
   try {
     await api.value.deliverStage(props.demand.demandId, current.value.stageId, { workId: deliverForm.workId || undefined, deliverableDesc: desc || undefined, deliverableUrl: url || undefined })
     deliverVisible.value = false
-    ElMessage.success(isStoryboard.value ? '交付已提交，等待发布者验收' : '交付已提交，等待 AI 审核与发布者验收')
+    ElMessage.success(isStoryboard.value ? '交付已提交，等待平台验收' : '交付已提交，等待 AI 审核与平台验收')
     await reload()
     emit('changed')
   } catch (failure) { await handleError(failure) } finally { busy.value = false }
@@ -182,7 +182,7 @@ async function doRequestExtend() {
   try {
     await api.value.requestStageExtend(props.demand.demandId, current.value.stageId, { days: 0, hours, reason: extendForm.reason?.trim() || undefined })
     extendVisible.value = false
-    ElMessage.success('延时申请已提交，等待发布者处理')
+    ElMessage.success('延时申请已提交，等待平台处理')
     await reload()
     emit('changed')
   } catch (failure) { await handleError(failure) } finally { busy.value = false }
@@ -192,7 +192,7 @@ onMounted(async () => {
   clockTimer = setInterval(() => { tick.value++ }, 60000)
   // 有轮次卡在 AI 审核中时按 5 秒轮询取结果（与 APP 同口径）
   pollTimer = setInterval(() => { if (stages.value.some(stage => stage.status === 'ai_reviewing')) reload() }, 5000)
-  // 延时审批与下一轮激活发生在发布者端：30 秒重拉，截止时间/剩余时长自动同步
+  // 延时审批与下一轮激活由平台侧处理：30 秒重拉，截止时间/剩余时长自动同步
   syncTimer = setInterval(() => { if (!busy.value) reload() }, 30000)
 })
 onUnmounted(() => { clearInterval(clockTimer); clearInterval(pollTimer); clearInterval(syncTimer) })

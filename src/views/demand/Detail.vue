@@ -13,18 +13,15 @@
             <span v-for="tag in tagList" :key="tag" class="chip-lite">{{ tag }}</span>
           </div>
         </div>
-        <!-- 预算旁边的托管说明必须取真实状态：写死「全额已托管」会在 pending_payment / 已退回时变成假话 -->
-        <div class="dd-money"><b>{{ money(demand.budget) }}</b><span>任务预算 · {{ escrowStatusLabel(demand.escrowStatus) }}</span></div>
+        <div class="dd-money"><b>{{ money(demand.budget) }}</b><span>任务预算</span></div>
       </header>
 
       <dl class="dd-info">
         <div><dt>任务编号</dt><dd>{{ demand.demandNo }}</dd></div>
         <div><dt>任务类型</dt><dd>{{ taskTypeLabel(demand.taskType) }}</dd></div>
-        <div><dt>发布方</dt><dd>{{ demand.clientName || '-' }}</dd></div>
+        <div><dt>需求方</dt><dd>{{ demand.clientName || '平台代发布，暂未提供' }}</dd></div>
         <div><dt>接单截止</dt><dd>{{ dateText(demand.deadline) }}</dd></div>
         <div><dt>总集数</dt><dd>{{ Number(demand.totalEpisodes) > 0 ? demand.totalEpisodes + ' 集 · ' + (taskTypeValue === 'storyboard' ? '按源剧本逐轮出分镜' : '逐轮验收') : '未设定 · 整单时限 ' + formatHours(demand.durationHours) }}</dd></div>
-        <div><dt>托管状态</dt><dd>{{ escrowStatusLabel(demand.escrowStatus) }}（{{ money(demand.escrowAmount) }}）</dd></div>
-        <div><dt>我的押金</dt><dd>{{ depositStatusLabel(demand.depositStatus) }}<template v-if="Number(demand.depositAmount) > 0">（{{ money(demand.depositAmount) }}）</template></dd></div>
         <div v-if="isOwner"><dt>接单人</dt><dd>我 · {{ timeText(demand.acceptedAt) }} 接单</dd></div>
         <div class="dd-wide"><dt>交付要求</dt><dd>{{ taskTypeDeliverHint(demand.taskType) }}</dd></div>
       </dl>
@@ -33,7 +30,7 @@
 
       <section class="dd-block">
         <h3>需求描述</h3>
-        <p class="dd-requirement">{{ demand.requirement || '发布者未填写详细需求' }}</p>
+        <p class="dd-requirement">{{ demand.requirement || '平台未填写详细需求' }}</p>
       </section>
       <!-- 分镜类任务接单前必须能读到源剧本，否则无法评估工作量与出价 -->
       <section v-if="taskTypeValue === 'storyboard'" class="dd-block">
@@ -41,7 +38,7 @@
         <p class="dd-requirement">
           <template v-if="demand.sourceWorkTitle">作品《{{ demand.sourceWorkTitle }}》</template>
           <template v-if="demand.sourceScriptUrl"><span class="src-split">文件 {{ demand.sourceScriptName || '剧本文件' }}</span></template>
-          <template v-if="!demand.sourceWorkTitle && !demand.sourceScriptUrl">发布者提供的源剧本已失效，暂不建议接单。</template>
+          <template v-if="!demand.sourceWorkTitle && !demand.sourceScriptUrl">平台提供的源剧本已失效，暂不建议接单。</template>
         </p>
         <p class="dd-src-acts"><button class="btn sm ghost" type="button" @click="openSource">查看源剧本</button></p>
       </section>
@@ -52,30 +49,18 @@
 
       <section v-if="!isOwner" class="dd-actions">
         <template v-if="canClaim">
-          <button class="btn" :disabled="busy" @click="openDepositSandbox()">{{ busy ? '获取收款码…' : `支付宝扫码付押金 ¥${depositYuan} 接单` }}</button>
-          <button class="btn ghost" :disabled="busy" @click="openChat">联系发布方</button>
-          <button class="btn quiet" :disabled="busy" @click="doDepositPass">开发环境一键直通接单</button>
+          <button class="btn" :disabled="busy" @click="doClaim">{{ busy ? '接单中…' : '我要接单' }}</button>
+          <button class="btn ghost" :disabled="busy" @click="openChat">联系平台</button>
+          <p class="note">接单后按轮次交付，每轮通过验收即结算该轮款项。</p>
         </template>
-        <p v-else-if="demand.status === 'open' && demand.escrowStatus !== 'escrowed'" class="note">该任务尚未完成托管付款，暂不可接单；发布方付完托管款后会出现在任务广场。</p>
         <p v-else-if="demand.status === 'open'" class="note">该任务当前不可接单，请另选其他任务。</p>
         <p v-else class="note">任务已{{ demandStatusLabel(demand.status) }}，不能再接单。</p>
       </section>
-      <p v-else class="note dd-owned">你已接下此任务，押金 {{ money(demand.depositAmount) }} 在全部轮次验收通过后退还；逾期未通过将被没收。</p>
+      <p v-else class="note dd-owned">你已接下此任务，请按当前轮时限交付，全部轮次验收通过后款项结清。</p>
 
       <h3 class="dd-section-title">验收进度</h3>
       <DemandStagePanel ref="panel" :demand="demand" :is-owner="isOwner" @changed="load" />
     </template>
-
-    <PortalLayer v-model="payVisible" title="支付宝沙箱扫码付押金" modal>
-      <div class="pay-body">
-        <p class="cost">押金 {{ payAmountText }}，金额以后端返回值为准；沙箱收款不产生真实资金。</p>
-        <p class="cost">支付成功并查单确认后即视为接单成功，首轮验收计时同步开始。</p>
-        <img v-if="payQr" :src="payQr" alt="支付宝沙箱押金收款二维码" width="220" height="220">
-        <button class="btn pay-refresh" :disabled="payRefreshing" @click="refreshDepositQr">{{ payRefreshing ? '生成新码中…' : '刷新二维码' }}</button>
-        <p class="cost pay-message">{{ payMessage || '等待支付结果…扫码完成后会自动确认' }}</p>
-        <button class="btn" :disabled="payChecking" @click="checkDeposit">{{ payChecking ? '查询中…' : '我已完成支付' }}</button>
-      </div>
-    </PortalLayer>
 
     <!-- 源剧本查阅：作品源逐集读正文（后端已按纯文本下发），文件源给直链 -->
     <PortalLayer v-model="srcVisible" title="源剧本" wide>
@@ -108,15 +93,14 @@
   </div>
 </template>
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import QRCode from 'qrcode'
 import { usePortal } from '../../utils/portal.js'
 import LoadState from '../../components/LoadState.vue'
 import PortalLayer from '../../components/PortalLayer.vue'
 import DemandStagePanel from '../../components/demand/DemandStagePanel.vue'
-import { demandStatusLabel, escrowStatusLabel, depositStatusLabel, money, dateText, timeText, genreLabel, formatHours, taskTypeLabel, taskTypeDeliverHint } from '../../utils/demand.js'
+import { demandStatusLabel, money, dateText, timeText, genreLabel, formatHours, taskTypeLabel, taskTypeDeliverHint } from '../../utils/demand.js'
 import { mediaUrl } from '../../utils/avatarUrl.js'
 const { api, user, handleError } = usePortal()
 const route = useRoute()
@@ -126,12 +110,6 @@ const panel = ref(null)
 const pending = ref(true)
 const error = ref('')
 const busy = ref(false)
-const payVisible = ref(false)
-const payQr = ref('')
-const payAmount = ref(0)
-const payMessage = ref('')
-const payChecking = ref(false)
-const payRefreshing = ref(false)
 const srcVisible = ref(false)
 const srcPending = ref(false)
 const srcError = ref('')
@@ -139,12 +117,10 @@ const source = ref(null)
 const srcOpened = reactive({})
 const taskTypeValue = computed(() => demand.value?.taskType || 'script')
 const isOwner = computed(() => !!demand.value && !!user.value?.userId && String(demand.value.acceptedCreatorId) === String(user.value.userId))
-const canClaim = computed(() => demand.value?.status === 'open' && demand.value?.escrowStatus === 'escrowed')
+// 平台代发即视为款项到位，广场上能看到的 open 单就是可接的单
+const canClaim = computed(() => demand.value?.status === 'open')
 const tagList = computed(() => String(demand.value?.tags || '').split(/[,，]/).map(t => t.trim()).filter(Boolean))
 const statusTone = computed(() => ({ open: 'warn', in_progress: 'info', selected: 'info', completed: 'ok', closed: 'off', failed: 'danger' }[demand.value?.status] || 'off'))
-// 押金 = floor(预算/10)，与 APP 按钮预告口径一致；实际扣款金额与接单结果以后端查单响应为准
-const depositYuan = computed(() => Math.floor((Number(demand.value?.budget) || 0) / 1000))
-const payAmountText = computed(() => money(payAmount.value))
 async function load() {
   if (!demandId.value) { error.value = '任务编号无效'; pending.value = false; return }
   pending.value = !demand.value; error.value = ''
@@ -152,96 +128,25 @@ async function load() {
   catch (failure) { error.value = failure.message || '任务加载失败'; await handleError(failure) }
   finally { pending.value = false }
 }
-// 备用通路：一键直通付押金并接单（沙箱未配置或被护栏拒绝时使用）
-async function doDepositPass() {
+// 先到先得的原子抢单：并发下只有一人命中，其余按后端文案提示另选任务
+async function doClaim() {
   if (busy.value) return
   busy.value = true
   try {
-    await api.value.devPassDeposit(demand.value.demandId)
-    ElMessage.success('押金已入账，接单成功，首轮计时开始')
+    await api.value.claimDemand(demand.value.demandId)
+    ElMessage.success('接单成功，首轮计时开始')
     await load()
     await panel.value?.reload()
   } catch (failure) {
     if (failure?.code === 403) ElMessage.warning('请先开通创作者资格再接单')
-    else if (failure?.code === 400) ElMessage.warning(failure.message || '开发直通不可用，请改用支付宝沙箱扫码付款')
     else await handleError(failure)
   } finally { busy.value = false }
-}
-// 主路径：支付宝沙箱扫码付押金并接单，收款码打开后每 3 秒静默查单（与 APP 弹窗同口径）。
-// refresh=true 让服务端换新商户单号重出码，用于旧码失效后手动/自动换码。
-async function openDepositSandbox({ refresh = false } = {}) {
-  busy.value = true
-  try {
-    const result = await api.value.payDeposit(demand.value.demandId, refresh)
-    if (result?.paid) {
-      // 旧收款码其实已被扫付，服务端已就地结算接单，这里按成功收尾
-      stopPayPolling()
-      payVisible.value = false
-      ElMessage.success('押金此前已支付，请查看任务最新状态')
-      await load()
-      await panel.value?.reload()
-      return
-    }
-    if (!result?.qrCode) throw Object.assign(new Error('未取到沙箱支付二维码'), { code: 500 })
-    payAmount.value = Number(result.amount) || 0
-    payQr.value = await QRCode.toDataURL(result.qrCode, { width: 220, margin: 2 })
-    payMessage.value = ''
-    payVisible.value = true
-  } catch (failure) {
-    if (failure?.code === 403) ElMessage.warning('请先开通创作者资格再接单')
-    else if (failure?.code === 500) ElMessage.warning('沙箱支付暂不可用，请稍后再试')
-    else await handleError(failure)
-  } finally { busy.value = false }
-}
-async function refreshDepositQr() {
-  if (payRefreshing.value) return
-  payRefreshing.value = true
-  payMessage.value = '正在生成新的收款码…'
-  try { await openDepositSandbox({ refresh: true }) } finally { payRefreshing.value = false }
-}
-let payTimer = null
-let payRotateTimer = null
-function stopPayPolling() { if (payTimer) { clearInterval(payTimer); payTimer = null } }
-watch(payVisible, visible => {
-  stopPayPolling()
-  if (payRotateTimer) { clearInterval(payRotateTimer); payRotateTimer = null }
-  if (visible) {
-    payTimer = setInterval(() => { checkDeposit({ silent: true }) }, 3000)
-    // 沙箱收款码有有效期，弹窗停留超过 5 分钟自动换一张新码（与 APP 同口径）
-    payRotateTimer = setInterval(() => { refreshDepositQr() }, 5 * 60 * 1000)
-  }
-})
-onUnmounted(() => { stopPayPolling(); if (payRotateTimer) clearInterval(payRotateTimer) })
-async function checkDeposit({ silent = false } = {}) {
-  if (payChecking.value) return
-  if (!silent) { payChecking.value = true; payMessage.value = '' }
-  try {
-    const result = await api.value.confirmDeposit(demand.value.demandId)
-    if (result?.claimed) {
-      stopPayPolling()
-      payVisible.value = false
-      ElMessage.success('押金已入账，接单成功，首轮计时开始')
-      await load()
-      await panel.value?.reload()
-    } else if (result?.paid) {
-      // 扣到钱却没接成功（多半被抢先），继续轮询没有意义
-      stopPayPolling()
-      payMessage.value = result.reason || '押金已扣款但接单未成功，请联系平台核对'
-    } else if (result?.closed) {
-      // 支付宝侧旧单已关闭，当前码再怎么扫也不会到账，自动换一张新码
-      await refreshDepositQr()
-    } else if (result?.reason) {
-      stopPayPolling()
-      payMessage.value = result.reason
-    } else if (!silent) payMessage.value = '尚未查询到支付成功，请完成支付后重试'
-  } catch (failure) { if (!silent) payMessage.value = failure.message || '查询失败，请稍后重试' }
-  finally { if (!silent) payChecking.value = false }
 }
 async function openChat() {
   try { await api.value.demandChatSession(demand.value.demandId); ElMessage.success('会话已就绪，可在「会话」面板沟通') }
   catch (failure) { if (failure?.code === 403) ElMessage.warning('请先开通创作者资格再沟通'); else await handleError(failure) }
 }
-// 源剧本正文按行分段渲染：后端已转纯文本，这里用文本插值而非 v-html，不把发布者内容当 HTML 执行
+// 源剧本正文按行分段渲染：后端已转纯文本，这里用文本插值而非 v-html，不把正文当 HTML 执行
 const paragraphs = chapter => String(chapter?.content || '').split(/\n+/).map(line => line.trim()).filter(Boolean)
 async function loadSource() {
   srcPending.value = true; srcError.value = ''
@@ -304,11 +209,8 @@ onMounted(load)
 .src-content { padding: 4px 14px 12px; border-top: 1px dashed var(--rule, #ebeef5); font-size: 14px; line-height: 1.9; color: var(--ink-2, #5c5850) }
 .src-content p { margin: 8px 0 0; white-space: pre-wrap }
 .dd-owned { color: #67c23a }
+.dd-actions .note { margin: 0; flex: 1 1 100%; }
 .dd-section-title { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--rule, #ebeef5) }
-.pay-body { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center }
-.pay-body .cost { margin: 0; font-size: 12.5px; color: var(--ink-3, #909399) }
-.pay-message { color: #e6a23c }
-.pay-refresh { padding: 4px 16px; font-size: 12px }
 .dialog-body { display: flex; flex-direction: column; gap: 12px }
 .dialog-foot { display: flex; justify-content: flex-end }
 </style>

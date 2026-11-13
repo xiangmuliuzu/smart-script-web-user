@@ -1,7 +1,7 @@
 <template>
   <div class="demand-page">
     <DemandTabs />
-    <p class="note">这里是你已付押金接下的任务。每轮交付后由发布者验收，验收通过即放出该轮款项并进入你的待结算余额。</p>
+    <p class="note">这里是你接下的任务。每轮交付后由平台验收，验收通过即放出该轮款项并进入你的待结算余额。</p>
     <form class="filters" @submit.prevent="applyFilters">
       <label class="field">状态
         <select v-model="filters.status">
@@ -29,7 +29,7 @@
     <p v-if="!pending && !error && !list.length" class="load-state">还没有接下的任务，去<router-link class="link" to="/demand">任务广场</router-link>看看</p>
     <DemandCard v-for="item in list" :key="item.demandId" :demand="item" mode="mine" @open="goDemandDetail">
       <button class="btn sm" @click.stop="goDemandDetail(item.demandId)">去交付</button>
-      <button class="btn sm ghost" @click.stop="openChat(item)">联系发布方</button>
+      <button class="btn sm ghost" @click.stop="openChat(item)">联系平台</button>
     </DemandCard>
     <div v-if="total > PAGE_SIZE" class="pager">
       <button class="btn sm ghost" :disabled="pageNum <= 1" @click="turn(-1)">上一页</button>

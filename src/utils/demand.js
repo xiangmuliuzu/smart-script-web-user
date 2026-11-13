@@ -3,20 +3,10 @@
 import { fenText } from './finance.js'
 
 // 任务主状态（DEMAND_STATUS_*）：open 征集中、in_progress 已接单进行中、selected 已选定（走中标询盘）、
-// completed 全部轮次验收通过、closed 发布者关闭、failed 活动轮超时终止
+// completed 全部轮次验收通过、closed 平台关闭、failed 活动轮超时终止
 const DEMAND_STATUS_LABELS = { open: '征集中', in_progress: '进行中', selected: '已选定', completed: '已完成', closed: '已关闭', failed: '已失败' }
 export const demandStatusLabel = s => DEMAND_STATUS_LABELS[s] || s || '-'
 export const demandStatusOptions = Object.entries(DEMAND_STATUS_LABELS).map(([value, label]) => ({ value, label }))
-
-// 托管资金状态（ESCROW_*）
-const ESCROW_LABELS = { none: '未托管', pending_payment: '待付托管', escrowed: '已托管', released: '已放款', refunded_to_publisher: '已退回发布者' }
-export const escrowStatusLabel = s => ESCROW_LABELS[s] || s || '-'
-
-// 押金资金状态（DEPOSIT_*）：held 由「付押金→查单确认」写入，即接单成功。
-// 押金与托管是两笔不同的钱：押金(deposit)是创作者缴的履约保证金，不是发布者托管的预算款(escrow)，
-// 文案不能复用「已托管」，否则卡片上「托管：已托管 · 押金：已托管」完全分不开。
-const DEPOSIT_LABELS = { none: '未缴', held: '在押', refunded: '已退还', forfeited: '已没收' }
-export const depositStatusLabel = s => DEPOSIT_LABELS[s] || s || '-'
 
 /* 验收轮次：后端激活某轮只写 started_at/due_at，status 仍是 pending，
    所以「进行中」必须由 startedAt 判定，不能只看 status。 */
@@ -131,15 +121,15 @@ export function durationText(stage) {
 export const DEMAND_GENRES = { 1: '都市', 2: '古装', 3: '玄幻', 4: '悬疑', 5: '甜宠', 6: '励志', 7: '其他' }
 export const genreOptions = Object.entries(DEMAND_GENRES).map(([value, label]) => ({ value: Number(value), label }))
 export const genreLabel = genreId => DEMAND_GENRES[Number(genreId)] || (genreId ? '其他' : '未分类')
-/* 任务类型（sys_demand.task_type）：与后端 TradeDemandService.TASK_TYPE_* 及企业端 utils/demand.js 同口径 */
+/* 任务类型（sys_demand.task_type）：与后端 TradeDemandService.TASK_TYPE_* 及管理端任务页同口径 */
 export const TASK_TYPE_LABELS = { script: '只征集剧本', script_storyboard: '剧本+分镜', storyboard: '提供剧本做分镜' }
 export const taskTypeLabel = t => TASK_TYPE_LABELS[t] || TASK_TYPE_LABELS.script
 export const taskTypeOptions = Object.entries(TASK_TYPE_LABELS).map(([value, label]) => ({ value, label }))
 /* 各类型的交付口径（接单方视角），详情页与筛选结果都用它解释「这一类要交什么」 */
 export const TASK_TYPE_DELIVER_HINTS = {
-  script: '逐轮交付本人未上架的剧本作品，AI 剧本审核通过后进入发布者人工验收',
+  script: '逐轮交付本人未上架的剧本作品，AI 剧本审核通过后进入平台人工验收',
   script_storyboard: '逐轮交付剧本作品，分镜以文件链接或交付说明随本轮一并提交，AI 剧本审核通过后进入人工验收',
-  storyboard: '按发布者提供的源剧本产出分镜：交付分镜文件或填写交付说明即可（作品可选），提交后直接进入人工验收',
+  storyboard: '按平台提供的源剧本产出分镜：交付分镜文件或填写交付说明即可（作品可选），提交后直接进入人工验收',
 }
 export const taskTypeDeliverHint = t => TASK_TYPE_DELIVER_HINTS[t] || TASK_TYPE_DELIVER_HINTS.script
 /* 排序白名单与后端 SysDemandMapper 一致：created / budget / deadline，非法值后端回落 created desc */

@@ -372,7 +372,7 @@ export const applyWithdraw = form => data(financeBase + '/withdraw/apply', { met
 export const listWithdraws = (params = {}) =>
   data(financeBase + '/withdraw/list' + qs({ pageNum: 1, pageSize: 20, ...params }))
 
-// ──── 任务广场（需求悬赏）：创作者侧只读广场 + 接单 + 交付，发布/托管/验收归企业端 ────
+// ──── 任务广场（需求悬赏）：创作者侧只读广场 + 接单 + 交付，发布与买方动作归管理端 ────
 const demandBase = '/api/v1/trade/demand'
 const demandPath = id => demandBase + '/' + encodeURIComponent(id)
 // 金额口径：入参 budget 与 budgetMin/budgetMax 为分，stages[].amount 为元，出参一律为分（展示时 /100）。
@@ -391,16 +391,11 @@ export const deliverableWorks = () => data(demandBase + '/deliverable-works')
 // 创作者提交本轮交付物：{ workId, deliverableDesc, deliverableUrl }
 // 剧本类（script/script_storyboard）workId 必填；「提供剧本做分镜」可只交分镜文件链接+说明，workId 可选
 export const deliverStage = (demandId, stageId, body) => data(`${demandPath(demandId)}/stage/${encodeURIComponent(stageId)}/deliver`, { method: 'POST', body })
-// 延时：创作者只能发起申请与查看记录，决定权在发布者
+// 延时：创作者只能发起申请与查看记录，决定权在平台运营
 export const requestStageExtend = (demandId, stageId, body) => data(`${demandPath(demandId)}/stage/${encodeURIComponent(stageId)}/extend/request`, { method: 'POST', body })
 export const stageExtendHistory = (demandId, stageId) => data(`${demandPath(demandId)}/stage/${encodeURIComponent(stageId)}/extend/history`)
 export const demandExtendHistory = demandId => data(demandPath(demandId) + '/extend/history')
-// 备用通路：开发直通「点一下支付押金并接单」（与 APP 同端点同开关，prod 护栏下后端 400 拒绝；无创作者资格 403）。
-export const devPassDeposit = demandId => data(demandPath(demandId) + '/pay/deposit/dev-pass', { method: 'POST' })
-// 押金沙箱扫码（次入口）：付押金 → 查单确认（confirm 返回 {paid, claimed, closed, reason}，落败时 paid 可能为真而 claimed 为假）。
-// refresh=true 让服务端换新商户单号重出收款码（仅原付款人可换，他人仍复用同一张码）。
-export const payDeposit = (demandId, refresh = false) => data(demandPath(demandId) + `/pay/deposit${refresh ? '?refresh=true' : ''}`, { method: 'POST' })
-export const confirmDeposit = demandId => data(demandPath(demandId) + '/pay/deposit/confirm', { method: 'POST' })
+// 接单：先到先得，无押金环节，点一下即锁定任务并开始首轮计时
 export const claimDemand = demandId => data(demandPath(demandId) + '/claim', { method: 'POST' })
 // 任务会话（创作者发起不带 targetUserId），返回会话 VO；后续收发与聊天列表沿用合作抽屉的会话能力
 export const demandChatSession = demandId => data(demandPath(demandId) + '/chat/session', { method: 'POST' })

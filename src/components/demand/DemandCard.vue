@@ -13,15 +13,9 @@
     </p>
     <p class="cost dc-meta">
       {{ genreLabel(demand.genreId) }}
-      <template v-if="taskTypeValue === 'storyboard'"> · 发布者提供源剧本</template>
+      <template v-if="taskTypeValue === 'storyboard'"> · 平台提供源剧本</template>
       <!-- 标签必须带前缀：否则「玄幻 · 11 / 22」会被读成集数进度 -->
       <template v-if="tagList.length"> · 标签 {{ tagList.join(' / ') }}</template>
-    </p>
-    <!-- 广场口径下后端只放已托管的可接单任务；接过的单要显示资金与当前轮进度 -->
-    <!-- 两笔钱各带主语：预算托管=发布者缴的款，履约押金=自己缴的保证金 -->
-    <p v-if="mode === 'mine'" class="cost dc-meta">
-      预算托管：{{ escrowStatusLabel(demand.escrowStatus) }}（{{ money(demand.escrowAmount) }}）
-      · 履约押金：{{ depositStatusLabel(demand.depositStatus) }}（{{ money(demand.depositAmount) }}）
     </p>
     <p v-if="mode === 'mine' && demand.acceptedAt" class="cost dc-meta">接单于 {{ timeText(demand.acceptedAt) }}</p>
     <!-- 只有进行中的单才该有轮次倒计时：已完成/已关闭/已失败仍显示「剩余 N 天」会被读成还没结清 -->
@@ -33,14 +27,14 @@
     <p v-if="demand.status === 'failed' && demand.failReason" class="cost dc-danger">{{ demand.failReason }}</p>
     <p class="dc-req">{{ brief }}</p>
     <div class="dc-foot">
-      <span class="cost">{{ demand.clientName || '发布方未显示' }} · 发布于 {{ dateText(demand.createdAt) }}</span>
+      <span class="cost">{{ demand.clientName ? '需求方 ' + demand.clientName : '平台发布' }} · 发布于 {{ dateText(demand.createdAt) }}</span>
       <div class="dc-actions" @click.stop><slot :demand="demand" /></div>
     </div>
   </article>
 </template>
 <script setup>
 import { computed } from 'vue'
-import { demandStatusLabel, escrowStatusLabel, depositStatusLabel, money, dateText, timeText, countdown, genreLabel, formatHours, taskTypeLabel } from '../../utils/demand.js'
+import { demandStatusLabel, money, dateText, timeText, countdown, genreLabel, formatHours, taskTypeLabel } from '../../utils/demand.js'
 // open 统一回传 demandId，与 layout 提供的 goDemandDetail(id) 直接对接
 const props = defineProps({ demand: { type: Object, required: true }, mode: { type: String, default: 'square' } })
 defineEmits(['open'])
@@ -48,7 +42,7 @@ const taskTypeValue = computed(() => props.demand.taskType || 'script')
 const tagList = computed(() => String(props.demand.tags || '').split(/[,，]/).map(t => t.trim()).filter(Boolean).slice(0, 4))
 const brief = computed(() => {
   const text = String(props.demand.requirement || '').replace(/\s+/g, ' ').trim()
-  return text.length > 96 ? text.slice(0, 96) + '…' : (text || '发布者未填写需求描述')
+  return text.length > 96 ? text.slice(0, 96) + '…' : (text || '暂无需求描述')
 })
 const statusTone = computed(() => ({ open: 'warn', in_progress: 'info', selected: 'info', completed: 'ok', closed: 'off', failed: 'danger' }[props.demand.status] || 'off'))
 // 倒计时只算一次：剩余时间充裕时用常态灰字，只有临期/逾期才上橙、红，避免满屏告警色

@@ -6,7 +6,7 @@
       <div class="head-copy">
         <p class="kicker">TASK SQUARE · 公开接单</p>
         <h1>任务广场</h1>
-        <p class="head-desc">只展示「征集中且发布者已完成托管付款」的任务，接了就能拿钱；你已接的单在「我的任务」里看。</p>
+        <p class="head-desc">这里只展示平台已发布、等待接单的「征集中」任务，先到先得；你已接下的单在「我的任务」里看。</p>
       </div>
       <dl class="head-stats">
         <div><dt>可接单任务</dt><dd>{{ stats.availableCount ?? '—' }}</dd></div>

@@ -1,8 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import * as demandUtils from '../src/utils/demand.js'
 import {
-  depositStatusLabel,
-  escrowStatusLabel,
   isActiveStage,
   money,
   stageStatusLabel,
@@ -11,27 +10,11 @@ import {
   taskTypeOptions
 } from '../src/utils/demand.js'
 
-// 后端权威枚举：ESCROW_* 是发布者放进平台的预算款，DEPOSIT_* 是创作者缴的履约保证金。
-// held 曾被译作「已托管」，与 escrowed「已托管」撞词，卡片上出现「托管：已托管 · 押金：已托管」，
-// 用户完全分不出两笔钱；这里把两套文案钉住，防止后人再抄回旧词。
-const ESCROW_VALUES = ['none', 'pending_payment', 'escrowed', 'released', 'refunded_to_publisher']
-const DEPOSIT_VALUES = ['none', 'held', 'refunded', 'forfeited']
-
-test('押金与托管两套状态都有后端枚举的中文译文，不留英文原值', () => {
-  for (const value of ESCROW_VALUES) {
-    assert.notEqual(escrowStatusLabel(value), value, `托管 ${value} 缺中文文案`)
-  }
-  for (const value of DEPOSIT_VALUES) {
-    assert.notEqual(depositStatusLabel(value), value, `押金 ${value} 缺中文文案`)
-  }
-  assert.equal(escrowStatusLabel('escrowed'), '已托管')
-  assert.equal(depositStatusLabel('held'), '在押')
-})
-
-test('押金文案与托管文案不共用任何一个词，两笔钱在页面上分得开', () => {
-  const escrowLabels = ESCROW_VALUES.map(escrowStatusLabel)
-  const overlapped = DEPOSIT_VALUES.map(depositStatusLabel).filter(label => escrowLabels.includes(label))
-  assert.deepEqual(overlapped, [], `押金/托管文案撞词：${overlapped.join('、')}`)
+// 托管与押金随「平台代发任务」口径一起退役：资金在平台与需求方之间线下结清，
+// 创作者侧不再有 ESCROW_* / DEPOSIT_* 两笔钱，枚举与页面都不得再出现这两个概念。
+test('任务枚举不再导出托管与押金状态', () => {
+  assert.equal('escrowStatusLabel' in demandUtils, false)
+  assert.equal('depositStatusLabel' in demandUtils, false)
 })
 
 test('轮次进行中以 startedAt 判定，不看 status（activateStage 不改 status）', () => {
@@ -50,7 +33,7 @@ test('任务金额与收益域同一小数口径，一律两位', () => {
   assert.equal(money(null), '¥0.00')
 })
 
-// 任务三分类（sys_demand.task_type）与 APP/企业/管理端同口径：
+// 任务三分类（sys_demand.task_type）与 APP/管理端同口径：
 // 值域缺一即后端 normalizeAndValidateTaskType 会抛「任务类型不正确」，
 // 文案漂移会让接单方按错误的交付预期报价，故在此钉死。
 const TASK_TYPE_CODES = ['script', 'script_storyboard', 'storyboard']
@@ -60,9 +43,9 @@ const TASK_TYPE_TEXTS = {
   storyboard: '提供剧本做分镜'
 }
 const TASK_TYPE_HINTS = {
-  script: '逐轮交付本人未上架的剧本作品，AI 剧本审核通过后进入发布者人工验收',
+  script: '逐轮交付本人未上架的剧本作品，AI 剧本审核通过后进入平台人工验收',
   script_storyboard: '逐轮交付剧本作品，分镜以文件链接或交付说明随本轮一并提交，AI 剧本审核通过后进入人工验收',
-  storyboard: '按发布者提供的源剧本产出分镜：交付分镜文件或填写交付说明即可（作品可选），提交后直接进入人工验收'
+  storyboard: '按平台提供的源剧本产出分镜：交付分镜文件或填写交付说明即可（作品可选），提交后直接进入人工验收'
 }
 
 test('任务类型值域与中文标签与后端常量逐一对应', () => {
