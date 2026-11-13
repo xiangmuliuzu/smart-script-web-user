@@ -13,6 +13,11 @@
 .creation-actions .btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 8px 12px; border-radius: 5px; white-space: nowrap; }
 .creation-actions .btn.quiet { border-color: transparent; }
 .creation-error { margin: 0; border-width: 0 0 1px; flex: none; }
+/* 后台生成状态条：常驻可见，避免完成/关闭状态被忽略 */
+.creation-job-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; flex: none; margin: 0; padding: 10px 16px; background: #fff3cf; border-bottom: 1px solid #dfbe74; border-left: 4px solid #c68a1c; color: #60420a; font-size: 12px; font-weight: 500; }
+.creation-job-bar.done { background: #e3f4e9; border-bottom-color: #9bcdb1; border-left-color: #2f9e5f; color: #1f5b39; }
+.creation-job-bar .text-button { color: #8a5200; font-weight: 600; text-decoration: underline; }
+.creation-job-bar.done .text-button { color: #1f6b41; }
 .creation-columns { display: grid; grid-template-columns: clamp(210px, 15.3vw, 260px) minmax(0, 1fr) clamp(310px, 23vw, 360px); flex: 1; min-height: 0; }
 .creation-directory, .creation-ai { min-width: 0; background: #f3f0e8; overflow-y: auto; scrollbar-width: thin; }
 .creation-directory { border-right: 1px solid var(--rule); padding: 24px 18px 18px; }

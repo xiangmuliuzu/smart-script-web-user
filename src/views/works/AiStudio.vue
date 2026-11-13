@@ -13,7 +13,7 @@
         <p v-if="error" class="note bad" role="alert">{{ error }}</p><button class="btn" :disabled="generating || !canCreate">{{ generating ? '正在生成…' : tab === 'outline' ? '生成剧本大纲' : tab === 'write' ? '生成正文' : tab === 'storyboard' ? '生成分镜' : '开始润色' }}</button><p class="cost">生成结果和积分消耗以服务端返回为准</p>
       </form>
       <div class="compose-out"><h3>{{ tab === 'polish' ? '润色结果' : '生成结果' }}</h3><div class="ai-scroll"><p v-if="generating && result" class="cost" role="status">正在生成，内容持续更新…</p><div v-if="result" class="prose ai-result">{{ displayResult }}</div><LoadState v-else :pending="generating" :empty="!generating" empty-text="写下你的想法，故事将在这里展开。" /><div v-if="result" class="row top-gap">
-          <button v-if="embedded && tab === 'outline'" class="btn sm" :disabled="generating || insertDisabled || outlineIncomplete" @click="chooseFillOutline">按大纲生成各章</button>
+          <button v-if="embedded && tab === 'outline'" class="btn sm" :disabled="generating || insertDisabled || outlineIncomplete" @click="chooseFillOutline">根据大纲生成各章</button>
           <button v-if="embedded && tab === 'outline'" class="btn sm" :disabled="generating || insertDisabled" @click="$emit('create-outline', displayResult)">写入创作资料</button>
           <button v-else-if="embedded" class="btn sm" :disabled="generating || insertDisabled" @click="$emit('insert', displayResult)">插入正文</button>
           <button v-else class="btn sm" :disabled="generating || copying" @click="adopt">{{ tab === 'outline' ? '采用' : '写入章节' }}</button>
@@ -22,7 +22,7 @@
           <button v-else class="btn quiet sm" :disabled="generating" @click="results[tab] = ''">丢弃</button>
         </div>
         <p v-if="result && !form.workId && !embedded" class="cost">未选择作品时，采用会将内容复制到剪贴板。</p>
-        <p v-if="embedded && result && tab === 'outline'" class="cost">「写入创作资料」会把结果按标题拆开：故事简介进左侧「故事简介」、主要人物与人物关系进「人物便签」、每集事件卡只进「剧本大纲」。「按大纲生成各章」可选用当前输出或已保存的剧本大纲，仅填充空章节，每章按实际 token 扣除积分。</p>
+        <p v-if="embedded && result && tab === 'outline'" class="cost">「写入创作资料」会把结果按标题拆开：故事简介进「故事简介」、主要人物与人物关系进「人物便签」、每集事件卡进「剧本大纲」，并补上道具档案与写法基线（只补空位，不覆盖手填）。改满意后点「根据大纲生成各章」，提交后台队列逐集写正文，关闭页面也不中断，失败可续跑，每集按实际 token 扣积分。</p>
         <p v-else-if="embedded && result" class="cost">插入会追加到当前分集，保留原文。重新生成可选择完整重写，或带着当前结果提意见再生成。</p></div></div>
     </div>
     <div v-else class="top-gap"><LoadState :pending="recordLoading" :error="recordError" :retry="loadRecords" :empty="!recordLoading && !recordError && !records.length" /><div v-if="embedded && records.length && !recordError" class="ai-records"><article v-for="record in records" :key="record.recordId" :class="{ open: expanded.has(record.recordId) }"><button class="ai-record-row" type="button" @click="toggleRecord(record.recordId)"><b>{{ typeLabels[record.type] || record.type || 'AI 创作' }}</b><span>{{ record.tokens ?? '—' }} token</span><p>{{ record.title || '独立创作' }}</p><small>{{ dateText(record.createdAt || record.createTime) }}</small></button><div v-if="expanded.has(record.recordId)" class="ai-record-detail"><div v-if="record.input"><h4>我的输入</h4><pre>{{ record.input }}</pre></div><div v-if="record.output"><h4>AI 输出</h4><pre>{{ record.output }}</pre></div><p v-else-if="record.type === 'outline'" class="note">大纲请求未留存内容，请生成后及时保存。</p></div></article></div><div v-else-if="records.length && !recordError" class="tbl"><table><thead><tr><th>时间</th><th>类型</th><th>作品 / 章节</th><th class="num">消耗</th></tr></thead><tbody><tr v-for="record in records" :key="record.recordId"><td>{{ dateText(record.createTime || record.createdAt) }}</td><td>{{ typeLabels[record.type] || record.type || 'AI 创作' }}</td><td>{{ record.workTitle || record.title || '—' }}</td><td>{{ record.tokens ?? '—' }} token</td></tr></tbody></table></div></div>
@@ -238,7 +238,7 @@ async function chooseFillOutline() {
   if (!saved) { emit('fill-outline', displayResult.value); return }
   let source = displayResult.value
   try {
-    await ElMessageBox.confirm('用哪一份大纲生成各章？「剧本大纲」是左侧保存、可修改的版本；「当前输出」是本次 AI 生成的结果。', '按大纲生成各章', { confirmButtonText: '用当前输出', cancelButtonText: '用剧本大纲', distinguishCancelAndClose: true })
+    await ElMessageBox.confirm('用哪一份大纲生成各章？「剧本大纲」是左侧保存、可修改的版本；「当前输出」是本次 AI 生成的结果。', '根据大纲生成各章', { confirmButtonText: '用当前输出', cancelButtonText: '用剧本大纲', distinguishCancelAndClose: true })
   } catch (action) {
     if (action === 'cancel') source = saved
     else return
