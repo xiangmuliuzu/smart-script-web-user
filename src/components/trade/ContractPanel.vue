@@ -45,6 +45,7 @@
 
     <PortalLayer v-model="previewVisible" :title="previewTitle" modal big>
       <div v-loading="previewLoading" class="preview-wrap">
+        <p v-if="previewMissing" class="preview-warning">{{ previewMissing }} 张签章/合同图片在服务器上已经取不到（历史文件未随存储迁移，不是链接过期），其余内容照常显示。</p>
         <div v-if="previewSource === 'uploaded' && previewPages.length" class="preview-pages">
           <img v-for="(p, i) in previewPages" :key="i" class="preview-page" :src="mediaUrl(p)" alt="" />
         </div>
@@ -104,7 +105,7 @@ import ContractSignDialog from './ContractSignDialog.vue'
 import ContractEditor from './ContractEditor.vue'
 import { usePortal } from '../../utils/portal.js'
 import { money, asList } from '../../utils/creator.js'
-import { avatarUrl, contractHtml } from '../../utils/avatarUrl.js'
+import { avatarUrl, contractHtml, countUnreachableContractImages } from '../../utils/avatarUrl.js'
 import { downloadProfileFile } from '../../utils/copyright.js'
 import { contractDocumentText } from '../../utils/contractDocument.js'
 
@@ -130,6 +131,7 @@ const signingContract = ref(null)
 
 const previewSource = ref('template')
 const previewPages = ref([])
+const previewMissing = ref(0)
 const uploadInputRef = ref(null)
 const uploadTargetId = ref(0)
 const uploading = ref(false)
@@ -195,6 +197,7 @@ async function openPreview(c) {
   previewContent.value = ''
   previewSource.value = 'template'
   previewPages.value = []
+  previewMissing.value = 0
   previewVisible.value = true
   previewLoading.value = true
   try {
@@ -202,6 +205,7 @@ async function openPreview(c) {
     previewSource.value = detail?.sourceType || 'template'
     previewPages.value = Array.isArray(detail?.pageImageUrls) ? detail.pageImageUrls : []
     previewContent.value = contractHtml(detail?.content)
+    previewMissing.value = await countUnreachableContractImages(detail?.content, previewPages.value)
   } catch (e) {
     await handleError(e)
   } finally {
@@ -369,6 +373,7 @@ function openSignById(contract) {
 .foot-actions { display: flex; gap: 8px; align-items: center }
 .foot-actions a { text-decoration: none }
 .preview-wrap { min-height: 200px }
+.preview-warning { margin: 0 0 8px; font-size: 12px; color: #b45309 }
 .contract-frame { width: 100%; height: min(68vh, 720px); border: 0; display: block; background: #fff }
 .preview-pages { display: flex; flex-direction: column; gap: 8px; max-height: min(68vh, 720px); overflow-y: auto }
 .preview-page { width: 100%; display: block; border: 1px solid #ebeef5; border-radius: 4px }
