@@ -1,0 +1,149 @@
+<template>
+  <div class="creator-portal">
+    <LoadState v-if="pending || error" :pending="pending" :error="error" :retry="load" />
+    <template v-else-if="user && api">
+      <header class="topbar">
+        <button class="brand" @click="goWorks"><b>剧云策</b><span>创作者中心</span></button>
+        <nav class="nav" aria-label="主导航"><button :aria-current="onHome ? 'page' : undefined" @click="goHome">首页</button><button :aria-current="onWorks ? 'page' : undefined" @click="goWorks">工作台</button><button :aria-current="onDemand ? 'page' : undefined" @click="goDemand">任务广场</button></nav>
+        <div class="topbar-right">
+          <button v-if="realNameStatus && realNameStatus !== 'APPROVED'" class="chip verify-chip" @click="openPanel('account', 'profile')">⚠ 实名认证{{ realNameStatus === 'PENDING' ? '审核中' : '未完成' }}</button>
+          <div class="nav-group" role="group" aria-label="交易链路">
+            <button class="nav-icon" aria-label="询盘" @click="openPanel('cooperation', 'inquiry')"><span class="ico"><el-icon><ChatLineSquare /></el-icon></span><span class="lbl">询盘</span></button>
+            <button class="nav-icon" aria-label="会话" @click="openPanel('cooperation', 'session')"><span class="ico"><el-icon><ChatRound /></el-icon></span><span class="lbl">会话</span></button>
+            <button class="nav-icon" aria-label="订单" @click="openPanel('cooperation', 'order')"><span class="ico"><el-icon><Tickets /></el-icon></span><span class="lbl">订单</span></button>
+            <button class="nav-icon" aria-label="合同" @click="openPanel('cooperation', 'contract')"><span class="ico"><el-icon><Document /></el-icon></span><span class="lbl">合同</span></button>
+          </div>
+          <div class="nav-group" role="group" aria-label="沟通通知">
+            <button class="nav-icon" aria-label="消息" @click="openPanel('messages')"><span class="ico"><el-icon><Bell /></el-icon><span v-if="unread" class="badge">{{ unread > 99 ? '99+' : unread }}</span></span><span class="lbl">消息</span></button>
+            <button class="nav-icon" aria-label="平台客服" @click="openPanel('chat')"><span class="ico"><el-icon><ChatDotRound /></el-icon><span v-if="chatUnread" class="badge">{{ chatUnread > 99 ? '99+' : chatUnread }}</span></span><span class="lbl">平台客服</span></button>
+          </div>
+          <el-dropdown trigger="click" @command="accountCommand">
+            <button class="avatar-btn" aria-label="账号菜单"><el-avatar class="avatar" :size="28" :src="avatarUrl(user.avatar)" :alt="displayName + '的头像'">{{ displayName.slice(0, 1) }}</el-avatar><em>{{ displayName }}</em><el-icon><ArrowDown /></el-icon></button>
+            <template #dropdown><el-dropdown-menu class="portal-menu"><div class="who"><b>{{ displayName }}</b><span>{{ user.userName || '平台用户' }}</span></div><el-dropdown-item command="profile">个人资料</el-dropdown-item><el-dropdown-item command="feedback">意见反馈</el-dropdown-item><el-dropdown-item command="logout" divided :disabled="leaving">退出登录</el-dropdown-item></el-dropdown-menu></template>
+          </el-dropdown>
+        </div>
+      </header>
+      <main class="portal-main" :class="{ 'portal-main-editor': route.meta.editor }"><router-view v-slot="{ Component }"><component :is="Component" :key="route.path" ref="workspace" /></router-view></main>
+      <MessagesPanel v-if="panel === 'messages'" v-model="panelVisible" />
+      <PlatformChatPanel v-if="panel === 'chat'" v-model="panelVisible" />
+      <CooperationPanel v-if="panel === 'cooperation'" v-model="panelVisible" :initial-tab="panelTab" :order-search="panelOrderSearch" :initial-keyword="panelKeyword" />
+      <RightsPanel v-if="panel === 'rights'" ref="rightsPanelRef" v-model="panelVisible" :initial-tab="panelTab" />
+      <AccountPanel v-if="panel === 'account'" v-model="panelVisible" :initial-tab="panelTab" />
+      <RechargePanel v-if="panel === 'recharge'" v-model="panelVisible" />
+    </template>
+  </div>
+</template>
+<script setup>
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { Bell, ChatDotRound, ChatLineSquare, ChatRound, Document, Tickets, ArrowDown } from '@element-plus/icons-vue'
+import { getInfo, isAuthFailure, logout } from '../auth.js'
+import { portalKey } from '../utils/portal.js'
+import { avatarUrl } from '../utils/avatarUrl.js'
+import { friendlyErrorMessage } from '../utils/friendly-error.js'
+import { connectRealtime, disconnectRealtime, isRealtimeConnected, onRealtime } from '../utils/realtime-socket.js'
+import LoadState from '../components/LoadState.vue'
+import MessagesPanel from '../views/panels/Messages.vue'
+import PlatformChatPanel from '../views/panels/PlatformChat.vue'
+import CooperationPanel from '../views/panels/Cooperation.vue'
+import RightsPanel from '../views/panels/Rights.vue'
+import AccountPanel from '../views/panels/Account.vue'
+import RechargePanel from '../views/panels/Recharge.vue'
+const router = useRouter()
+const route = useRoute()
+const api = shallowRef(null)
+const user = ref(null)
+const pending = ref(true)
+const error = ref('')
+const leaving = ref(false)
+const unread = ref(0)
+const chatUnread = ref(0)
+const realNameStatus = ref('')
+const panel = ref('')
+const panelTab = ref('')
+const panelOrderSearch = ref('')
+const panelKeyword = ref('')
+const panelVisible = ref(false)
+const workspace = ref(null)
+const rightsPanelRef = ref(null)
+const displayName = computed(() => user.value?.nickname || user.value?.userName || '用户')
+const canCreate = computed(() => user.value?.authorCapability === true)
+const basePath = '/works'
+// 任务广场已提升为与工作台平级的顶级页签（/demand），不再走合作抽屉的 demand tab。
+const onWorks = computed(() => route.path === '/works' || route.path.startsWith('/works/'))
+const onDemand = computed(() => route.path === '/demand' || route.path.startsWith('/demand/'))
+const onHome = computed(() => route.path === '/')
+function openPanel(name, tab, keyword = '') { panelVisible.value = false; panel.value = name; panelTab.value = tab; panelOrderSearch.value = (tab === 'order') ? keyword : ''; panelKeyword.value = (tab === 'inquiry') ? keyword : ''; panelVisible.value = true }
+watch(panelVisible, visible => { if (!visible && panel.value === 'cooperation') workspace.value?.loadTodo?.() })
+async function openDeliveryByOrder(orderId) {
+  if (!orderId) return
+  openPanel('rights', 'delivery')
+  await nextTick()
+  await nextTick()
+  rightsPanelRef.value?.openDeliveryByOrder?.(orderId)
+}
+function goWorks() { panelVisible.value = false; return router.push(basePath) }
+function goHome() { panelVisible.value = false; return router.push('/') }
+function goWork(id) { panelVisible.value = false; return router.push(`${basePath}/${id}`) }
+function goDemand() { panelVisible.value = false; return router.push('/demand') }
+function goDemandDetail(id) { panelVisible.value = false; return router.push(`/demand/${id}`) }
+async function handleError(failure) {
+  if (isAuthFailure(failure)) { await router.replace({ path: '/login', query: { redirect: route.fullPath, ...(failure.reason === 'creator-required' ? { reason: 'creator-required' } : {}) } }); return }
+  ElMessage.error(friendlyErrorMessage({ status: failure?.status, code: failure?.code, message: failure?.message }))
+}
+async function refreshUnread() {
+  try { unread.value = Number(await api.value.unreadCount()) || 0 }
+  catch (failure) { if (isAuthFailure(failure)) await handleError(failure) }
+  try { chatUnread.value = Number(await api.value.chatUnreadCount()) || 0 }
+  catch (failure) { if (isAuthFailure(failure)) await handleError(failure) }
+}
+async function load() {
+  pending.value = true; error.value = ''; user.value = null
+  try {
+    const info = await getInfo(); user.value = info.user; api.value = await import('../api/creator.js')
+    pending.value = false
+    await Promise.allSettled([refreshUnread(), refreshRealName()])
+  } catch (failure) { if (isAuthFailure(failure)) await handleError(failure); else error.value = failure.message || '暂时无法确认登录状态' }
+  finally { pending.value = false }
+}
+async function accountCommand(command) {
+  if (command !== 'logout') { openPanel('account', command); return }
+  if (leaving.value) return
+  leaving.value = true
+  try { await logout() }
+  catch { ElMessage.warning('服务端退出未成功，已清理本地登录状态') }
+  finally { user.value = null; panelVisible.value = false; await router.replace('/login'); leaving.value = false }
+}
+provide(portalKey, { api, user, canCreate, basePath, openPanel, openDeliveryByOrder, goWork, goWorks, goHome, goDemand, goDemandDetail, handleError, refreshUnread })
+async function refreshRealName() { try { realNameStatus.value = (await api.value.getRealName())?.status || '' } catch (failure) { if (isAuthFailure(failure)) await handleError(failure) } }
+onMounted(load)
+
+// 长连接在线时角标无需定时轮询：帧到达即补拉一次；断开则退回 60s 兜底轮询。
+let realtimeOff = []
+let unreadTimer = null
+function applyUnreadCadence() {
+  const wanted = isRealtimeConnected() ? 60000 : 5000
+  if (unreadTimer && unreadTimer.__interval === wanted) return
+  clearInterval(unreadTimer)
+  unreadTimer = setInterval(refreshUnread, wanted)
+  unreadTimer.__interval = wanted
+}
+onMounted(() => {
+  connectRealtime()
+  applyUnreadCadence()
+  realtimeOff = [
+    onRealtime('connected', applyUnreadCadence),
+    onRealtime('disconnected', applyUnreadCadence),
+    onRealtime('reconnect', refreshUnread),
+    onRealtime('notification', refreshUnread),
+    onRealtime('chat', refreshUnread)
+  ]
+})
+onBeforeUnmount(() => {
+  realtimeOff.forEach(off => off())
+  realtimeOff = []
+  clearInterval(unreadTimer)
+  disconnectRealtime()
+})
+</script>

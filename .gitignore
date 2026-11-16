@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.local
+*.log
+
+.idea/
+dump.rdb
+
+# 设计评审截图（本地）
+.impeccable/

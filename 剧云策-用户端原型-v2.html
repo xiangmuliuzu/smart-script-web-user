@@ -1,0 +1,1572 @@
+<!DOCTYPE html>
+<html lang="zh            -CN">
+            <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>剧云策 · 创作者中心 — 原型 v6</title>
+            <style>
+            :root{
+              --paper:#F6F4EF; --paper-2:#FFFFFF; --paper-3:#EDEAE2;
+              --ink:#1B1A18; --ink-2:#5C5850; --ink-3:#8C877C;
+              --rule:#DCD8CE; --rule-2:#C9C4B8;
+              --indigo:#2C4A52; --indigo-dim:#4A6C74; --indigo-wash:#E4ECEC;
+              --cinnabar:#B03A2E; --cinnabar-w:#F5E6E3;
+              --bamboo:#4A7C59; --bamboo-w:#E6EFE8;
+              --ochre:#A87729; --ochre-w:#F5EEDF;
+              --serif:"Source Han Serif SC","Noto Serif SC","Songti SC","STSong",SimSun,Georgia,serif;
+              --sans:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei","Noto Sans SC",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+              --measure:68ch; --radius:2px;
+            }
+            *,*::before,*::after{ box-sizing:border-box; }
+            html{ -webkit-text-size-adjust:100%; }
+            body{
+              margin:0; background:var(--paper); color:var(--ink);
+              font-family:var(--sans); font-size:15px; line-height:1.7; letter-spacing:.01em;
+              background-image:linear-gradient(to bottom,transparent 0,transparent 34px,var(--paper-3) 34px,var(--paper-3) 35px);
+              background-size:100% 35px; background-attachment:fixed;
+            }
+            h1,h2,h3{ font-family:var(--serif); font-weight:600; letter-spacing:.02em; margin:0; }
+            button{ font:inherit; color:inherit; cursor:pointer; }
+            :focus-visible{ outline:2px solid var(--indigo); outline-offset:2px; border-radius:1px; }
+
+            /* ---------- 顶栏 ---------- */
+            .topbar{
+              position:sticky; top:0; z-index:30; display:flex; align-items:center; gap:20px;
+              padding:0 26px; height:56px;
+              background:rgba(246,244,239,.93); backdrop-filter:blur(8px);
+              border-bottom:1px solid var(--rule);
+            }
+            .brand{ display:flex; align-items:baseline; gap:9px; font-family:var(--serif);
+              background:none; border:0; padding:0; flex:none; }
+            .brand b{ font-size:17px; font-weight:600; letter-spacing:.06em; }
+            .brand span{ font-family:var(--sans); font-size:11.5px; color:var(--ink-3); letter-spacing:.14em; }
+            .brand:hover b{ color:var(--indigo); }
+            .topbar-right{ margin-left:auto; display:flex; align-items:center; gap:8px; flex:none; }
+
+            /* 顶栏主导航（本次补回：类名在 HTML 里，CSS 漏了） */
+            .nav{ display:flex; gap:2px; }
+            .nav button{ background:none; border:0; padding:7px 13px; font:inherit; font-size:14px;
+              color:var(--ink-2); border-bottom:2px solid transparent; margin-bottom:-1px;
+              cursor:pointer; white-space:nowrap; transition:color .15s,border-color .15s; }
+            .nav button:hover{ color:var(--ink); }
+            .nav button[aria-current="page"]{ color:var(--ink); border-bottom-color:var(--indigo); font-weight:500; }
+            @media (max-width:820px){ .nav button{ padding:7px 9px; font-size:13px; } }
+
+            /* 发布页三项摘要（同样是 HTML 用了、CSS 漏了） */
+            dl.summary{ display:grid; grid-template-columns:repeat(3,1fr); margin:0; }
+            dl.summary > div{ padding:14px 18px; border-right:1px solid var(--rule); }
+            dl.summary > div:first-child{ padding-left:0; }
+            dl.summary > div:last-child{ border-right:0; }
+            dl.summary dt{ font-size:12px; color:var(--ink-3); }
+            dl.summary dd{ margin:5px 0 0; font-family:var(--serif); font-size:19px; }
+            dl.summary dd small{ font-size:12.5px; color:var(--ink-3); }
+            .chip{ display:inline-flex; align-items:center; gap:6px; padding:4px 11px; font-size:12.5px;
+              border:1px solid var(--cinnabar); color:var(--cinnabar); border-radius:var(--radius); background:none; }
+            .chip:hover{ background:var(--cinnabar-w); }
+            .icon-btn{ position:relative; width:34px; height:34px; display:grid; place-items:center;
+              background:none; border:1px solid transparent; border-radius:var(--radius); color:var(--ink-2); transition:background .15s,color .15s; }
+            .icon-btn:hover{ background:var(--paper-3); color:var(--ink); }
+            .icon-btn svg{ width:18px; height:18px; }
+            .badge{ position:absolute; top:2px; right:1px; min-width:16px; height:16px; padding:0 4px;
+              background:var(--cinnabar); color:#fff; font-size:10.5px; line-height:16px; text-align:center; border-radius:8px; }
+            .avatar-btn{ display:flex; align-items:center; gap:8px; background:none; border:0; padding:3px 6px 3px 3px; border-radius:var(--radius); }
+            .avatar-btn:hover{ background:var(--paper-3); }
+            .avatar{ width:28px; height:28px; border-radius:50%; background:var(--indigo); color:#fff;
+              display:grid; place-items:center; font-family:var(--serif); font-size:14px; }
+            .avatar-btn em{ font-style:normal; font-size:13.5px; color:var(--ink-2); }
+            /* 头像下拉：先出菜单，再由菜单进入对应页面 */
+            .avatar-wrap{ position:relative; }
+            .umenu{ position:absolute; top:calc(100% + 8px); right:0; z-index:40; min-width:172px; padding:5px;
+              background:var(--paper-2); border:1px solid var(--rule-2); border-radius:var(--radius);
+              box-shadow:0 8px 24px rgba(27,26,24,.12); display:none; }
+            .umenu[data-open="true"]{ display:block; }
+            .umenu .who{ padding:9px 11px 10px; border-bottom:1px solid var(--rule); margin-bottom:5px; }
+            .umenu .who b{ display:block; font-family:var(--serif); font-size:14.5px; font-weight:600; }
+            .umenu .who span{ display:block; margin-top:3px; font-size:12px; color:var(--ink-3); }
+            .umenu button{ display:block; width:100%; text-align:left; background:none; border:0;
+              padding:8px 11px; font-size:13.5px; color:var(--ink-2); border-radius:var(--radius); }
+            .umenu button:hover{ background:var(--indigo-wash); color:var(--ink); }
+            .umenu button.danger{ color:var(--cinnabar); }
+            .umenu .sep{ height:1px; background:var(--rule); margin:5px 0; }
+            /* 锚点跳转要避开吸顶导航 */
+            #v-account [id^="acc-"]{ scroll-margin-top:84px; }
+
+            /* ---------- 骨架 ---------- */
+            .screen{ display:none; }
+            .screen[data-active="true"]{ display:block; }
+            main{ max-width:none; margin:0; padding:38px 46px 130px; }
+            .page-head{ margin-bottom:30px; }
+            .page-head h1{ font-size:26px; line-height:1.35; }
+            .page-head p{ margin:8px 0 0; color:var(--ink-2); font-size:14.5px; max-width:var(--measure); }
+            .back{ display:inline-flex; align-items:center; gap:5px; background:none; border:0; padding:0;
+              font-size:13.5px; color:var(--ink-2); margin-bottom:16px; }
+            .back:hover{ color:var(--indigo); }
+
+            /* ---------- 区块 ---------- */
+            .sec{ margin-top:52px; }
+            .sec:first-of-type{ margin-top:0; }
+            .sec-head{ display:flex; align-items:baseline; gap:12px; padding-bottom:11px; border-bottom:1px solid var(--rule-2); }
+            .sec-head h2{ font-size:18px; }
+            .sec-head .count{ font-size:12.5px; color:var(--ink-3); }
+            .sec-head .more{ margin-left:auto; font-size:13px; color:var(--indigo); background:none; border:0; padding:0; }
+            .sec-head .more:hover{ text-decoration:underline; }
+            .sec-head-lg{ padding-bottom:14px; border-bottom:2px solid var(--ink); }
+            .sec-head-lg h2{ font-size:24px; }
+            .sub{ margin-top:30px; }
+            .sub-head{ display:flex; align-items:baseline; gap:10px; padding-bottom:8px; border-bottom:1px solid var(--rule); }
+            .sub-head h3{ font-size:15px; }
+            .sub-head .count{ font-size:12.5px; color:var(--ink-3); }
+
+            /* ---------- 统计条 = 首页子导航（可点击） ---------- */
+            .stats{ display:flex; flex-wrap:wrap; border:1px solid var(--rule); background:var(--paper-2); }
+            .stat{ flex:1 1 132px; display:flex; flex-direction:column; align-items:flex-start;
+              padding:15px 20px; background:none; border:0; border-right:1px solid var(--rule);
+              text-align:left; transition:background .15s; }
+            .stat:last-child{ border-right:0; }
+            .stat:hover{ background:var(--indigo-wash); }
+            .stats > .stat[aria-selected="true"]{ background:var(--indigo-wash); box-shadow:inset 0 -2px 0 var(--indigo); }
+            .stats > .stat[aria-selected="true"] .k{ color:var(--indigo); font-weight:500; }
+            .stat .k{ font-size:12.5px; color:var(--ink-3); }
+            .stat .n{ font-family:var(--serif); font-size:23px; line-height:1.2; }
+            .stat .n small{ font-family:var(--sans); font-size:12.5px; color:var(--ink-3); margin-left:4px; }
+            .stat .n.money{ color:var(--cinnabar); }
+            /* 作品详情顶部作品卡 */
+            .workhead{ display:flex; gap:20px; align-items:flex-start; margin-bottom:24px; }
+            .wh-cover{ width:88px; aspect-ratio:3/4; flex:none; display:grid; place-items:center;
+              background:linear-gradient(160deg,#E9E5DA 0%,#DAD5C7 100%); border:1px solid var(--rule-2); }
+            .wh-cover .glyph{ font-family:var(--serif); font-size:32px; color:rgba(27,26,24,.15); }            .wh-body{ min-width:0; flex:1; padding-top:2px; }
+            .wh-intro{ margin:11px 0 0; font-size:13px; line-height:1.75; color:var(--ink-2); max-width:60ch; }
+
+            /* ---------- 按钮 ---------- */
+            .btn{ display:inline-flex; align-items:center; gap:6px; padding:7px 15px; border-radius:var(--radius);
+              border:1px solid var(--indigo); background:var(--indigo); color:#fff; font-size:13.5px; line-height:1.4; transition:opacity .15s; }
+            .btn:hover{ opacity:.88; }
+            .btn.ghost{ background:none; color:var(--indigo); }
+            .btn.ghost:hover{ background:var(--indigo-wash); }
+            .btn.quiet{ background:none; border-color:var(--rule-2); color:var(--ink-2); }
+            .btn.quiet:hover{ border-color:var(--ink-3); color:var(--ink); }
+            .btn.sm{ padding:4px 11px; font-size:12.5px; }
+
+            /* ---------- 印章 / 标签 ---------- */
+            .stamp{ display:inline-grid; place-items:center; width:46px; height:46px; flex:none;
+              border:1.5px solid currentColor; border-radius:var(--radius);
+              font-family:var(--serif); font-size:12px; line-height:1.05; letter-spacing:.04em; text-align:center; padding:2px; }
+            .stamp.sm{ width:38px; height:38px; font-size:10.5px; }
+            .stamp[data-s="passed"]{ color:var(--cinnabar); }
+            .stamp[data-s="review"]{ color:var(--ochre); }
+            .stamp[data-s="revise"]{ color:var(--cinnabar); }
+            .stamp[data-s="draft"]{ color:var(--ink-3); }
+            .tag{ display:inline-block; padding:1px 7px; font-size:12px; border:1px solid currentColor; border-radius:var(--radius); white-space:nowrap; }
+            .tag.ok{ color:var(--bamboo); } .tag.wait{ color:var(--ochre); } .tag.bad{ color:var(--cinnabar); } .tag.off{ color:var(--ink-3); }
+
+            /* ---------- 名单行 ---------- */
+            .rows{ list-style:none; margin:0; padding:0; }
+            .rows li{ display:flex; align-items:center; gap:12px; padding:12px 16px; background:var(--paper-2);
+              border:1px solid var(--rule); border-top:0; font-size:13.5px; }
+            .rows li:first-child{ border-top:1px solid var(--rule); }
+            .rows .k{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+            .rows .v{ font-family:var(--serif); font-size:14px; font-variant-numeric:tabular-nums; flex:none; }
+            .rows .v.money{ color:var(--cinnabar); }
+            .rows .v.muted{ font-family:var(--sans); font-size:13px; color:var(--ink-3); }
+
+            /* ---------- 窄屏：宽表格横向滚动，别把页面撑破 ---------- */
+            .tbl{ max-width:100%; overflow-x:auto; }
+            @media (max-width:820px){ .tbl > table{ min-width:520px; } }
+
+            /* ---------- 两栏 ---------- */
+            .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+            .grid2 > .col{ min-width:0; }
+
+            /* ---------- Tab ---------- */
+            .tabs{ display:flex; gap:20px; border-bottom:1px solid var(--rule); margin-top:22px; overflow-x:auto; }
+            .tabs button{ background:none; border:0; padding:9px 0; font-size:14px; color:var(--ink-2);
+              border-bottom:2px solid transparent; margin-bottom:-1px; white-space:nowrap; }
+            .tabs button:hover{ color:var(--ink); }
+            .tabs button[aria-selected="true"]{ color:var(--ink); border-bottom-color:var(--indigo); font-weight:500; }
+            .tabpanel{ display:none; }
+            .tabpanel[data-active="true"]{ display:block; }
+
+            /* ---------- 表格 ---------- */
+            table{ width:100%; border-collapse:collapse; background:var(--paper-2); }
+            th,td{ text-align:left; padding:10px 14px; border:1px solid var(--rule); font-size:13px; vertical-align:middle; }
+            th{ background:var(--paper-3); font-weight:500; color:var(--ink-2); font-size:12.5px; }
+            td.num,th.num{ font-variant-numeric:tabular-nums; }
+            td.ops{ white-space:nowrap; }
+
+            /* ---------- 表单 ---------- */
+            .field{ margin-bottom:14px; }
+            .field label{ display:block; font-size:12.5px; color:var(--ink-2); margin-bottom:5px; }
+            .field input,.field select,.field textarea{
+              width:100%; padding:8px 11px; font:inherit; font-size:13.5px;
+              background:var(--paper-2); border:1px solid var(--rule-2); border-radius:var(--radius); color:var(--ink); }
+            .field textarea{ min-height:76px; resize:vertical; }
+            .field input:focus,.field select:focus,.field textarea:focus{ outline:none; border-color:var(--indigo); box-shadow:0 0 0 3px var(--indigo-wash); }
+            .form-2{ display:grid; grid-template-columns:1fr 1fr; gap:0 16px; }
+            .panel{ padding:20px; background:var(--paper-2); border:1px solid var(--rule); }
+            .drop{ padding:24px; text-align:center; background:var(--paper); border:1px dashed var(--rule-2);
+              border-radius:var(--radius); color:var(--ink-2); font-size:13px; }
+            .drop:hover{ border-color:var(--indigo); color:var(--indigo); }
+
+            /* ---------- 时间线 ---------- */
+            .timeline{ list-style:none; margin:0; padding:0 0 0 18px; border-left:1px solid var(--rule-2); }
+            .timeline li{ position:relative; padding:0 0 20px 18px; }
+            .timeline li::before{ content:""; position:absolute; left:-23px; top:7px; width:9px; height:9px; border-radius:50%;
+              background:var(--paper); border:1.5px solid var(--ink-3); }
+            .timeline li[data-tone="passed"]::before{ border-color:var(--bamboo); background:var(--bamboo); }
+            .timeline li[data-tone="revise"]::before{ border-color:var(--cinnabar); background:var(--cinnabar); }
+            .timeline time{ display:block; font-size:12px; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+            .timeline b{ font-family:var(--serif); font-size:14.5px; }
+            .timeline p{ margin:3px 0 0; font-size:13px; color:var(--ink-2); }
+
+            /* ---------- 提示条 ---------- */
+            .note{ display:flex; gap:10px; padding:11px 14px; font-size:13px;
+              background:var(--ochre-w); border-left:3px solid var(--ochre); color:#6B4E19; }
+            .note.bad{ background:var(--cinnabar-w); border-left-color:var(--cinnabar); color:#7A2A21; }
+            .note.info{ background:var(--indigo-wash); border-left-color:var(--indigo-dim); color:#24434A; }
+            .note.good{ background:var(--bamboo-w); border-left-color:var(--bamboo); color:#2C4A36; }
+
+            /* ---------- 证书 ---------- */
+            .certs{ display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:14px; }
+            .cert{ position:relative; padding:20px 18px 18px; background:var(--paper-2); border:1px solid var(--rule-2); }
+            .cert::after{ content:""; position:absolute; right:14px; bottom:14px; width:46px; height:46px;
+              border:1.5px solid var(--cinnabar); opacity:.5; }
+            .cert h3{ font-size:15px; margin-bottom:2px; }
+            .cert .no{ font-size:11.5px; color:var(--ink-3); font-variant-numeric:tabular-nums; letter-spacing:.04em; }
+            .cert dl{ display:flex; gap:18px; margin:13px 0 0; }
+            .cert dt{ font-size:11px; color:var(--ink-3); }
+            .cert dd{ margin:1px 0 0; font-size:13px; font-family:var(--serif); }
+            .cert .ops{ margin-top:14px; display:flex; gap:7px; }
+
+            /* ---------- AI ---------- */
+            .quota{ display:flex; align-items:center; gap:20px; flex-wrap:wrap;
+              padding:18px 20px; background:var(--indigo); color:#EAF0EF; border-radius:var(--radius); }
+            .quota .num{ font-family:var(--serif); font-size:32px; line-height:1; color:#fff; }
+            .quota .num small{ font-family:var(--sans); font-size:12.5px; color:rgba(234,240,239,.7); margin-left:6px; }
+            .quota .desc{ font-size:13px; color:rgba(234,240,239,.78); max-width:34ch; }
+            .quota .acts{ margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
+            .quota .btn{ background:rgba(255,255,255,.94); border-color:transparent; color:var(--indigo); }
+            .quota .btn.ghost{ background:none; border-color:rgba(234,240,239,.5); color:#EAF0EF; }
+            .quota .btn.ghost:hover{ background:rgba(255,255,255,.12); }
+            .compose{ display:grid; grid-template-columns:minmax(0,290px) minmax(0,1fr); gap:20px; padding-top:18px; align-items:start; }
+            .compose-form{ padding:18px; background:var(--paper-2); border:1px solid var(--rule); }
+            .compose-form h3{ font-size:14.5px; margin-bottom:14px; }
+            .compose-out{ min-height:300px; padding:20px; background:var(--paper-2); border:1px solid var(--rule); }
+            .compose-out h3{ font-size:14.5px; padding-bottom:9px; border-bottom:1px solid var(--rule); margin-bottom:13px; }
+            .compose-out .prose{ font-family:var(--serif); font-size:14px; line-height:1.9; color:#2A2825; }
+            .compose-out .prose h4{ font-size:14.5px; margin:16px 0 5px; }
+            .compose-out .prose h4:first-child{ margin-top:0; }
+            .compose-out .prose p{ margin:0 0 9px; }
+            .cost{ font-size:12.5px; color:var(--ink-3); }
+
+            /* ---------- 消息抽屉 ---------- */
+            .scrim{ position:fixed; inset:0; background:rgba(27,26,24,.28); opacity:0; pointer-events:none; transition:opacity .22s; z-index:50; }
+            .scrim[data-open="true"]{ opacity:1; pointer-events:auto; }
+            .drawer{ position:fixed; top:0; right:0; bottom:0; width:min(430px,94vw);
+              background:var(--paper); border-left:1px solid var(--rule-2);
+              box-shadow:-18px 0 48px rgba(27,26,24,.12); z-index:60;
+              display:flex; flex-direction:column; transform:translateX(100%); transition:transform .26s cubic-bezier(.32,.72,0,1); }
+            .drawer[data-open="true"]{ transform:translateX(0); }
+            .drawer > header{ display:flex; align-items:center; gap:8px; padding:0 18px; height:56px; border-bottom:1px solid var(--rule); }
+            .drawer > header h2{ font-size:16px; }
+            .drawer > header .close{ margin-left:auto; }
+            .drawer .dtabs{ display:flex; gap:20px; padding:0 18px; border-bottom:1px solid var(--rule); flex:none; }
+            .drawer .dtabs button{ background:none; border:0; padding:11px 0; font-size:14px; color:var(--ink-2);
+              border-bottom:2px solid transparent; margin-bottom:-1px; }
+            .drawer .dtabs button[aria-selected="true"]{ color:var(--ink); border-bottom-color:var(--indigo); font-weight:500; }
+            .drawer .dpanel{ display:none; flex:1; overflow-y:auto; }
+            .drawer .dpanel[data-active="true"]{ display:block; }
+            .msg{ display:block; width:100%; text-align:left; background:none; border:0; padding:14px 18px; border-bottom:1px solid var(--rule); }
+            .msg:hover{ background:var(--paper-2); }
+            .msg .top{ display:flex; align-items:baseline; gap:8px; }
+            .msg .top b{ font-family:var(--serif); font-size:14px; font-weight:600; }
+            .msg .top time{ margin-left:auto; font-size:11.5px; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+            .msg p{ margin:3px 0 0; font-size:12.5px; color:var(--ink-2); }
+            .msg[data-unread="true"] .top b::before{ content:""; display:inline-block; width:6px; height:6px; border-radius:50%;
+              background:var(--cinnabar); margin-right:7px; vertical-align:middle; }
+            .chat-head{ display:flex; align-items:center; gap:10px; padding:13px 18px; border-bottom:1px solid var(--rule); background:var(--paper-2); }
+            .chat-head .who{ font-family:var(--serif); font-size:14.5px; }
+            .chat-head .sub{ font-size:12px; color:var(--ink-3); }
+            .chat-body{ padding:16px; display:flex; flex-direction:column; gap:13px; }
+            .bubble{ max-width:82%; padding:10px 13px; font-size:13px; line-height:1.65; border-radius:var(--radius); }
+            .bubble.them{ background:var(--paper-2); border:1px solid var(--rule); align-self:flex-start; }
+            .bubble.me{ background:var(--indigo); color:#fff; align-self:flex-end; }
+            .bubble time{ display:block; font-size:11px; opacity:.6; margin-top:5px; }
+            .chat-input{ display:flex; gap:8px; padding:13px 18px; border-top:1px solid var(--rule); background:var(--paper-2); }
+            .chat-input input{ flex:1; padding:8px 11px; font:inherit; font-size:13px; background:var(--paper); border:1px solid var(--rule-2); border-radius:var(--radius); }
+
+            /* ---------- 登录 ---------- */
+            .login-wrap{ min-height:100vh; display:grid; grid-template-columns:1.05fr .95fr; }
+            .login-aside{ padding:56px 52px; display:flex; flex-direction:column; justify-content:space-between; background:var(--indigo); color:#EAF0EF; }
+            .login-aside .brand b{ color:#fff; } .login-aside .brand span{ color:rgba(234,240,239,.62); }
+            .login-aside blockquote{ margin:auto 0; padding:0; max-width:26ch; font-family:var(--serif); font-size:31px; line-height:1.5; font-weight:600; letter-spacing:.03em; }
+            .login-aside blockquote footer{ margin-top:18px; font-family:var(--sans); font-size:13px; font-weight:400; color:rgba(234,240,239,.66); letter-spacing:.06em; }
+            .login-aside .fine{ font-size:12.5px; color:rgba(234,240,239,.55); }
+            .login-main{ display:grid; place-items:center; padding:48px 32px; }
+            .login-form{ width:100%; max-width:344px; }
+            .login-form h1{ font-size:24px; margin-bottom:6px; }
+            .login-form > p{ margin:0 0 30px; font-size:13.5px; color:var(--ink-2); }
+            .login-form .btn{ width:100%; justify-content:center; padding:10px; margin-top:6px; }
+            .login-links{ display:flex; justify-content:space-between; margin-top:16px; font-size:13px; }
+            .login-links a{ color:var(--ink-2); text-decoration:none; } .login-links a:hover{ color:var(--indigo); text-decoration:underline; }
+
+            /* ---------- 工具 ---------- */
+            .muted{ color:var(--ink-3); }
+            .row{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+            @media (max-width:960px){ .compose{ grid-template-columns:1fr; } }
+            @media (max-width:820px){
+              main{ padding:30px 18px 90px; }
+              .topbar{ padding:0 14px; gap:10px; }
+              .brand span{ display:none; }
+              .avatar-btn em{ display:none; }
+              .stat{ flex-basis:50%; border-bottom:1px solid var(--rule); }
+              .login-wrap{ grid-template-columns:1fr; }
+              .login-aside{ padding:32px 26px; } .login-aside blockquote{ font-size:23px; margin:26px 0; }
+            }
+            @media (prefers-reduced-motion:reduce){ *{ transition-duration:.01ms !important; animation-duration:.01ms !important; } }
+            @media print{ .topbar,.drawer,.scrim,.chip{ display:none !important; } }
+
+            .home-main > [data-sub]{ display:none; }
+            .home-main > [data-sub][data-active="true"]{ display:block; }
+
+            /* ---------- 新版工作台：左侧作品，右侧消息 ---------- */
+            .workspace-layout{ display:grid; grid-template-columns:minmax(0,4fr) minmax(258px,1fr); gap:28px; align-items:start; }
+            .workspace-main{ min-width:0; }
+            .workspace-main .sec-head{ padding-bottom:14px; border-bottom:1px solid var(--rule); }
+            .worklist{ display:flex; flex-direction:column; gap:14px; margin-top:18px; }
+            .workitem{ display:grid; grid-template-columns:104px minmax(0,1fr); min-height:142px; background:var(--paper-2);
+              border:1px solid var(--rule); border-radius:var(--radius); overflow:hidden; cursor:pointer;
+              transition:border-color .15s, box-shadow .15s, transform .15s; }
+            .workitem:hover{ border-color:var(--indigo-dim); box-shadow:0 5px 18px rgba(27,26,24,.07); transform:translateY(-1px); }
+            .workitem:focus-visible{ outline:2px solid var(--indigo); outline-offset:2px; }
+            .workitem .work-cover{ position:relative; display:grid; place-items:center; min-height:142px; background:#E9E5DA; border-right:1px solid var(--rule); }
+            .workitem .work-cover .glyph{ font-family:var(--serif); font-size:36px; color:rgba(27,26,24,.18); }
+            .workitem .work-cover .stamp{ position:absolute; left:9px; top:9px; background:var(--paper-2); }
+            .workitem .work-copy{ min-width:0; padding:18px 20px; display:flex; flex-direction:column; }
+            .workitem .work-title{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+            .workitem .work-title h3{ margin:0; font-size:18px; }
+            .workitem .work-kind{ font-size:12px; color:var(--ink-3); }
+            .workitem .work-synopsis{ margin:10px 0 0; color:var(--ink-2); font-size:13.5px; line-height:1.75; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+            .workitem .work-foot{ margin-top:auto; padding-top:12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+            .workitem .work-meta{ margin-right:auto; font-size:12px; color:var(--ink-3); }
+            .workitem[data-reviewing="true"]{ background:#ECECEA; border-color:#D4D2CD; filter:grayscale(1); opacity:.62; }
+            .workitem[data-reviewing="true"]:hover{ transform:none; box-shadow:none; border-color:#BBB8B1; }
+            .workitem.new-work{ min-height:126px; border-style:dashed; border-color:var(--indigo-dim); background:var(--indigo-wash); }
+            .workitem.new-work .work-cover{ min-height:126px; background:transparent; border-right:1px dashed var(--indigo-dim); }
+            .workitem.new-work .plus{ width:52px; height:52px; display:grid; place-items:center; border:1px solid var(--indigo-dim); border-radius:50%; font-size:34px; font-weight:300; color:var(--indigo); line-height:1; }
+            .workitem.new-work .work-title h3,.workitem.new-work .work-synopsis{ color:var(--indigo); }
+            .desk-workspace{ position:sticky; top:84px; min-width:0; border-left:1px solid var(--rule); padding-left:22px; }
+            .desk-workspace .aside-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:2px 0 13px; border-bottom:1px solid var(--rule); }
+            .desk-workspace .aside-head h2{ font-size:16px; }
+            .desk-workspace .aside-head button{ color:var(--indigo); font-size:12px; background:none; border:0; padding:4px; }
+            @media (max-width:980px){ .workspace-layout{ grid-template-columns:1fr; } .desk-workspace{ position:static; border-left:0; border-top:1px solid var(--rule); padding:22px 0 0; } }
+            @media (max-width:620px){ .workitem{ grid-template-columns:82px minmax(0,1fr); } .workitem .work-copy{ padding:14px; } .workitem .work-cover{ min-height:150px; } .workitem .work-foot .btn{ width:100%; } }
+
+            @media (max-width:820px){ main{ padding:26px 18px 96px; } }
+
+            /* ===== 合同弹窗 ===== */
+
+            .modal{ position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:60;
+              width:min(860px,92vw); max-height:84vh; display:none; flex-direction:column;
+              background:var(--paper); border:1px solid var(--rule-2); box-shadow:0 26px 70px rgba(27,26,24,.26); }
+            .modal[data-open="true"]{ display:flex; }
+            .modal > header{ display:flex; align-items:center; gap:10px; padding:0 22px; height:58px;
+              border-bottom:1px solid var(--rule); flex:none; background:var(--paper-2); }
+            .modal > header h2{ font-size:16px; }
+            .modal > header .count{ font-size:12.5px; color:var(--ink-3); }
+            .modal > header .close{ margin-left:auto; }
+            .modal-body{ padding:22px; overflow:auto; }
+
+            /* ===== 消息页 ===== */
+            .home-main{ min-width:0; }
+
+            /* ===== 作品卡片墙：封面在左、简介在右 ===== */
+            .worklist{ display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:18px; align-items:stretch; }
+            .workitem{ grid-template-columns:108px minmax(0,1fr); grid-template-rows:auto; min-height:0; }
+            .workitem .work-cover{ min-height:146px; border-right:1px solid var(--rule); border-bottom:0; }
+            .workitem .work-copy{ padding:16px 18px; }
+            .workitem .work-title{ gap:8px; }
+            .workitem .work-title h3{ font-size:16.5px; }
+            .workitem .work-synopsis{ margin-top:8px; -webkit-line-clamp:3; line-clamp:3; }
+            .workitem .work-foot{ padding-top:11px; gap:8px; }
+            .workitem .work-foot .btn{ padding:5px 11px; font-size:12.5px; }
+            .workitem.new-work .work-cover{ min-height:146px; border-right:1px dashed var(--indigo-dim); border-bottom:0; }
+            .workitem.new-work .plus{ width:44px; height:44px; font-size:28px; }
+            @media (max-width:1100px){
+              .worklist{ grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; }
+              .workitem{ grid-template-columns:92px minmax(0,1fr); }
+              .workitem .work-cover{ min-height:124px; }
+            }
+            @media (max-width:620px){
+              .worklist{ grid-template-columns:1fr; }
+              .workitem{ grid-template-columns:88px minmax(0,1fr); }
+              .workitem .work-foot .btn{ width:auto; }
+            }
+
+            /* ===== 右栏：工作台（待办 + 最近动态） ===== */
+            .aside-note{ margin-left:auto; font-size:11.5px; color:var(--cinnabar); }
+            .aside-block{ margin-top:20px; }
+            .aside-block h3{ display:flex; align-items:baseline; gap:8px; margin:0 0 11px;
+              font-family:var(--sans); font-size:12.5px; font-weight:600; letter-spacing:.06em; color:var(--ink-3); }
+            .aside-block h3 .count{ margin-left:auto; font-weight:400; color:var(--cinnabar); }
+            .todo-item{ display:block; width:100%; text-align:left; background:var(--paper-2);
+              border:1px solid var(--rule); border-radius:var(--radius); padding:11px 13px; margin-bottom:9px;
+              cursor:pointer; transition:border-color .15s,background .15s; }
+            .todo-item:hover{ border-color:var(--indigo-dim); background:var(--indigo-wash); }
+            .todo-item:last-child{ margin-bottom:0; }
+            .todo-item b{ display:block; font-size:12.5px; line-height:1.55; font-weight:600; }
+            .todo-item[data-tone="bad"] b{ color:var(--cinnabar); }
+            .todo-item[data-tone="wait"] b{ color:var(--ochre); }
+            .todo-item span{ display:block; margin-top:5px; font-size:11.5px; color:var(--ink-3); line-height:1.55; }
+            .aside-log{ list-style:none; margin:0; padding:0; }
+            .aside-log li{ padding:10px 0; border-bottom:1px solid var(--rule); font-size:12.5px; color:var(--ink-2); line-height:1.6; }
+            .aside-log li:last-child{ border-bottom:0; }
+            .aside-log time{ display:block; margin-bottom:3px; font-size:11px; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+            .drawer.wide{ width:min(780px,96vw); }
+
+            /* ===== 顶栏图标：图标 + 下方文字 ===== */
+            .nav-icon{ display:flex; flex-direction:column; align-items:center; gap:2px;
+              background:none; border:0; padding:3px 8px; border-radius:var(--radius);
+              color:var(--ink-2); cursor:pointer; transition:background .15s,color .15s; }
+            .nav-icon:hover{ background:var(--paper-3); color:var(--ink); }
+            .nav-icon .ico{ position:relative; display:block; width:20px; height:20px; }
+            .nav-icon .ico svg{ width:20px; height:20px; display:block; }
+            .nav-icon .lbl{ font-size:10.5px; line-height:1.1; white-space:nowrap; letter-spacing:.02em; }
+            .nav-icon .badge{ top:-7px; right:-8px; }
+            @media (max-width:900px){ .nav-icon .lbl{ display:none; } }
+
+            /* ===== 作品详情：左 2/3 章节 / 右 1/3 发布 ===== */
+            .work-detail-grid{ display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1fr);
+              gap:28px; align-items:start; margin-top:22px; }
+            .work-detail-side{ min-width:0; border-left:1px solid var(--rule); padding-left:26px; }
+            .work-detail-side .grid2{ grid-template-columns:1fr; gap:22px; }
+            .work-detail-side .sub-head{ margin-top:0; }
+            .work-detail-main .tbl table, .work-detail-side .tbl table{ margin-top:0; }
+            @media (max-width:980px){
+              .work-detail-grid{ grid-template-columns:1fr; }
+              .work-detail-side{ border-left:0; padding-left:0; border-top:1px solid var(--rule); padding-top:24px; }
+            }
+
+/* ===== 左右分栏各自独立滚动 ===== */
+.workspace-main, .desk-workspace,
+.work-detail-main, .work-detail-side{
+  max-height:calc(100vh - 152px);
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
+  scrollbar-color:var(--rule-2) transparent;
+}
+.workspace-main, .work-detail-main{ padding-right:14px; }
+.desk-workspace, .work-detail-side{ padding-right:10px; }
+.desk-workspace{ position:static; }
+.workspace-main::-webkit-scrollbar, .desk-workspace::-webkit-scrollbar,
+.work-detail-main::-webkit-scrollbar, .work-detail-side::-webkit-scrollbar{ width:8px; }
+.workspace-main::-webkit-scrollbar-thumb, .desk-workspace::-webkit-scrollbar-thumb,
+.work-detail-main::-webkit-scrollbar-thumb, .work-detail-side::-webkit-scrollbar-thumb{
+  background:var(--rule-2); border-radius:4px; }
+.workspace-main::-webkit-scrollbar-thumb:hover, .desk-workspace::-webkit-scrollbar-thumb:hover,
+.work-detail-main::-webkit-scrollbar-thumb:hover, .work-detail-side::-webkit-scrollbar-thumb:hover{
+  background:var(--ink-3); }
+.workspace-main::-webkit-scrollbar-track, .desk-workspace::-webkit-scrollbar-track,
+.work-detail-main::-webkit-scrollbar-track, .work-detail-side::-webkit-scrollbar-track{ background:transparent; }
+
+/* ===== 作品头卡里的设置按钮：做醒目 ===== */
+.detail-top .settings-btn{ margin-left:auto; align-self:center; flex:none;
+  padding:10px 20px; font-size:14px; letter-spacing:.02em;
+  box-shadow:0 3px 12px rgba(44,74,82,.25); transition:box-shadow .15s,transform .15s; }
+.detail-top .settings-btn:hover{ box-shadow:0 5px 18px rgba(44,74,82,.34); transform:translateY(-1px); }
+@media (max-width:980px){
+  .workspace-main, .desk-workspace, .work-detail-main, .work-detail-side{ max-height:none; }
+}
+
+/* ===== 作品详情顶栏（返回 + 作品设置） ===== */
+.detail-top{ display:flex; align-items:center; gap:14px; margin-bottom:20px; }
+.detail-top .settings-btn{ margin-left:auto; flex:none; }
+.work-detail-main .workhead{ margin-bottom:20px; }
+
+/* ===== 左侧抽屉（个人资料 / 意见反馈） ===== */
+.drawer.from-left{ left:0; right:auto; width:min(560px,96vw);
+  border-left:0; border-right:1px solid var(--rule-2);
+  box-shadow:18px 0 48px rgba(27,26,24,.12); transform:translateX(-100%); }
+.drawer.from-left[data-open="true"]{ transform:translateX(0); }
+.drawer.from-left .dpanel .grid2{ grid-template-columns:1fr; gap:26px; }
+.drawer.from-left .dpanel .sub-head{ margin-top:0; }
+.drawer.from-left [id^="acc-"]{ scroll-margin-top:16px; }
+
+/* ===== 章节编辑器：居中大弹窗 ===== */
+.modal.big{ width:min(1040px,94vw); height:min(780px,88vh); max-height:88vh; }
+.modal.big .modal-body{ flex:1; overflow-y:auto; padding:24px 26px; }
+.modal.big .field label{ display:block; }
+#chapter-drawer #chapter-note{ margin:0 0 20px; }
+#chapter-drawer .row{ align-items:center; }
+#chapter-drawer .field label{ display:block; }
+
+/* ===== 从草稿上传 ===== */
+.drop{ cursor:pointer; }
+.drop.done{ border-style:solid; border-color:var(--bamboo); background:var(--bamboo-w); color:#2C4A36; }
+
+/* ===== 创作上传：新建作品两栏 ===== */
+.create-grid{ display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:0 32px; align-items:start; }
+.create-form{ min-width:0; }
+.create-upload{ min-width:0; border-left:1px solid var(--rule); padding-left:32px; }
+.cu-label{ display:block; font-size:12.5px; color:var(--ink-3); margin-bottom:9px; }
+.create-upload .drop{ display:flex; flex-direction:column; align-items:center; gap:6px;
+  padding:30px 18px; text-align:center; }
+.create-upload .drop b{ font-family:var(--serif); font-size:14.5px; font-weight:600; }
+.create-upload .drop span{ font-size:12.5px; }
+.create-upload .drop.done{ font-size:13px; line-height:1.7; }
+.cu-tip{ margin:10px 0 0; font-size:12px; color:var(--ink-3); line-height:1.65; }
+@media (max-width:980px){
+  .create-grid{ grid-template-columns:1fr; gap:26px 0; }
+  .create-upload{ border-left:0; padding-left:0; border-top:1px solid var(--rule); padding-top:22px; }
+}
+</style>
+            </head>
+            <body>
+
+            <!-- ==================== 登录 ==================== -->
+            <section class="screen" id="s-login" data-active="true">
+              <div class="login-wrap">
+                <div class="login-aside">
+                  <div class="brand"><b>剧云策</b><span>创作者中心</span></div>
+                  <blockquote>好故事值得一份<br>盖章的凭证。<footer>创作 · 审核 · 确权 · 收益</footer></blockquote>
+                  <p class="fine">本页为界面原型，数据均为演示内容。</p>
+                </div>
+                <div class="login-main">
+                  <form class="login-form" onsubmit="event.preventDefault();go('app')">
+                    <h1>登录创作者中心</h1>
+                    <p>用手机号或账号登录，管理你的作品、版权与收益。</p>
+                    <div class="field"><label for="acct">账号</label><input id="acct" value="jiangxu" autocomplete="username"></div>
+                    <div class="field"><label for="pwd">密码</label><input id="pwd" type="password" value="········" autocomplete="current-password"></div>
+                    <button class="btn" type="submit">登录</button>
+                    <div class="login-links"><a href="#" onclick="event.preventDefault()">短信登录</a><a href="#" onclick="event.preventDefault()">注册 / 忘记密码</a></div>
+                  </form>
+                </div>
+  </div>
+</section>
+
+<!-- ==================== 应用 ==================== -->
+<div class="screen" id="s-app">
+  <header class="topbar">
+    <button class="brand" onclick="show('home')"><b>剧云策</b><span>创作者中心</span></button>
+    <nav class="nav" aria-label="主导航">
+      <button data-nav="home" aria-current="page">工作台</button>
+    </nav>
+    <div class="topbar-right">
+      <button class="chip" onclick="accountGo('acc-verify')">⚠ 实名认证未完成</button>
+            <button class="nav-icon" onclick="toggleCollab(true)" aria-label="我的合作，1 条报价待确认">
+        <span class="ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+          <span class="badge">1</span>
+        </span>
+        <span class="lbl">我的合作</span>
+      </button>
+      <button class="nav-icon" onclick="toggleRights(true)" aria-label="版权与收益">
+        <span class="ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.4 8.2 8 9 4.6-.8 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg>
+
+        </span>
+        <span class="lbl">版权与收益</span>
+      </button>
+      <button class="nav-icon" onclick="toggleDrawer(true)" aria-label="消息，3 条未读">
+        <span class="ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+          <span class="badge">3</span>
+        </span>
+        <span class="lbl">消息</span>
+      </button>
+      <div class="avatar-wrap">
+      <button class="avatar-btn" onclick="toggleUmenu()" aria-haspopup="true" aria-expanded="false" aria-controls="umenu">
+      <span class="avatar" aria-hidden="true">江</span><em>江叙</em>
+      </button>
+      <div class="umenu" id="umenu" data-open="false" role="menu" aria-label="账号菜单">
+      <div class="who"><b>江叙</b><span>jiangxu · 未实名</span></div>
+      <button role="menuitem" onclick="accountGo()">个人资料</button>
+      <button role="menuitem" onclick="openAccount('feedback')">意见反馈</button>
+      <div class="sep"></div>
+      <button role="menuitem" class="danger" onclick="go('login')">退出登录</button>
+      </div>
+      </div>
+      </div>
+    </header>
+
+  <main>
+
+    <!-- ========== 工作台：我的作品（卡片墙）／作品详情／创作上传 ========== -->
+    <section class="screen" id="v-home" data-active="true">
+      <div class="home-main" data-mode="list">
+        <div data-sub="list" data-active="true">
+          <div class="workspace-layout">
+            <div class="workspace-main">
+              <div class="sec-head sec-head-lg">
+                <div><h2>我的作品</h2><span class="count">4 部 · 草稿 1 · 审核中 1 · 待修改 1 · 已发布 1</span></div>
+                <button class="more" onclick="alert('原型：作品筛选与搜索')">筛选 / 搜索</button>
+              </div>
+
+              <div class="worklist">
+                <!-- 最新作品的位置：空占位作品，中间一个加号，点它进创作页 -->
+                <article class="workitem new-work" onclick="homeMode('create')" tabindex="0" role="button" aria-label="创作与上传">
+                  <div class="work-cover"><span class="plus" aria-hidden="true">＋</span></div>
+                  <div class="work-copy">
+                    <div class="work-title"><h3>创作与上传</h3><span class="work-kind">新建作品</span></div>
+                    <p class="work-synopsis">从一个新故事开始，或上传你已经完成的剧本。创建后可以继续补充简介、章节和版权信息。</p>
+                    <div class="work-foot"><span class="work-meta">点击此处进入创作页面</span><span class="btn sm">开始创作</span></div>
+                  </div>
+                </article>
+
+                <article class="workitem" onclick="show('work')" tabindex="0" role="button">
+                  <div class="work-cover"><span class="glyph">归</span><span class="stamp" data-s="revise">待<br>修改</span></div>
+                  <div class="work-copy">
+                    <div class="work-title"><h3>归途列车</h3><span class="work-kind">短剧 · 都市悬疑</span></div>
+                    <p class="work-synopsis">一列永远到不了终点的夜班车，乘客都在等一个不会来的人。第 3 章需要调整未成年人情节后重新提交。</p>
+                    <div class="work-foot"><span class="work-meta">12 章 · 6.8 万字 · 更新于 10-11</span><button class="btn sm" onclick="event.stopPropagation();show('work')">修改并重新提交</button></div>
+                  </div>
+                </article>
+
+                <article class="workitem" data-reviewing="true" onclick="show('work')" tabindex="0" role="button">
+                  <div class="work-cover"><span class="glyph">长</span><span class="stamp" data-s="review">审核<br>中</span></div>
+                  <div class="work-copy">
+                    <div class="work-title"><h3>长夜将明</h3><span class="work-kind">短剧 · 悬疑推理</span></div>
+                    <p class="work-synopsis">推理作家被困在自己写的小说里，必须在天亮之前找出凶手。作品正在进行内容审核，暂时不可编辑。</p>
+                    <div class="work-foot"><span class="work-meta">16 章 · 9.2 万字 · 提交于 10-10 14:30</span><button class="btn quiet sm" onclick="event.stopPropagation();show('work')">查看进度</button></div>
+                  </div>
+                </article>
+
+                <article class="workitem" onclick="show('work')" tabindex="0" role="button">
+                  <div class="work-cover"><span class="glyph">三</span><span class="stamp" data-s="draft">草稿</span></div>
+                  <div class="work-copy">
+                    <div class="work-title"><h3>第三次告白</h3><span class="work-kind">短剧 · 都市情感</span></div>
+                    <p class="work-synopsis">电台主播林晚在深夜节目里接到一通不说话的来电，第二天她收到一封复述了她每一句话的信。</p>
+                    <div class="work-foot"><span class="work-meta">3 章 · 1.1 万字 · 创建于 10-09</span><button class="btn quiet sm" onclick="event.stopPropagation();show('work')">继续创作</button></div>
+                  </div>
+                </article>
+
+                <article class="workitem" onclick="show('work')" tabindex="0" role="button">
+                  <div class="work-cover"><span class="glyph">山</span><span class="stamp" data-s="passed">已<br>发布</span></div>
+                  <div class="work-copy">
+                    <div class="work-title"><h3>山河故人</h3><span class="work-kind">短剧 · 年代情感</span></div>
+                    <p class="work-synopsis">一对父女在三十年里错过又重逢，故乡的河一直在流。作品已发布，可在作品详情中查看审核记录与合作状态。</p>
+                    <div class="work-foot"><span class="work-meta">20 章 · 11.4 万字 · 发布于 10-06</span><button class="btn quiet sm" onclick="event.stopPropagation();show('work')">审核记录</button></div>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+                    <!-- 右 1/5：工作台（待办 + 最近动态） -->
+        <aside class="desk-workspace" aria-label="工作台">
+          <div class="aside-head"><h2>工作台</h2><span class="aside-note">3 项待办</span></div>
+
+          <div class="aside-block">
+            <h3>待办<span class="count">3</span></h3>
+            <button class="todo-item" data-tone="bad" onclick="show('work')">
+              <b>归途列车 · 第 3 集被驳回</b><span>改完第 12–18 场后可重新提交</span>
+            </button>
+            <button class="todo-item" data-tone="wait" onclick="show('work')">
+              <b>长夜将明 · 内容审核中</b><span>提交 10-10 14:30 · 预计 3 个工作日</span>
+            </button>
+            <button class="todo-item" data-tone="wait" onclick="openCollab('quote')">
+              <b>《山河故人》收到报价 ¥80,000</b><span>星辰影业 · 独家授权 3 年</span>
+            </button>
+          </div>
+
+          <div class="aside-block">
+            <h3>最近动态</h3>
+            <ul class="aside-log">
+              <li><time>10-11 16:40</time>归途列车 · 第 3 集审核驳回</li>
+              <li><time>10-10 14:30</time>长夜将明 · 提交内容审核</li>
+              <li><time>10-10 10:20</time>山河故人 · 收到报价 ¥80,000</li>
+              <li><time>10-09 09:20</time>山河故人 · 提交版权申请</li>
+            </ul>
+          </div>
+        </aside>
+          </div>
+        </div>
+
+        <!-- 作品详情（点作品卡进来） -->
+              <div data-sub="detail">
+        <div class="detail-top">
+          <button class="back" onclick="homeMode('list')">← 返回我的作品</button>
+          <button class="btn settings-btn" onclick="toggleWorkSettings(true)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 15a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 4.6a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21 11a2 2 0 1 1 0 4z"/></svg>
+                作品设置
+              </button>
+        </div>
+
+        <div class="work-detail-grid">
+          <div class="work-detail-main">
+            <div class="workhead">
+              <div class="wh-cover"><span class="glyph">归</span></div>
+              <div class="wh-body">
+                <div class="row" style="gap:12px">
+                  <h1 style="font-size:24px">归途列车</h1>
+                  <span class="stamp sm" data-s="revise">待<br>修改</span>
+                </div>
+                <p class="muted" style="margin:8px 0 0;font-size:13.5px">短剧 · 都市悬疑 ｜ 12 章 ｜ 6.8 万字 ｜ 最近更新 10-11</p>
+                <p class="wh-intro">一列永远到不了终点的夜班车，乘客都在等一个不会来的人。第 3 集第 12–18 场因涉未成年情节被驳回，改完即可重新提交。</p>
+              </div>
+            </div>
+            <div class="row" style="margin-bottom:14px">
+              <button class="btn" onclick="openChapter('new')">＋ 写新章节</button>
+              <span class="cost">作品 = 章节集合，先写章节再发布</span>
+            </div>
+            <div class="tbl">
+              <table>
+                  <thead><tr><th style="width:70px">序</th><th>章节标题</th><th style="width:90px" class="num">字数</th><th style="width:100px">状态</th><th style="width:130px"></th></tr></thead>
+                  <tbody>
+                    <tr><td class="num">01</td><td>雨夜的乘客</td><td class="num">5,120</td><td><span class="tag ok">已通过</span></td>
+                      <td class="ops"><button class="btn quiet sm" onclick="openChapter('edit')">编辑</button> <button class="btn quiet sm" onclick="alert('原型：删除（原型不做实际删除）')">删除</button></td></tr>
+                    <tr><td class="num">02</td><td>无人认领的行李</td><td class="num">5,880</td><td><span class="tag ok">已通过</span></td>
+                      <td class="ops"><button class="btn quiet sm" onclick="openChapter('edit')">编辑</button> <button class="btn quiet sm" onclick="alert('原型：删除（原型不做实际删除）')">删除</button></td></tr>
+                    <tr><td class="num">03</td><td>十二号车厢</td><td class="num">6,040</td><td><span class="tag bad">待修改</span></td>
+                      <td class="ops"><button class="btn sm" onclick="openChapter('revise')">修改</button> <button class="btn quiet sm" onclick="alert('原型：删除（原型不做实际删除）')">删除</button></td></tr>
+                    <tr><td class="num">04</td><td>逆行</td><td class="num">5,460</td><td><span class="tag off">草稿</span></td>
+                      <td class="ops"><button class="btn quiet sm" onclick="openChapter('edit')">编辑</button> <button class="btn quiet sm" onclick="alert('原型：删除（原型不做实际删除）')">删除</button></td></tr>
+                    <tr><td class="num">…</td><td colspan="4" class="muted">第 5–12 章（草稿）</td></tr>
+                  </tbody>
+
+              </table>
+            </div>
+          </div>
+          <aside class="work-detail-side">
+<div class="note bad">第 3 章于 10-11 被驳回：第 12–18 场涉及未成年人情节，需调整后再提交。</div>
+
+          <div class="grid2" style="margin-top:20px">
+            <div class="col">
+              <div class="sub-head"><h3 style="font-size:14px">当前状态</h3></div>
+              <div class="panel" style="border-top:0">
+                <dl class="summary" style="border:0">
+                  <div style="padding-left:0"><dt>作品状态</dt><dd style="font-size:20px;color:var(--ochre)">待修改</dd></div>
+                  <div><dt>已发布章节</dt><dd style="font-size:20px">2 <small>/ 12</small></dd></div>
+                  <div><dt>版本</dt><dd style="font-size:20px">v3</dd></div>
+                </dl>
+                <div class="row" style="margin-top:18px">
+                  <button class="btn" onclick="alert('原型：POST /users/me/works/{id}/submit 提交审核')">提交审核</button>
+                  <button class="btn quiet" onclick="alert('原型：查看版本历史')">查看版本历史</button>
+                </div>
+                <p class="cost" style="margin-top:12px">已发布的作品改动后会生成新版本，需要重新提交审核。</p>
+              </div>
+            </div>
+            <div class="col">
+              <div class="sub-head"><h3 style="font-size:14px">审核记录</h3></div>
+              <div class="panel" style="border-top:0">
+                <ul class="timeline">
+                  <li data-tone="revise"><time>2026-10-11 16:40</time><b>内容审核 · 驳回</b>
+                    <p>第 12–18 场涉及未成年人情节，需调整后再提交。—— 审核员 王</p></li>
+                  <li data-tone="passed"><time>2026-10-09 10:12</time><b>内容审核 · 第 1–2 章通过</b></li>
+                  <li data-tone="passed"><time>2026-10-07 15:20</time><b>版权审核 · 通过</b><p>权利归属核验无误，已生成电子证书。</p></li>
+                  <li><time>2026-10-08 14:30</time><b>提交审核</b><p>提交 12 章，共 6.8 万字。</p></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          </aside>
+        </div>
+      </div>
+
+        <!-- 创作上传（点占位卡的 + 进来） -->
+        <div data-sub="create">
+          <button class="back" onclick="homeMode('list')">← 返回我的作品</button>
+          <div class="page-head">
+            <h1>创作上传</h1>
+            <p>把写好的剧本传上来，或者让 AI 陪你一起写。</p>
+          </div>
+          <div class="sec" style="margin-top:0">
+            <div class="sub-head"><h3>新建作品</h3><span class="count">手动填写，或直接从草稿上传</span></div>
+            <div class="panel" style="border-top:0">
+              <div class="create-grid">
+                <!-- 左：手动填写 -->
+                <div class="create-form">
+                  <div class="form-2">
+                    <div class="field"><label>书名 <span style="color:var(--cinnabar)">*</span></label>
+                      <input id="work-name" value="第三次告白" maxlength="100" placeholder="请输入作品标题"></div>
+                    <div class="field"><label>分类 <span style="color:var(--cinnabar)">*</span></label>
+                      <select id="work-cat"><option>请选择分类</option><option>都市情感</option><option>悬疑推理</option><option>年代情感</option></select></div>
+                  </div>
+                  <div class="field"><label>简介</label>
+                    <textarea id="work-intro" placeholder="一句话介绍你的故事（可留空）"></textarea></div>
+                  <div class="row">
+                    <button class="btn" onclick="alert('原型：POST /content/works 创建作品，成功后进入作品详情')">开始创作</button>
+                    <span class="cost">书名最多 100 字</span>
+                  </div>
+                </div>
+
+                <!-- 右：从草稿上传（与手动填写并列的另一种入口） -->
+                <div class="create-upload">
+                  <span class="cu-label">或直接上传草稿</span>
+                  <div class="drop" id="work-drop" onclick="uploadDraft('work')">
+                    <b>点击选择剧本文件</b>
+                    <span>或把 .docx / .txt 拖到这里</span>
+                  </div>
+                  <p class="cu-tip">自动识别书名与章节，载入后可以继续编辑</p>
+                </div>
+              </div>
+              <div class="note info" style="margin-top:20px">
+                书名与分类为必填；创建后可在「作品详情」补充封面、定价等资料。
+              </div>
+            </div>
+          </div>
+
+          <div class="sec" id="sub-ai">
+            <div class="sub-head"><h3>AI 辅助创作</h3><span class="count">生成失败会自动返还次数</span></div>
+            <div style="padding-top:16px">
+              <div class="quota">
+                <div><div class="num">12<small>次可用</small></div></div>
+                <div class="desc">积分兑换或观看广告可以获得次数。次数用完后 AI 创作将暂停。</div>
+                <div class="acts">
+                  <button class="btn" onclick="alert('原型：500 积分兑换 1 次')">用积分兑换</button>
+                  <button class="btn ghost" onclick="alert('原型：观看一条广告获得 1 次')">看广告 +1 次</button>
+                </div>
+              </div>
+
+              <div class="tabs" role="tablist">
+                <button role="tab" aria-selected="true"  data-tab="outline">AI 大纲</button>
+                <button role="tab" aria-selected="false" data-tab="draft">AI 写正文</button>
+                <button role="tab" aria-selected="false" data-tab="polish">AI 润色</button>
+                <button role="tab" aria-selected="false" data-tab="log">生成记录</button>
+              </div>
+
+              <div class="tabpanel" data-active="true" data-panel="outline">
+                <div class="compose">
+                  <form class="compose-form" onsubmit="event.preventDefault();alert('原型：生成大纲，消耗 1 次')">
+                    <h3>生成大纲</h3>
+                    <div class="field"><label>作品</label><select><option>第三次告白（草稿）</option><option>归途列车（待修改）</option></select></div>
+                    <div class="field"><label>题材</label><input value="都市情感"></div>
+                    <div class="field"><label>集数</label><input value="12"></div>
+                    <div class="field"><label>你的要求</label><textarea>双线叙事，女主是电台主播，男主是听众。希望前三集埋一个反转。</textarea></div>
+                    <button class="btn" type="submit">生成大纲</button>
+                    <p class="cost" style="margin:9px 0 0">消耗 1 次 · 剩余 12 次</p>
+                  </form>
+                  <div class="compose-out">
+                    <h3>生成结果</h3>
+                    <div class="prose">
+                      <h4>第一集 · 深夜频率</h4><p>电台主播林晚在凌晨节目里接到一个不说话的电话，只有雨声。她照例说了一句"晚安，陌生人"。</p>
+                      <h4>第二集 · 匿名来信</h4><p>她收到一封没有署名的信，信里复述了她昨晚节目里说过的每一句话。</p>
+                      <h4>第三集 · 反转</h4><p>信的落款是她自己的名字，日期是三年前——她失忆的那一年。</p>
+                    </div>
+                    <div class="row" style="margin-top:14px">
+                      <button class="btn sm" onclick="alert('原型：采用 AI 结果')">采用</button><button class="btn quiet sm" onclick="alert('原型：重新生成')">重新生成</button><button class="btn quiet sm" onclick="alert('原型：丢弃结果')">丢弃</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="tabpanel" data-panel="draft">
+                <div class="compose">
+                  <form class="compose-form" onsubmit="event.preventDefault();alert('原型：生成正文，消耗 1 次')">
+                    <h3>生成正文</h3>
+                    <div class="field"><label>作品</label><select><option>第三次告白（草稿）</option></select></div>
+                    <div class="field"><label>章节</label><select><option>第 1 集 · 深夜频率（草稿）</option></select></div>
+                    <div class="field"><label>场景要求</label><textarea>电台直播间，深夜。林晚独自值班，窗外下大雨。</textarea></div>
+                    <button class="btn" type="submit">生成正文</button>
+                    <p class="cost" style="margin:9px 0 0">消耗 1 次 · 剩余 12 次</p>
+                  </form>
+                  <div class="compose-out">
+                    <h3>生成结果</h3>
+                    <div class="prose">
+                      <p>直播间的灯只开了头顶那一盏，其余的地方都沉在暗里。林晚把耳机推上去，听见雨点砸在玻璃上，密得像有人在敲。</p>
+                      <p>"这里是深夜频率。"她对着麦克风说，"凌晨一点十七分，你那边下雨了吗。"</p>
+                      <p>电话接进来了。对方没有说话。她也习惯了——有些听众打进来，只是想听一个人在旁边。</p>
+                    </div>
+                    <div class="row" style="margin-top:14px"><button class="btn sm" onclick="alert('原型：写入章节')">写入章节</button><button class="btn quiet sm" onclick="alert('原型：重新生成')">重新生成</button></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="tabpanel" data-panel="polish">
+                <div class="compose">
+                  <form class="compose-form" onsubmit="event.preventDefault();alert('原型：润色，消耗 1 次')">
+                    <h3>润色片段</h3>
+                    <div class="field"><label>作品</label><select><option>归途列车（待修改）</option></select></div>
+                    <div class="field"><label>要润色的原文</label><textarea>他走进车厢，雨还在下，他坐了下来，看着窗外。</textarea></div>
+                    <div class="field"><label>润色方向</label><select><option>增强画面感</option><option>精简啰嗦</option><option>加强情绪</option></select></div>
+                    <button class="btn" type="submit">开始润色</button>
+                    <p class="cost" style="margin:9px 0 0">消耗 1 次 · 剩余 12 次</p>
+                  </form>
+                  <div class="compose-out">
+                    <h3>润色结果</h3>
+                    <div class="prose">
+                      <p>他踏上车厢，肩头还是湿的。雨一路追着他进来，在门窗上留下细密的痕。他挑了个靠窗的位置坐下，玻璃里映出的那张脸，比窗外的夜还沉。</p>
+                    </div>
+                    <div class="row" style="margin-top:14px"><button class="btn sm" onclick="alert('原型：替换原文')">替换原文</button><button class="btn quiet sm" onclick="alert('原型：保留原文')">保留原文</button></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="tabpanel" data-panel="log" style="padding-top:18px">
+                <div class="tbl">
+                  <table>
+                      <thead><tr><th style="width:120px">时间</th><th style="width:100px">类型</th><th>作品 / 章节</th><th style="width:80px" class="num">消耗</th></tr></thead>
+                      <tbody>
+                        <tr><td class="num">10-12 14:22</td><td>AI 大纲</td><td>第三次告白</td><td class="num">1 次</td></tr>
+                        <tr><td class="num">10-12 11:08</td><td>AI 写正文</td><td>第三次告白 · 第 1 集</td><td class="num">1 次</td></tr>
+                        <tr><td class="num">10-11 20:41</td><td>AI 润色</td><td>归途列车 · 第 3 集</td><td class="num">1 次</td></tr>
+                        <tr><td class="num">10-10 09:15</td><td>积分兑换</td><td>—</td><td class="num">+10 次</td></tr>
+                      </tbody>
+
+                  </table>
+                </div>
+                <div class="row" style="margin-top:16px">
+                  <span class="cost" style="margin-right:auto">积分余额 1,240 · 福利任务 2 项可领 · 今日广告剩余 3 次</span>
+                  <button class="btn ghost sm" onclick="alert('原型：查看积分明细')">积分明细</button>
+                  <button class="btn ghost sm" onclick="alert('原型：查看福利任务')">福利任务</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 消息 ========== -->
+<!-- ========== 我的合作 ========== -->
+<!-- ========== 版权与收益 ========== -->
+<!-- ========== 个人资料（含实名认证、账号安全） ========== -->
+    </main>
+</div>
+
+<div class="scrim" id="scrim" onclick="closeLayers()"></div>
+
+
+
+<!-- ==================== 我的合同（弹窗） ==================== -->
+<div class="modal" id="contract-modal" data-open="false" role="dialog" aria-modal="true" aria-hidden="true" aria-label="我的合同">
+  <header>
+    <h2>我的合同</h2><span class="count">2 份 · 1 份待签署</span>
+    <button class="icon-btn close" onclick="toggleModal(false)" aria-label="关闭">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </header>
+  <div class="modal-body">
+          <div class="tbl">
+            <table>
+                <thead><tr><th>合同</th><th>对方</th><th style="width:150px">类型</th><th style="width:110px">状态</th><th style="width:140px"></th></tr></thead>
+                <tbody>
+                  <tr><td>归途列车授权合同</td><td>星辰影业</td><td>独家授权 2 年</td><td><span class="tag wait">待签署</span></td>
+                    <td class="ops"><button class="btn sm" onclick="alert('原型：在线签署合同')">查看并签署</button></td></tr>
+                  <tr><td>山河故人授权合同</td><td>星野文化</td><td>非独家授权 1 年</td><td><span class="tag ok">已签署</span></td>
+                    <td class="ops"><button class="btn quiet sm" onclick="alert('原型：下载合同')">下载</button></td></tr>
+                </tbody>
+
+            </table>
+          </div>
+          <p class="cost" style="margin-top:12px">电子签署由平台对接第三方合同服务，签署后可在本页下载。</p>
+
+  </div>
+</div>
+
+
+<!-- ==================== 消息抽屉（点顶栏图标弹出） ==================== -->
+<aside class="drawer" id="drawer" data-open="false" aria-label="消息" aria-hidden="true">
+  <header>
+    <h2>消息</h2>
+    <button class="btn quiet sm" onclick="alert('原型：全部标为已读')">全部已读</button>
+    <button class="icon-btn close" onclick="toggleDrawer(false)" aria-label="关闭">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </header>
+  <div class="dtabs" role="tablist">
+    <button role="tab" aria-selected="true"  data-dtab="notice">通知 <span class="badge" style="position:static;display:inline-block;margin-left:5px">3</span></button>
+    <button role="tab" aria-selected="false" data-dtab="talk">与平台沟通</button>
+  </div>
+  <div class="dpanel" data-active="true" data-dpanel="notice">
+            <button class="msg" data-unread="true" onclick="show('work')"><span class="top"><b>审核驳回</b><time>10-11 16:40</time></span>
+            <p>《归途列车》第 3 集被驳回，请修改后重新提交。</p></button>
+            <button class="msg" data-unread="true" onclick="openCollab('quote')"><span class="top"><b>收到报价</b><time>10-10 10:20</time></span>
+            <p>星辰影业就《山河故人》报价 ¥80,000，等待你确认。</p></button>
+            <button class="msg" data-unread="true" onclick="openRights('apply')"><span class="top"><b>版权进度</b><time>10-10 11:05</time></span>
+            <p>《长夜将明》版权申请材料待补，请补充作者身份证明。</p></button>
+            <button class="msg" onclick="openRights('settle')"><span class="top"><b>结算到账</b><time>10-01 09:00</time></span>
+            <p>《山河故人》结算 ¥64,000 已到账，可发起提现。</p></button>
+            <button class="msg" onclick="openAccount('profile')"><span class="top"><b>平台公告</b><time>10-01 10:00</time></span>
+            <p>十月份版权登记受理时间调整通知。</p></button>
+  </div>
+  <div class="dpanel" data-dpanel="talk">
+            <div class="chat-head">
+            <span class="avatar" aria-hidden="true">平</span>
+            <div><div class="who">平台运营</div><div class="sub">通常 1 小时内回复</div></div>
+            </div>
+            <div class="chat-body">
+            <div class="bubble them">你好，看到你在《归途列车》第 3 集被驳回后提交了申诉，我们来跟进一下。<time>10-12 10:05</time></div>
+            <div class="bubble me">我改了两场，但不确定未成年人的处理方式是否符合要求。<time>10-12 10:11</time></div>
+            <div class="bubble them">可以参照审核意见里给的两条修改建议，改动后重新提交就行。如果还不确定，把改动的段落发我，我帮你先看一遍。<time>10-12 10:14</time></div>
+            <div class="bubble me">好的，我下午改完发你。<time>10-12 10:15</time></div>
+            </div>
+            <div class="chat-input">
+            <input placeholder="输入消息…" aria-label="输入消息">
+            <button class="btn" onclick="alert('原型：发送消息')">发送</button>
+            </div>
+  </div>
+</aside>
+
+
+<!-- ==================== 我的合作（点顶栏图标弹出） ==================== -->
+<aside class="drawer wide" id="collab-drawer" data-open="false" aria-label="我的合作" aria-hidden="true">
+  <header>
+    <h2>我的合作</h2>
+    <button class="btn quiet sm" onclick="toggleModal(true)">我的合同 · 2 份</button>
+    <button class="icon-btn close" onclick="toggleCollab(false)" aria-label="关闭">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </header>
+  <div class="dtabs" role="tablist">
+    <button role="tab" aria-selected="true"  data-dtab="inquiry">询盘</button>
+    <button role="tab" aria-selected="false" data-dtab="quote">报价</button>
+    <button role="tab" aria-selected="false" data-dtab="order">订单</button>
+  </div>
+  <div class="dpanel" data-active="true" data-dpanel="inquiry" style="padding:0 20px 24px">
+          <div class="note info">企业浏览到你的作品后可以发起询盘。你回复后，平台会协助双方推进。</div>
+          <div class="tbl">
+            <table style="margin-top:18px">
+                <thead><tr><th>询盘企业</th><th>意向作品</th><th style="width:120px">时间</th><th style="width:110px">状态</th><th style="width:110px"></th></tr></thead>
+                <tbody>
+                  <tr><td>星辰影业</td><td>山河故人</td><td class="num">10-09 15:02</td><td><span class="tag wait">待回复</span></td>
+                    <td class="ops"><button class="btn sm" onclick="alert('原型：回复询盘')">回复</button></td></tr>
+                  <tr><td>星野文化</td><td>长夜将明</td><td class="num">10-07 10:31</td><td><span class="tag ok">已回复</span></td>
+                    <td class="ops"><button class="btn quiet sm" onclick="alert('原型：查看详情')">查看</button></td></tr>
+                </tbody>
+
+            </table>
+          </div>
+  </div>
+  <div class="dpanel" data-dpanel="quote" style="padding:0 20px 24px">
+          <div class="note">报价确认后进入订单流程。合同签订前，双方都可撤回。</div>
+          <div class="tbl">
+            <table style="margin-top:18px">
+                <thead><tr><th>作品</th><th>报价方</th><th style="width:130px">授权方式</th><th style="width:110px" class="num">金额</th><th style="width:110px">状态</th><th style="width:150px"></th></tr></thead>
+                <tbody>
+                  <tr><td>山河故人</td><td>星辰影业</td><td>独家授权 3 年</td><td class="num">¥80,000</td><td><span class="tag wait">待确认</span></td>
+                    <td class="ops"><button class="btn sm" onclick="alert('原型：接受该报价')">接受</button> <button class="btn quiet sm" onclick="alert('原型：发起还价')">还价</button></td></tr>
+                  <tr><td>长夜将明</td><td>星野文化</td><td>非独家授权 1 年</td><td class="num">¥25,000</td><td><span class="tag bad">已拒绝</span></td>
+                    <td class="ops"><button class="btn quiet sm" onclick="alert('原型：查看详情')">查看</button></td></tr>
+                  <tr><td>归途列车</td><td>星辰影业</td><td>独家授权 2 年</td><td class="num">¥60,000</td><td><span class="tag ok">已接受</span></td>
+                    <td class="ops"><button class="btn quiet sm" onclick="alert('原型：查看详情')">查看</button></td></tr>
+                </tbody>
+
+            </table>
+          </div>
+          <p class="cost" style="margin-top:12px">议价记录：星辰影业 10-10 首次报价 ¥70,000 → 你 10-10 还价 ¥85,000 → 星辰影业 10-11 报价 ¥80,000。</p>
+  </div>
+  <div class="dpanel" data-dpanel="order" style="padding:0 20px 24px">
+          <div class="tbl">
+            <table>
+                <thead><tr><th style="width:160px">订单号</th><th>作品</th><th>买方</th><th style="width:110px" class="num">成交金额</th><th style="width:110px">状态</th><th style="width:90px"></th></tr></thead>
+                <tbody>
+                  <tr><td class="num">SO20261012001</td><td>归途列车</td><td>星辰影业</td><td class="num">¥60,000</td><td><span class="tag wait">履行中</span></td>
+                    <td class="ops"><button class="btn quiet sm" onclick="alert('原型：查看订单详情')">详情</button></td></tr>
+                  <tr><td class="num">SO20261001003</td><td>山河故人</td><td>星野文化</td><td class="num">¥64,000</td><td><span class="tag ok">已完成</span></td>
+                    <td class="ops"><button class="btn quiet sm" onclick="alert('原型：查看订单详情')">详情</button></td></tr>
+                </tbody>
+
+            </table>
+          </div>
+          <p class="cost" style="margin-top:12px">订单金额为平台分成后的创作者所得，明细见「版权与收益 → 结算」。线下谈判记录由平台和企业端维护，可在订单详情中查看。</p>
+  </div>
+</aside>
+
+
+<!-- ==================== 版权与收益（点顶栏图标弹出） ==================== -->
+<aside class="drawer wide" id="rights-drawer" data-open="false" aria-label="版权与收益" aria-hidden="true">
+  <header>
+    <h2>版权与收益</h2>
+    <button class="icon-btn close" onclick="toggleRights(false)" aria-label="关闭">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </header>
+  <div class="dtabs" role="tablist">
+    <button role="tab" aria-selected="true"  data-dtab="apply">版权申请</button>
+    <button role="tab" aria-selected="false" data-dtab="assets">版权资产</button>
+    <button role="tab" aria-selected="false" data-dtab="certs">电子证书</button>
+    <button role="tab" aria-selected="false" data-dtab="seal">印章</button>
+    <button role="tab" aria-selected="false" data-dtab="settle">结算</button>
+    <button role="tab" aria-selected="false" data-dtab="withdraw">提现</button>
+  </div>
+  <div class="dpanel" data-active="true" data-dpanel="apply" style="padding:0 20px 24px">
+          <div class="note info">版权登记由平台统一向省版权中心提交，你只需提交申请与材料，进度会同步到这里。登记完成后作品会出现在「版权资产」与「电子证书」。</div>
+          <div class="tbl">
+            <table style="margin-top:18px">
+                <thead><tr><th>作品</th><th style="width:130px">提交时间</th><th style="width:130px">当前进度</th><th style="width:100px"></th></tr></thead>
+                <tbody>
+                  <tr><td>山河故人</td><td class="num">10-09 09:20</td><td><span class="tag off">材料待补 · 身份证明</span></td><td class="ops"><button class="btn sm" onclick="alert('原型：补充版权申请材料')">补材料</button></td></tr>
+                </tbody>
+
+            </table>
+          </div>
+          <div class="row" style="margin-top:16px">
+            <button class="btn" onclick="alert('原型：发起版权申请（需先实名）')">发起新的版权申请</button><span class="cost">需先完成实名认证</span>
+          </div>
+  </div>
+  <div class="dpanel" data-dpanel="assets" style="padding:0 20px 24px">
+          <div class="tbl">
+            <table>
+                <thead><tr><th>作品</th><th style="width:190px">登记号</th><th style="width:120px">登记日期</th><th style="width:110px"></th></tr></thead>
+                <tbody>
+                  <tr><td>长夜将明</td><td class="num">苏作登字-2026-F-018842</td><td class="num">2026-10-06</td><td class="ops"><button class="btn quiet sm" onclick="alert('原型：查看授权历史')">授权历史</button></td></tr>
+                  <tr><td>归途列车</td><td class="num">苏作登字-2026-F-017209</td><td class="num">2026-09-22</td><td class="ops"><button class="btn quiet sm" onclick="alert('原型：查看授权历史')">授权历史</button></td></tr>
+                </tbody>
+
+            </table>
+          </div>
+  </div>
+  <div class="dpanel" data-dpanel="certs" style="padding:0 20px 24px">
+          <div class="certs">
+            <article class="cert"><h3>长夜将明</h3><p class="no">苏作登字-2026-F-018842</p>
+              <dl><div><dt>著作权人</dt><dd>江叙</dd></div><div><dt>登记日期</dt><dd>2026-10-06</dd></div></dl>
+              <div class="ops"><button class="btn sm" onclick="alert('原型：下载电子证书')">下载证书</button><button class="btn quiet sm" onclick="alert('原型：在线验真证书')">在线验真</button></div></article>
+            <article class="cert"><h3>归途列车</h3><p class="no">苏作登字-2026-F-017209</p>
+              <dl><div><dt>著作权人</dt><dd>江叙</dd></div><div><dt>登记日期</dt><dd>2026-09-22</dd></div></dl>
+              <div class="ops"><button class="btn sm" onclick="alert('原型：下载电子证书')">下载证书</button><button class="btn quiet sm" onclick="alert('原型：在线验真证书')">在线验真</button></div></article>
+          </div>
+  </div>
+  <div class="dpanel" data-dpanel="seal" style="padding:0 20px 24px">
+          <div class="note">印章用于版权材料与授权合同的签署。提交后由平台审核，通过后可用于后续合同流程。</div>
+          <ul class="rows" style="margin-top:18px">
+            <li><span class="k">江叙 · 个人名章 · 10-07 提交</span><span class="v muted">已通过</span><button class="btn quiet sm" onclick="alert('原型：查看详情')">查看</button></li>
+            <li><span class="k">江叙工作室章 · 10-11 提交</span><span class="v muted">审核中</span><button class="btn quiet sm" onclick="alert('原型：查看详情')">查看</button></li>
+          </ul>
+          <div class="row" style="margin-top:14px">
+            <button class="btn ghost" onclick="alert('原型：申请新印章')">申请新印章</button>
+            <button class="btn quiet" onclick="alert('原型：停用印章')">停用印章</button>
+          </div>
+  </div>
+  <div class="dpanel" data-dpanel="settle" style="padding:0 20px 24px">
+          <div class="note good">作品成交后由平台结算。创作者所得为订单金额扣除平台服务费后的部分。</div>
+          <div class="tbl">
+            <table style="margin-top:18px">
+                <thead><tr><th style="width:140px">结算单号</th><th>关联作品 / 订单</th><th style="width:110px" class="num">订单金额</th><th style="width:120px" class="num">平台服务费</th><th style="width:100px" class="num">实收</th><th style="width:100px">状态</th></tr></thead>
+                <tbody>
+                  <tr><td class="num">JS20261001001</td><td>山河故人 · SO20261001003</td><td class="num">¥80,000</td><td class="num">−¥16,000</td><td class="num">¥64,000</td><td><span class="tag ok">已到账</span></td></tr>
+                  <tr><td class="num">JS20261012002</td><td>归途列车 · SO20261012001</td><td class="num">¥60,000</td><td class="num">−¥12,000</td><td class="num">¥48,000</td><td><span class="tag wait">待结算</span></td></tr>
+                </tbody>
+
+            </table>
+          </div>
+          <div class="stats" style="margin-top:18px">
+            <div class="stat" style="cursor:default"><span class="k">累计实收</span><span class="n money">¥64,000</span></div>
+            <div class="stat" style="cursor:default"><span class="k">待结算</span><span class="n">¥48,000</span></div>
+            <div class="stat" style="cursor:default"><span class="k">已提现</span><span class="n">¥0</span></div>
+          </div>
+  </div>
+  <div class="dpanel" data-dpanel="withdraw" style="padding:0 20px 24px">
+          <div class="note info">提现申请由平台审核，审核通过后 1–3 个工作日到账。</div>
+          <div class="stats" style="margin-top:18px">
+            <div class="stat" style="cursor:default"><span class="k">可提现余额</span><span class="n money">¥64,000</span></div>
+            <div class="stat" style="cursor:default"><span class="k">提现中</span><span class="n">¥0</span></div>
+          </div>
+          <div class="row" style="margin-top:18px">
+            <button class="btn" onclick="alert('原型：发起提现（需先实名与印章审核）')">申请提现</button><span class="cost">需先完成实名认证与印章审核</span>
+          </div>
+          <div class="sub-head" style="margin-top:26px"><h3 style="font-size:14px">提现记录</h3></div>
+          <ul class="rows" style="margin-top:0">
+            <li><span class="k muted">暂无提现记录</span><span class="v muted">—</span><span style="width:70px"></span></li>
+          </ul>
+  </div>
+</aside>
+
+
+<!-- ==================== 作品设置（点详情里的按钮弹出） ==================== -->
+<aside class="drawer wide" id="work-settings" data-open="false" aria-label="作品设置" aria-hidden="true">
+  <header>
+    <h2>作品设置</h2>
+    <button class="icon-btn close" onclick="toggleWorkSettings(false)" aria-label="关闭">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </header>
+  <div class="dpanel" data-active="true" style="padding:20px">
+          <div class="grid2">
+            <div class="col">
+              <div class="sub-head"><h3 style="font-size:14px">作品信息</h3></div>
+              <div class="panel" style="border-top:0">
+                <div class="field"><label>书名</label><input value="归途列车" maxlength="100"></div>
+                <div class="field"><label>分类</label>
+                  <select><option>都市悬疑</option><option>都市情感</option><option>悬疑推理</option><option>年代情感</option></select></div>
+                <div class="field"><label>简介</label>
+                  <textarea>一列永远到不了终点的列车，和一群不敢下车的人。</textarea></div>
+                <button class="btn sm" onclick="alert('原型：保存作品设置')">保存</button>
+              </div>
+            </div>
+            <div class="col">
+              <div class="sub-head"><h3 style="font-size:14px">封面与定价</h3></div>
+              <div class="panel" style="border-top:0">
+                <div class="field"><label>封面</label></div>
+                <div class="drop">点击上传封面（建议 3:4，≤5 MB）</div>
+                <div class="field" style="margin-top:16px"><label>定价（元）</label>
+                  <input value="0"></div>
+                <p class="cost" style="margin:-6px 0 14px">0 表示免费</p>
+                <div class="field"><label>合作方式</label>
+                  <select><option>独家授权</option><option>非独家授权</option></select></div>
+                <button class="btn sm" onclick="alert('原型：保存作品设置')">保存</button>
+              </div>
+            </div>
+          </div>
+  </div>
+</aside>
+
+
+<!-- ==================== 个人资料 / 意见反馈（左侧滑出） ==================== -->
+<aside class="drawer from-left" id="account-drawer" data-open="false" aria-label="账号" aria-hidden="true">
+  <header>
+    <h2>账号</h2>
+    <button class="icon-btn close" onclick="toggleAccount(false)" aria-label="关闭">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </header>
+  <div class="dtabs" role="tablist">
+    <button role="tab" aria-selected="true"  data-dtab="profile">个人资料</button>
+    <button role="tab" aria-selected="false" data-dtab="feedback">意见反馈</button>
+  </div>
+  <div class="dpanel" data-active="true" data-dpanel="profile" style="padding:20px">
+          <div class="col">
+            <div class="sub-head" id="acc-profile"><h3>个人资料</h3></div>
+            <div class="panel" style="border-top:0">
+              <div class="row" style="gap:14px;margin-bottom:16px">
+                <span class="avatar" style="width:48px;height:48px;font-size:19px">江</span>
+                <button class="btn quiet sm" onclick="alert('原型：更换头像')">更换头像</button>
+              </div>
+              <div class="field"><label>笔名</label><input value="江叙"></div>
+              <div class="field"><label>擅长题材</label><input value="悬疑 · 都市 · 年代"></div>
+              <div class="field"><label>个人简介</label><input value="写点让人睡不着觉的故事。"></div>
+              <button class="btn sm" onclick="alert('原型：保存个人资料')">保存修改</button>
+            </div>
+          </div>
+
+          <div class="col">
+            <div class="sub-head" id="acc-verify"><h3>实名认证</h3><span class="count">未完成</span></div>
+            <div class="panel" style="border-top:0">
+              <div class="note bad" style="margin-bottom:16px">未完成实名，无法申请版权、签署合同与提现。</div>
+              <div class="field"><label>真实姓名</label><input value=""></div>
+              <div class="field"><label>身份证号</label><input value=""></div>
+              <div class="field"><label>证件照片</label><input value="点击上传正面 / 反面"></div>
+              <button class="btn sm" onclick="alert('原型：提交实名认证')">提交认证</button>
+            </div>
+
+            <div class="sub-head" id="acc-security" style="margin-top:26px"><h3>账号安全</h3></div>
+            <ul class="rows" style="margin-top:0">
+              <li><span class="k">登录密码</span><span class="v muted">上次修改 09-20</span><button class="btn quiet sm" onclick="alert('原型：修改登录密码')">修改</button></li>
+              <li><span class="k">绑定手机</span><span class="v muted">138****6621</span><button class="btn quiet sm" onclick="alert('原型：换绑手机')">换绑</button></li>
+              <li><span class="k">登录设备</span><span class="v muted">Windows · 当前设备</span><button class="btn quiet sm" onclick="alert('原型：管理登录设备')">管理</button></li>
+            </ul>
+          </div>
+  </div>
+  <div class="dpanel" data-dpanel="feedback" style="padding:20px">
+          <div class="col">
+            <div class="sub-head"><h3>提交反馈</h3></div>
+            <div class="panel" style="border-top:0">
+              <div class="field"><label>反馈类型</label>
+                <select><option>功能异常</option><option>体验建议</option><option>内容违规举报</option><option>其他</option></select>
+              </div>
+              <div class="field"><label>描述你遇到的问题或建议</label><textarea placeholder="写点什么…"></textarea></div>
+              <div class="field"><label>相关截图（选填）</label><input value="点击上传图片"></div>
+              <div class="field"><label>联系方式（选填）</label><input placeholder="手机号或邮箱，便于我们回复你"></div>
+              <button class="btn sm" onclick="alert('原型：提交反馈')">提交反馈</button>
+            </div>
+          </div>
+
+          <div class="col">
+            <div class="sub-head"><h3>处理须知</h3></div>
+            <div class="panel" style="border-top:0">
+              <div class="note info" style="margin-bottom:14px">提交后 1–3 个工作日内处理，结果会通过站内消息通知你。</div>
+              <ul class="rows" style="margin-top:0">
+                <li><span class="k">版权、合同类问题</span><span class="v muted">请走「版权与收益」对应入口</span></li>
+                <li><span class="k">作品审核结果申诉</span><span class="v muted">请在作品详情查看审核记录</span></li>
+                <li><span class="k">账号被盗</span><span class="v muted">请先在个人资料改密并换绑手机</span></li>
+              </ul>
+            </div>
+
+            <div class="sub-head" style="margin-top:26px"><h3>我的反馈</h3><span class="count">1 条</span></div>
+            <ul class="rows" style="margin-top:0">
+              <li><span class="k">封面尺寸无法保存</span><span class="v muted">已解决 · 10-08</span><button class="btn quiet sm" onclick="alert('原型：查看')">查看</button></li>
+            </ul>
+          </div>
+  </div>
+</aside>
+
+
+<!-- ==================== 章节编辑器（居中大弹窗） ==================== -->
+<div class="modal big" id="chapter-drawer" data-open="false" role="dialog" aria-modal="true" aria-label="章节编辑" aria-hidden="true">
+  <header>
+    <h2 id="chapter-title">新建章节</h2>
+    <button class="icon-btn close" onclick="toggleChapter(false)" aria-label="关闭">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </header>
+  <div class="modal-body">
+    <div class="note bad" id="chapter-note" style="display:none">
+      第 3 章于 10-11 被驳回：第 12–18 场涉及未成年人情节，需调整后再提交。—— 审核员 王
+    </div>
+    <div class="row" style="gap:14px">
+      <div class="field" style="flex:1"><label>章节标题</label>
+        <input id="chapter-name" placeholder="给这一章起个名字"></div>
+      <div class="field" style="width:110px"><label>集数</label>
+        <input id="chapter-no" value="13"></div>
+    </div>
+    <div class="field"><label>正文</label>
+      <textarea id="chapter-body" style="min-height:300px" placeholder="写点什么…"></textarea></div>
+    <div class="field"><label>或从草稿上传</label>
+      <div class="drop" id="chapter-drop" onclick="uploadDraft('chapter')">
+        点击选择草稿文件（.txt / .docx / .md），也可以直接拖进来
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn" onclick="saveChapter()">保存</button>
+      <button class="btn quiet" onclick="alert('原型：存为草稿')">存为草稿</button>
+      <span class="cost" id="chapter-tip">保存后可在右侧「发布」提交审核</span>
+    </div>
+  </div>
+</div>
+
+<script>
+function go(name){
+  document.querySelectorAll('.screen').forEach(function(el){ el.dataset.active = String(el.id === 's-' + name); });
+  window.scrollTo(0,0);
+}
+/* 视图切换；sub 指定该页内的页签（openRights('settle')）或工作台要展开的那一态 */
+var NAV_OF = { home:'home', account:null, feedback:null };
+function show(v, sub){
+  if(v === 'work'){ show('home'); homeMode('detail'); return; }   // 章节与发布已同屏
+  if(v === 'collab'){ openCollab(sub); return; }   // 我的合作已是弹窗，不再跳页
+  if(v === 'rights'){ openRights(sub); return; }   // 版权与收益已是弹窗，不再跳页
+  if(v === 'account' || v === 'feedback'){ openAccount(sub); return; }   // 账号已并成左侧弹窗
+  document.querySelectorAll('#s-app main > .screen').forEach(function(el){ el.dataset.active = String(el.id === 'v-' + v); });
+  var nav = NAV_OF[v];
+  document.querySelectorAll('#s-app .nav button').forEach(function(b){
+    if(nav && b.dataset.nav === nav){ b.setAttribute('aria-current','page'); } else { b.removeAttribute('aria-current'); }
+  });
+  if(v === 'home'){ homeMode(sub || 'list'); }
+  else if(sub){
+    var scope = document.getElementById('v-' + v);
+    var btn = scope && scope.querySelector('.tabs button[data-tab="' + sub + '"]');
+    if(btn){ btn.click(); }
+  }
+  toggleDrawer(false);
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('#s-app .nav button').forEach(function(b){
+  b.addEventListener('click', function(){ show(b.dataset.nav); });
+});
+
+/* 工作台三态：作品列表 / 作品详情 / 创作上传 */
+function homeMode(m){
+  var main = document.querySelector('#v-home .home-main');
+  main.dataset.mode = m;
+  main.querySelectorAll(':scope > [data-sub]').forEach(function(p){
+    p.dataset.active = String(p.dataset.sub === m);
+  });
+  window.scrollTo(0,0);
+}
+
+/* 首页内滚动定位 */
+function jump(id){
+  var el = document.getElementById(id);
+  if(el){ el.scrollIntoView({behavior:'smooth', block:'start'}); }
+}
+
+/* 头像下拉：点开先出菜单，再由菜单进对应页面 */
+/* 浮层互斥：开新的抽屉先收起其它抽屉（合同弹窗是叠在合作弹窗上的，另算） */
+function closeOtherLayers(keep){
+  ['drawer', 'collab-drawer', 'rights-drawer', 'work-settings', 'account-drawer', 'chapter-drawer'].forEach(function(id){
+    if(id === keep) return;
+    var el = document.getElementById(id);
+    if(el && el.dataset.open === 'true'){ el.dataset.open = 'false'; el.setAttribute('aria-hidden','true'); }
+  });
+  var m = document.getElementById('contract-modal');
+  if(keep && m.dataset.open === 'true'){ m.dataset.open = 'false'; m.setAttribute('aria-hidden','true'); }
+}
+
+/* 顶栏消息抽屉 */
+function toggleDrawer(open){
+  var d = document.getElementById('drawer');
+  if(open){ closeOtherLayers('drawer'); }
+  d.dataset.open = String(open);
+  d.setAttribute('aria-hidden', String(!open));
+  syncScrim();
+}
+/* 我的合作弹窗 */
+function toggleCollab(open){
+  var d = document.getElementById('collab-drawer');
+  if(open){ closeOtherLayers('collab-drawer'); }
+  d.dataset.open = String(open);
+  d.setAttribute('aria-hidden', String(!open));
+  syncScrim();
+}
+function openCollab(tab){
+  toggleCollab(true);
+  if(tab){
+    var b = document.querySelector('#collab-drawer .dtabs button[data-dtab="' + tab + '"]');
+    if(b){ b.click(); }
+  }
+}
+
+/* 从草稿上传：原型里直接把示例内容填进表单，给出可见反馈 */
+var DRAFTS = {
+  chapter: { name:'最后一站的灯', no:'13',
+    body:'雨停了。他站在车厢连接处，看着玻璃映出的那张脸——比窗外的夜还沉。\n\n列车没有终点，但他知道，这一站该下了。',
+    tip:'已从「第13章_草稿.docx」载入 2,140 字，可直接编辑后保存' },
+  work: { name:'最后一站的灯', cat:'悬疑推理',
+    intro:'一列永远到不了终点的夜班车，和一个终于决定下车的乘客。',
+    note:'已识别 12 章 · 6.8 万字，书名与简介已自动填入' }
+};
+function uploadDraft(where){
+  var d = DRAFTS[where];
+  if(!d) return;
+  if(where === 'chapter'){
+    document.getElementById('chapter-name').value = d.name;
+    document.getElementById('chapter-no').value = d.no;
+    document.getElementById('chapter-body').value = d.body;
+    document.getElementById('chapter-tip').textContent = d.tip;
+    var box = document.getElementById('chapter-drop');
+    box.classList.add('done');
+    box.textContent = '已载入：第13章_草稿.docx（点击可重新选择）';
+  } else {
+    document.getElementById('work-name').value = d.name;
+    document.getElementById('work-cat').value = d.cat;
+    document.getElementById('work-intro').value = d.intro;
+    var b2 = document.getElementById('work-drop');
+    b2.classList.add('done');
+    b2.textContent = d.note + '（点击可重新选择）';
+  }
+}
+
+/* 章节编辑器（写新章节 / 编辑 / 修改） */
+var CHAPTER_MODE = {
+  'new':    { t:'新建章节', note:false, name:'',        no:'13', tip:'保存后可在右侧「发布」提交审核' },
+  'edit':   { t:'编辑章节', note:false, name:'雨夜的乘客', no:'01', tip:'已通过审核的章节，改动后会生成新版本' },
+  'revise': { t:'修改章节', note:true,  name:'十二号车厢', no:'03', tip:'改完这章即可重新提交审核' }
+};
+function openChapter(mode){
+  var m = CHAPTER_MODE[mode] || CHAPTER_MODE['new'];
+  document.getElementById('chapter-title').textContent = m.t;
+  document.getElementById('chapter-name').value = m.name;
+  document.getElementById('chapter-no').value = m.no;
+  document.getElementById('chapter-tip').textContent = m.tip;
+  document.getElementById('chapter-note').style.display = m.note ? '' : 'none';
+  document.getElementById('chapter-drawer').dataset.mode = mode;
+  toggleChapter(true);
+}
+function saveChapter(){
+  alert('原型：保存章节');
+  toggleChapter(false);
+}
+function toggleChapter(open){
+  var d = document.getElementById('chapter-drawer');
+  if(open){ closeOtherLayers('chapter-drawer'); }
+  d.dataset.open = String(open);
+  d.setAttribute('aria-hidden', String(!open));
+  syncScrim();
+}
+
+/* 账号弹窗（个人资料 / 意见反馈，从左侧滑出） */
+function toggleAccount(open){
+  var d = document.getElementById('account-drawer');
+  if(open){ closeOtherLayers('account-drawer'); }
+  d.dataset.open = String(open);
+  d.setAttribute('aria-hidden', String(!open));
+  syncScrim();
+}
+function openAccount(tab, anchor){
+  toggleAccount(true);
+  if(tab){
+    var b = document.querySelector('#account-drawer .dtabs button[data-dtab="' + tab + '"]');
+    if(b){ b.click(); }
+  }
+  if(anchor){ setTimeout(function(){ jump(anchor); }, 0); }
+}
+
+/* 作品设置弹窗 */
+function toggleWorkSettings(open){
+  var d = document.getElementById('work-settings');
+  if(open){ closeOtherLayers('work-settings'); }
+  d.dataset.open = String(open);
+  d.setAttribute('aria-hidden', String(!open));
+  syncScrim();
+}
+
+/* 版权与收益弹窗 */
+function toggleRights(open){
+  var d = document.getElementById('rights-drawer');
+  if(open){ closeOtherLayers('rights-drawer'); }
+  d.dataset.open = String(open);
+  d.setAttribute('aria-hidden', String(!open));
+  syncScrim();
+}
+function openRights(tab){
+  toggleRights(true);
+  if(tab){
+    var b = document.querySelector('#rights-drawer .dtabs button[data-dtab="' + tab + '"]');
+    if(b){ b.click(); }
+  }
+}
+
+/* 合同弹窗 */
+function toggleModal(open){
+  document.getElementById('contract-modal').dataset.open = String(open);
+  syncScrim();
+}
+/* 遮罩：抽屉或弹窗任一个开着就显示 */
+function syncScrim(){
+  var on = document.getElementById('drawer').dataset.open === 'true'
+        || document.getElementById('collab-drawer').dataset.open === 'true'
+        || document.getElementById('rights-drawer').dataset.open === 'true'
+        || document.getElementById('work-settings').dataset.open === 'true'
+        || document.getElementById('account-drawer').dataset.open === 'true'
+        || document.getElementById('chapter-drawer').dataset.open === 'true'
+        || document.getElementById('contract-modal').dataset.open === 'true';
+  document.getElementById('scrim').dataset.open = String(on);
+}
+/* Esc / 遮罩：先关最上层（合同弹窗 → 合作弹窗 → 消息抽屉） */
+function closeLayers(){
+  // 章节编辑器只允许「×」或「保存」关闭，遮罩和 Esc 都不生效
+  if(document.getElementById('chapter-drawer').dataset.open === 'true') return;
+  var m = document.getElementById('contract-modal');
+  if(m.dataset.open === 'true'){ toggleModal(false); return; }
+  toggleCollab(false);
+  toggleRights(false);
+  toggleWorkSettings(false);
+  toggleAccount(false);
+  toggleChapter(false);
+  toggleDrawer(false);
+}
+document.addEventListener('keydown', function(e){ if(e.key === 'Escape'){ closeLayers(); toggleUmenu(false); } });
+
+function toggleUmenu(open){
+  var m = document.getElementById('umenu');
+  var on = (open === undefined) ? m.dataset.open !== 'true' : open;
+  m.dataset.open = String(on);
+  document.querySelector('.avatar-btn').setAttribute('aria-expanded', String(on));
+}
+function accountGo(id){
+  toggleUmenu(false);
+  openAccount('profile', id);
+}
+document.addEventListener('click', function(e){
+  if(!e.target.closest('.avatar-wrap')) toggleUmenu(false);
+});
+
+/* 页签：同一容器内的按钮切同一容器内的面板 */
+function wireTabs(rootSel, btnAttr, panelAttr, scopeSel){
+  document.querySelectorAll(rootSel).forEach(function(group){
+    group.addEventListener('click', function(e){
+      var btn = e.target.closest('button[' + btnAttr + ']');
+      if(!btn) return;
+      var key = btn.getAttribute(btnAttr);
+      group.querySelectorAll('button[' + btnAttr + ']').forEach(function(b){ b.setAttribute('aria-selected', String(b === btn)); });
+      var scope = group.closest('.tabpanel, [data-sub]') || group.closest(scopeSel);
+      scope.querySelectorAll('[' + panelAttr + ']').forEach(function(p){ p.dataset.active = String(p.getAttribute(panelAttr) === key); });
+    });
+  });
+}
+wireTabs('#s-app .tabs', 'data-tab', 'data-panel', '.screen');
+wireTabs('#drawer .dtabs', 'data-dtab', 'data-dpanel', '#drawer');
+wireTabs('#collab-drawer .dtabs', 'data-dtab', 'data-dpanel', '#collab-drawer');
+wireTabs('#rights-drawer .dtabs', 'data-dtab', 'data-dpanel', '#rights-drawer');
+wireTabs('#account-drawer .dtabs', 'data-dtab', 'data-dpanel', '#account-drawer');
+
+/* 作品卡：整卡可点，卡内按钮走自己的目标 */
+document.querySelectorAll('.workitem').forEach(function(card){
+  card.addEventListener('keydown', function(e){
+    if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); card.click(); }
+  });
+});
+
+show('home');
+</script>
+</body>
+</html>

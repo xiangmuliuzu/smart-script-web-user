@@ -1,0 +1,10 @@
+{
+  "checks": [
+    "three production HTML entries reference only assets in their own mount",
+    "user login, protected redirect and refresh stay under /user/",
+    "enterprise login and refresh stay under /enterprise/ with separate tokens",
+    "admin keeps its root login and user authentication does not authorize it",
+    "expired user identity returns to /user/login and API paths remain site-wide"
+  ],
+  "errors": []
+}

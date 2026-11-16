@@ -1,0 +1,158 @@
+<template>
+  <PortalLayer v-model="visible" title="账号" size="min(560px, 96vw)" :before-close="beforeClose"><PortalTabs v-model="tab" :items="tabs" drawer label="账号功能" /><div class="panel-content">
+    <template v-if="tab === 'profile'"><LoadState :pending="pending" :error="loadError" :retry="load" /><template v-if="!pending && !loadError">
+      <div class="sub-head"><h3>个人资料</h3><button v-if="!editing" type="button" class="btn quiet sm" :disabled="busy" @click="editing = true">修改</button></div>
+      <div class="panel attached">
+        <div class="row profile-avatar-row"><label class="avatar-picker" title="点击更换头像"><input type="file" accept="image/png,image/jpeg" aria-label="更换头像" :disabled="busy" @change="uploadAvatar($event.target.files[0]); $event.target.value = ''" /><el-avatar class="avatar profile-avatar" :size="48" :src="avatarUrl(profile.avatar)" alt="个人头像">{{ profile.nickname?.slice(0, 1) || '用' }}</el-avatar></label><b>{{ savedProfile.nickname || '未设置昵称' }}</b></div>
+        <form v-if="editing" @submit.prevent="save"><label class="field">笔名 / 昵称<input v-model="profile.nickname" maxlength="30" required /></label><label class="field">个人简介<input v-model="profile.bio" maxlength="500" /></label><p v-if="error" class="note bad" role="alert">{{ error }}</p><div class="profile-actions"><button class="btn sm" :disabled="busy">{{ busy ? '处理中…' : '保存修改' }}</button><button type="button" class="btn quiet sm" :disabled="busy" @click="cancelEdit">取消</button></div></form>
+        <template v-else><p class="cost">{{ savedProfile.bio || '暂无个人简介' }}</p><p v-if="specialties" class="cost">擅长题材：{{ specialties }}</p><p v-if="error" class="note bad" role="alert">{{ error }}</p></template>
+      </div>
+      <div class="sub-head sub"><h3>实名认证</h3><span class="count">{{ realNameLabels[realName?.status] || '待确认' }}</span></div><div class="panel attached"><LoadState :pending="realNameLoading" :error="realNameError" :retry="loadRealName" /><template v-if="realName && !realNameError"><div class="note" :class="realName.status === 'APPROVED' ? 'good' : 'bad'">{{ realName.status === 'APPROVED' ? '实名认证已通过。' : realName.status === 'PENDING' ? '实名认证处理中，请耐心等待。' : realName.rejectReason || '未完成实名，无法申请版权、签署合同与提现。' }}</div><form v-if="['NOT_SUBMITTED', 'REJECTED'].includes(realName.status)" class="top-gap" @submit.prevent="verify"><label class="field">真实姓名<input v-model="identity.realName" autocomplete="off" maxlength="30" required /></label><label class="field">身份证号<input v-model="identity.idNumber" autocomplete="off" maxlength="18" required /></label><label class="field">身份证正面（人像面）<input type="file" accept="image/jpeg,image/png,image/gif,image/bmp" required @change="identity.front = $event.target.files[0]" /></label><label class="field">身份证反面（国徽面）<input type="file" accept="image/jpeg,image/png,image/gif,image/bmp" required @change="identity.back = $event.target.files[0]" /></label><p v-if="identityError" class="note bad" role="alert">{{ identityError }}</p><button class="btn sm" :disabled="verifying">{{ verifying ? '提交中…' : '提交认证' }}</button></form></template></div>
+      <div class="sub-head sub"><h3>账号安全</h3></div><ul class="rows"><li><span class="k">登录密码</span><span class="v muted">定期修改更安全</span><button class="btn quiet sm" @click="passwordVisible = true">修改</button></li><li><span class="k">绑定手机</span><span class="v muted">{{ profile.phoneMasked || '未绑定' }}</span><button class="btn quiet sm" @click="phoneVisible = true">换绑</button></li><li><span class="k">登录设备</span><span class="v muted">当前浏览器</span><button class="btn quiet sm" disabled>管理</button></li></ul>
+    </template></template>
+    <template v-else>
+      <div class="feedback-heading">
+        <PortalTabs v-model="feedbackTab" :items="feedbackTabs" label="反馈分类" />
+        <div class="feedback-help" :class="{ open: helpOpen }"><button type="button" :aria-expanded="helpOpen" @click="helpOpen = !helpOpen">处理须知</button><div class="feedback-popover"><p>提交后 1–3 个工作日内处理，结果会通过站内消息通知你。</p><p>版权、合同类问题：请走「版权与收益」入口</p><p>作品审核结果申诉：请查看作品审核记录</p><p>账号被盗：请先修改密码并换绑手机</p></div></div>
+      </div>
+      <form v-if="feedbackTab === 'submit'" class="panel" @submit.prevent="submitFeedback"><label class="field">反馈类型<select v-model="feedbackForm.category"><option value="BUG">功能异常</option><option value="EXPERIENCE">体验建议</option><option value="COMPLAINT">内容违规举报</option><option value="OTHER">其他</option></select></label><label class="field">描述你遇到的问题或建议<textarea v-model="feedbackForm.content" placeholder="写点什么…" maxlength="2000" required /></label><label class="field">相关截图（选填）<input type="file" accept="image/*" disabled /></label><p class="cost">截图上传暂未开放，可在描述中补充说明。</p><label class="field">联系方式（选填）<input v-model="feedbackForm.contact" placeholder="手机号或邮箱，便于我们回复你" maxlength="100" /></label><p v-if="feedbackError" class="note bad" role="alert">{{ feedbackError }}</p><button class="btn sm" :disabled="feedbackSending">{{ feedbackSending ? '提交中…' : '提交反馈' }}</button></form>
+      <template v-else><LoadState :pending="feedbackLoading" :error="feedbackLoadError" :retry="loadFeedback" :empty="!feedbackLoading && !feedbackLoadError && !feedback.length" /><ul v-if="!feedbackLoadError" class="rows"><li v-for="item in feedback" :key="item.feedbackId"><span class="k">{{ item.content }}</span><span class="v muted">{{ feedbackLabels[item.status] || item.status }} · {{ dateText(item.submittedAt || item.createTime).slice(5, 10) }}</span><button class="btn quiet sm" @click="selectedFeedback = item; feedbackDetailVisible = true">查看</button></li></ul></template>
+    </template>
+  </div>
+  <PortalLayer v-model="passwordVisible" title="修改登录密码" modal :before-close="closePassword"><form @submit.prevent="updatePassword"><label class="field">原密码<input v-model="password.oldPassword" type="password" autocomplete="current-password" minlength="8" maxlength="64" required /></label><label class="field">新密码<input v-model="password.newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="64" required /></label><label class="field">确认新密码<input v-model="password.confirm" type="password" autocomplete="new-password" minlength="8" maxlength="64" required /></label><p class="cost">密码长度 8–64 位，修改后需要重新登录。</p><p v-if="passwordError" class="note bad" role="alert">{{ passwordError }}</p><button class="btn" :disabled="passwordSaving">{{ passwordSaving ? '保存中…' : '确认修改' }}</button></form></PortalLayer>
+  <PhoneChange v-if="phoneVisible" v-model="phoneVisible" :phone="profile.phoneMasked" @saved="load" />
+  <PortalLayer v-model="feedbackDetailVisible" title="反馈详情" modal><p>{{ selectedFeedback?.content }}</p><p class="cost">{{ feedbackLabels[selectedFeedback?.status] || selectedFeedback?.status }}</p><div class="note info">{{ selectedFeedback?.reply || '暂无平台回复，处理结果会通过站内消息通知你。' }}</div></PortalLayer>
+  </PortalLayer>
+</template>
+<script setup>
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { usePortal } from '../../utils/portal.js'
+import { validateFile, dateText } from '../../utils/creator.js'
+import { avatarUrl } from '../../utils/avatarUrl.js'
+import { clearSession } from '../../auth.js'
+import PortalLayer from '../../components/PortalLayer.vue'
+import PortalTabs from '../../components/PortalTabs.vue'
+import LoadState from '../../components/LoadState.vue'
+import PhoneChange from './PhoneChange.vue'
+const props = defineProps({ modelValue: Boolean, initialTab: String })
+const emit = defineEmits(['update:modelValue'])
+const { api, user, handleError } = usePortal()
+const router = useRouter()
+const visible = computed({ get: () => props.modelValue, set: value => emit('update:modelValue', value) })
+const tab = ref(props.initialTab || 'profile')
+const tabs = [{ value: 'profile', label: '个人资料' }, { value: 'feedback', label: '意见反馈' }]
+const profile = reactive({ nickname: '', bio: '', avatar: '', phoneMasked: '', creatorProfile: null })
+const originalProfile = ref('')
+const editing = ref(false)
+const savedProfile = computed(() => originalProfile.value ? JSON.parse(originalProfile.value) : {})
+const specialties = computed(() => profile.creatorProfile?.specialties?.map(s => s.name || s.label || s.specialtyName).filter(Boolean).join(' · ') || '')
+const pending = ref(false)
+const loadError = ref('')
+const busy = ref(false)
+const error = ref('')
+const realName = ref(null)
+const realNameLoading = ref(false)
+const realNameError = ref('')
+const realNameLabels = { NOT_SUBMITTED: '未完成', PENDING: '审核中', APPROVED: '已认证', REJECTED: '需重新提交' }
+const identity = reactive({ realName: '', idNumber: '', front: null, back: null })
+const identityError = ref('')
+const verifying = ref(false)
+const passwordVisible = ref(false)
+const password = reactive({ oldPassword: '', newPassword: '', confirm: '' })
+const passwordError = ref('')
+const passwordSaving = ref(false)
+const phoneVisible = ref(false)
+const helpOpen = ref(false)
+const feedbackTab = ref('submit')
+const feedbackTabs = [{ value: 'submit', label: '提交反馈' }, { value: 'mine', label: '我的反馈' }]
+const feedbackForm = reactive({ category: 'BUG', content: '', contact: '' })
+const feedback = ref([])
+const feedbackLoading = ref(false)
+const feedbackLoadError = ref('')
+const feedbackError = ref('')
+const feedbackSending = ref(false)
+const feedbackLabels = { SUBMITTED: '待处理', PENDING: '待处理', PROCESSING: '处理中', REPLIED: '已回复', RESOLVED: '已解决', CLOSED: '已关闭' }
+const selectedFeedback = ref(null)
+const feedbackDetailVisible = ref(false)
+async function load() {
+  pending.value = true; loadError.value = ''
+  try { Object.assign(profile, await api.value.getProfile()); originalProfile.value = JSON.stringify(profile) }
+  catch (failure) { loadError.value = failure.message; await handleError(failure) }
+  finally { pending.value = false }
+}
+async function loadRealName() { realNameLoading.value = true; realNameError.value = ''; try { realName.value = await api.value.getRealName() } catch (failure) { realNameError.value = failure.message; await handleError(failure) } finally { realNameLoading.value = false } }
+async function beforeClose(done) {
+  if (busy.value || verifying.value || feedbackSending.value) return
+  if ((originalProfile.value && JSON.stringify(profile) !== originalProfile.value) || feedbackForm.content.trim() || feedbackForm.contact.trim() || identity.realName || identity.idNumber) { try { await ElMessageBox.confirm('还有未保存的资料或表单，确定离开？', '未保存的内容', { confirmButtonText: '离开', cancelButtonText: '继续编辑' }) } catch { return } }
+  identity.realName = ''; identity.idNumber = ''; done()
+}
+async function uploadAvatar(file) {
+  if (!file || busy.value) return
+  error.value = validateFile(file, ['png', 'jpg', 'jpeg'], 5)
+  if (error.value) return
+  busy.value = true
+  try { const result = await api.value.upload(file, 'avatar'); if (!result.url) throw new Error('头像上传响应缺少图片地址，请重试'); const saved = { ...savedProfile.value, avatar: result.url }; await api.value.saveProfile(saved); profile.avatar = result.url; originalProfile.value = JSON.stringify(saved); Object.assign(user.value, { avatar: result.url }); ElMessage.success('头像已更新') }
+  catch (failure) { error.value = failure.message; await handleError(failure) }
+  finally { busy.value = false }
+}
+function cancelEdit() { Object.assign(profile, savedProfile.value); error.value = ''; editing.value = false }
+async function save() {
+  if (busy.value) return
+  error.value = ''
+  if (!profile.nickname.trim()) { error.value = '请输入笔名 / 昵称'; return }
+  busy.value = true
+  try { const result = await api.value.saveProfile(profile); Object.assign(profile, result); Object.assign(user.value, { nickname: profile.nickname, avatar: profile.avatar }); originalProfile.value = JSON.stringify(profile); editing.value = false; ElMessage.success('个人资料已保存') }
+  catch (failure) { error.value = failure.message; await handleError(failure) }
+  finally { busy.value = false }
+}
+async function verify() {
+  if (verifying.value) return
+  identityError.value = ''
+  if (!identity.realName.trim() || !/^\d{17}[\dXx]$/.test(identity.idNumber)) { identityError.value = '请填写真实姓名和有效的 18 位身份证号'; return }
+  if (!identity.front || !identity.back || identity.front.size > 5 * 1024 * 1024 || identity.back.size > 5 * 1024 * 1024) { identityError.value = '请上传不超过 5 MB 的身份证正反面图片'; return }
+  verifying.value = true
+  try { realName.value = await api.value.submitRealName(identity, realName.value.status === 'REJECTED'); identity.realName = ''; identity.idNumber = ''; identity.front = null; identity.back = null; ElMessage.success('实名申请已提交') }
+  catch (failure) { identityError.value = failure.message; await handleError(failure) }
+  finally { verifying.value = false }
+}
+function closePassword(done) { if (passwordSaving.value) return; Object.assign(password, { oldPassword: '', newPassword: '', confirm: '' }); passwordError.value = ''; done() }
+async function updatePassword() {
+  if (passwordSaving.value) return
+  passwordError.value = ''
+  if (password.newPassword.length < 8 || password.newPassword.length > 64 || password.newPassword !== password.confirm) { passwordError.value = '新密码需为 8–64 位，且两次输入一致'; return }
+  passwordSaving.value = true
+  try { await api.value.changePassword({ oldPassword: password.oldPassword, newPassword: password.newPassword }); Object.assign(password, { oldPassword: '', newPassword: '', confirm: '' }); passwordVisible.value = false; ElMessage.success('密码已修改，请重新登录'); clearSession(); await router.replace('/login') }
+  catch (failure) { passwordError.value = failure.message; await handleError(failure) }
+  finally { passwordSaving.value = false }
+}
+async function loadFeedback() { feedbackLoading.value = true; feedbackLoadError.value = ''; try { feedback.value = await api.value.listFeedback() } catch (failure) { feedbackLoadError.value = failure.message; await handleError(failure) } finally { feedbackLoading.value = false } }
+async function submitFeedback() {
+  if (feedbackSending.value) return
+  feedbackError.value = ''
+  const content = feedbackForm.content.trim() + (feedbackForm.contact.trim() ? '\n联系方式：' + feedbackForm.contact.trim() : '')
+  if (feedbackForm.content.trim().length < 5 || content.length > 2000) { feedbackError.value = '反馈内容至少 5 个字，含联系方式最多 2000 字'; return }
+  feedbackSending.value = true
+  try { await api.value.sendFeedback({ category: feedbackForm.category, content }); feedbackForm.content = ''; feedbackForm.contact = ''; ElMessage.success('反馈已提交'); feedbackTab.value = 'mine'; await loadFeedback() }
+  catch (failure) { feedbackError.value = failure.message; await handleError(failure) }
+  finally { feedbackSending.value = false }
+}
+watch(tab, value => { if (value === 'feedback') loadFeedback() })
+watch(() => props.initialTab, value => { if (value) tab.value = value })
+onMounted(() => { load(); loadRealName(); if (tab.value === 'feedback') loadFeedback() })
+onUnmounted(() => { identity.realName = ''; identity.idNumber = ''; Object.assign(password, { oldPassword: '', newPassword: '', confirm: '' }) })
+</script>
+
+<style scoped>
+.avatar-picker { position: relative; cursor: pointer; }
+.avatar-picker input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.avatar-picker:focus-within { outline: 2px solid currentColor; outline-offset: 3px; }
+.profile-actions { display: flex; gap: 12px; }
+.feedback-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.feedback-help { position: relative; flex: none; font-size: 13px; color: var(--ink-2); }
+.feedback-help button { cursor: pointer; padding: 0; border: 0; background: none; color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.feedback-popover { display: none; position: absolute; z-index: 5; top: 100%; right: 0; width: min(320px, 80vw); padding: 12px 16px; background: var(--paper-2); border: 1px solid var(--rule); box-shadow: 0 8px 24px #0002; line-height: 1.6; }
+.feedback-popover p { margin: 6px 0; }
+.feedback-help:hover .feedback-popover, .feedback-help.open .feedback-popover, .feedback-help:focus-within .feedback-popover { display: block; }
+</style>

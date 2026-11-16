@@ -1,0 +1,42 @@
+{
+  "name": "smart-script-web-user",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "test": "node --test",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:browser": "node scripts/browser-smoke.mjs",
+    "test:avatar": "node scripts/avatar-smoke.mjs",
+    "test:creation": "node scripts/creation-smoke.mjs",
+    "test:chapter-workspace": "node scripts/chapter-workspace-smoke.mjs",
+    "test:ai-stream": "node scripts/ai-stream-smoke.mjs",
+    "test:ai-create": "node scripts/ai-create-smoke.mjs",
+    "test:ai-skill": "node scripts/ai-skill-smoke.mjs",
+    "test:work-deletion": "node scripts/work-deletion-smoke.mjs",
+    "test:paths": "node scripts/server-paths-smoke.mjs",
+    "gate": "npm run test && npm run build"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "2.3.2",
+    "dompurify": "3.4.17",
+    "element-plus": "2.14.5",
+    "qrcode": "^1.5.4",
+    "quill": "2.0.3",
+    "vue": "3.5.43",
+    "vue-router": "4.6.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "6.0.9",
+    "playwright": "1.63.0",
+    "vite": "8.3.1"
+  },
+  "optionalDependencies": {
+    "@rolldown/binding-win32-x64-msvc": "^1.2.14"
+  }
+}

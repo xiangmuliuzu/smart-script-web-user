@@ -1,0 +1,26 @@
+{
+  "checks": [
+    "authenticated workspace uses API data",
+    "search and status filters",
+    "review lock and selected work detail",
+    "chapter edit, dirty-close guard and save",
+    "chapter create, file import and delete",
+    "work settings save",
+    "messages mark all read and platform chat",
+    "cooperation and contracts keep real unavailable states",
+    "rights tabs keep real unavailable states",
+    "account profile and feedback",
+    "TXT draft upload and work creation",
+    "AI generation, insert and record tabs",
+    "DOCX native body import",
+    "mobile layouts and no horizontal page overflow",
+    "login has no demo entry and former demo paths cannot bypass authentication",
+    "buyer without creator capability cannot log in",
+    "normal login enters API workspace and restores on refresh",
+    "business 503 retains token and retry recovers",
+    "revoked creator capability blocks session restoration and clears token",
+    "user-facing unsupported services do not call admin APIs",
+    "expired identity returns to login and clears only user token"
+  ],
+  "runtimeErrors": []
+}

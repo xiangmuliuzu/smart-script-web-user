@@ -1,0 +1,402 @@
+import { request, getToken } from '../auth.js'
+import { friendlyErrorMessage } from '../utils/friendly-error.js'
+import { asList } from '../utils/creator.js'
+
+// 沿用若依 request，认证响应保持顶层结构，业务接口在这里读取 data。
+const data = async (path, options) => (await request(path, options)).data
+const workPath = id => '/api/v1/users/me/works/' + encodeURIComponent(id)
+export const listWorks = async () => asList(await data('/api/v1/users/me/works'))
+export const getWork = async id => {
+  const detail = await data(workPath(id))
+  if (detail?.chapters) detail.chapters = detail.chapters.map(chapter => ({ ...chapter, isFree: String(chapter.isFree ?? '0'), content: chapter.formattedContent || chapter.content || '' }))
+  return detail
+}
+export const listReviews = async id => asList(await data(workPath(id) + '/review-records'))
+export const listVersions = async id => asList(await data(`/api/v1/content/works/${encodeURIComponent(id)}/versions`))
+export const createWork = form => data('/api/v1/content/works', { method: 'POST', body: { title: form.title.trim(), description: form.summary, scriptUrl: form.scriptUrl, scriptName: form.scriptName, scriptSize: form.scriptSize } })
+export const updateWork = (id, form) => data(workPath(id), { method: 'PUT', body: { title: form.title.trim(), summary: form.summary, cover: form.cover, price: form.price, tradeType: form.tradeType } })
+export const sendWorkDeletionCode = id => data(`/api/v1/content/works/${encodeURIComponent(id)}/delete-code`, { method: 'POST' })
+export const deleteWork = (id, code) => data(`/api/v1/content/works/${encodeURIComponent(id)}`, { method: 'DELETE', body: { code } })
+export const submitWork = id => data(workPath(id) + '/submit', { method: 'POST' })
+export const saveChapter = (id, chapter) => {
+  const body = { chapterTitle: chapter.chapterTitle.trim(), content: chapter.content, isFree: chapter.isFree }
+  // 摘要：只有调用方显式给出字符串才下发（空串=清空）。不传表示“本次不改”，
+  // 否则编辑正文时会把它清空——后端 null 不改、空串清空。
+  if (typeof chapter.summary === 'string') body.summary = chapter.summary
+  return data(workPath(id) + '/chapters' + (chapter.chapterId ? '/' + encodeURIComponent(chapter.chapterId) : ''), { method: chapter.chapterId ? 'PUT' : 'POST', body })
+}
+export const publishChapter = chapterId => data('/api/v1/content/chapters/' + encodeURIComponent(chapterId), { method: 'PUT', body: { status: '0' } })
+// 方案 2：正文定稿后单独调一次 AI，产出「本章摘要 + 台账更新」，后端写 summary 并合并台账（正文不变）。
+export const summarizeChapter = (workId, chapterId, content, model) => data('/api/v1/content/ai/chapter-summary', { method: 'POST', body: { workId, chapterId, content, model } })
+// 每集验收（5 项判定，≥4 项通过；只提示不改正文），结果后端落 sys_chapter_review。
+export const reviewChapter = (workId, chapterId, content, model) => data('/api/v1/content/ai/chapter-review', { method: 'POST', body: { workId, chapterId, content, model } })
+// 卷级状态快照：每 10 集一卷；生成后写正文只注入「本卷 + 上卷」。
+export const buildVolumeSnapshot = (workId, volumeNo, model) => data('/api/v1/content/ai/volume-snapshot', { method: 'POST', body: { workId, volumeNo, model } })
+export const listWorkVolumes = workId => data('/api/v1/content/works/' + encodeURIComponent(workId) + '/volumes')
+export const saveWorkVolume = (workId, volumeNo, snapshot) => data('/api/v1/content/works/' + encodeURIComponent(workId) + '/volumes/' + encodeURIComponent(volumeNo), { method: 'PUT', body: { snapshot } })
+export const deleteChapter = (id, chapterId) => data(workPath(id) + '/chapters/' + encodeURIComponent(chapterId), { method: 'DELETE' })
+export async function upload(file, purpose = 'script') {
+  const body = new FormData()
+  // 后端剧本上传白名单包含 txt/docx，Markdown 保留文本内容并按 txt 上传。
+  const uploaded = purpose === 'script' && /\.md$/i.test(file.name) ? new File([file], file.name.replace(/\.md$/i, '.txt'), { type: 'text/plain' }) : file
+  body.append('file', uploaded)
+  const path = purpose === 'avatar' ? '/api/v1/users/me/avatar' : '/api/v1/content/upload'
+  if (purpose === 'script' || purpose === 'cover') body.append('type', purpose)
+  // 印章图/审核材料与 App 一致：走 content/upload，type=material。
+  if (purpose === 'seal') body.append('type', 'material')
+  // 版权申请材料与 App 一致：type=copyright_material。
+  if (purpose === 'copyright') body.append('type', 'copyright_material')
+  return data(path, { method: 'POST', body })
+}
+
+// ──── 版权申请 / 电子证书（与 App 共用 /api/v1/content/copyright，同用户数据同步） ────
+const copyrightBase = '/api/v1/content/copyright'
+const qs = params => {
+  const entries = Object.entries(params || {}).filter(([, v]) => v != null && v !== '')
+  return entries.length ? '?' + new URLSearchParams(entries).toString() : ''
+}
+export const listCopyrightApplications = (params = {}) =>
+  data(copyrightBase + '/application/list' + qs({ pageNum: 1, pageSize: 50, ...params }))
+export const getCopyrightApplication = id =>
+  data(copyrightBase + '/application/' + encodeURIComponent(id))
+/** 登记费询价（支付前）。 */
+export const quoteCopyrightFee = (workId, copyrightCenter) =>
+  data(copyrightBase + '/application/fee-quote' + qs({ workId, copyrightCenter }))
+/** 创建待支付单（付完后才建申请）；兼容旧路径 /application/apply。 */
+export const createCopyrightPayOrder = form =>
+  data(copyrightBase + '/application/pay-order', { method: 'POST', body: form })
+export const submitCopyrightApplication = form => createCopyrightPayOrder(form)
+/** 驳回后重新缴费下单；兼容旧路径 /application/resubmit。 */
+export const createCopyrightResubmitPayOrder = form =>
+  data(copyrightBase + '/application/pay-order/resubmit', { method: 'POST', body: form })
+export const resubmitCopyrightApplication = form => createCopyrightResubmitPayOrder(form)
+export const getCopyrightPayOrder = payOrderId =>
+  data(copyrightBase + '/application/pay-order/' + encodeURIComponent(payOrderId))
+/** 临时直付：跳过支付宝沙箱，直接履约建申请并提交第三方。 */
+export const directPayCopyrightOrder = payOrderId =>
+  data(copyrightBase + '/application/pay-order/' + encodeURIComponent(payOrderId) + '/direct-pay', {
+    method: 'POST',
+    body: {}
+  })
+export const submitCopyrightSupplement = (applyId, form) =>
+  data(copyrightBase + '/application/' + encodeURIComponent(applyId) + '/supplement', {
+    method: 'POST',
+    body: form
+  })
+export const syncCopyrightApplicationStatus = applyId =>
+  data(copyrightBase + '/application/' + encodeURIComponent(applyId) + '/sync-status', {
+    method: 'POST',
+    body: {}
+  })
+export const deleteCopyrightApplication = id =>
+  data(copyrightBase + '/application/' + encodeURIComponent(id), { method: 'DELETE' })
+export const listCopyrightCerts = (params = {}) =>
+  data(copyrightBase + '/cert/list' + qs({ pageNum: 1, pageSize: 50, ...params }))
+export const getCopyrightCert = id =>
+  data(copyrightBase + '/cert/' + encodeURIComponent(id))
+export const downloadCopyrightCert = id =>
+  data(copyrightBase + '/cert/' + encodeURIComponent(id) + '/download')
+export const listCopyrightCenters = async () => asList(await data(copyrightBase + '/config/active'))
+
+// ──── 版权资产（创作者侧 /api/v1/content/copyright/assets，字段与 Admin 对齐，仅本人已发布作品） ────
+const assetsBase = copyrightBase + '/assets'
+export const listCopyrightAssets = (params = {}) =>
+  data(assetsBase + qs({ pageNum: 1, pageSize: 20, ...params }))
+export const getCopyrightAsset = workId =>
+  data(assetsBase + '/' + encodeURIComponent(workId))
+export const updateCopyrightAssetStatus = (workId, status) =>
+  data(assetsBase + '/' + encodeURIComponent(workId) + '/status', { method: 'PUT', body: { status } })
+export const listCopyrightAuthorizationHistory = (workId, params = {}) =>
+  data(assetsBase + '/' + encodeURIComponent(workId) + '/authorization-history' + qs({ pageNum: 1, pageSize: 10, ...params }))
+
+// ──── 版权印章（与 App 共用 /api/v1/content/copyright-seals，同用户数据同步） ────
+const sealPath = id => '/api/v1/content/copyright-seals/' + encodeURIComponent(id)
+export const listSeals = async () => asList(await data('/api/v1/content/copyright-seals'))
+export const getSeal = id => data(sealPath(id))
+export const createSeal = form => data('/api/v1/content/copyright-seals', { method: 'POST', body: { sealName: form.sealName, sealImageUrl: form.sealImageUrl, materialUrls: form.materialUrls || '' } })
+export const updateSeal = (id, form) => data(sealPath(id), { method: 'PUT', body: form })
+export const disableSeal = id => data(sealPath(id) + '/disable', { method: 'PUT' })
+export const deleteSeal = id => data(sealPath(id), { method: 'DELETE' })
+// AI 生成耗时可能超过默认 30s（大纲尤甚，需等待模型完整输出），单独放长到 120s。
+export const generate = (type, form) => data('/api/v1/content/ai/' + type, { method: 'POST', body: form, timeout: 120000 })
+
+// ──── 后台生成队列：点一次提交，后端逐集跑完（关页/断网不影响，可续跑） ────
+// 与「按大纲生成各章」的区别：队列在后端执行并逐集落库，接口立即返回任务；
+// 每集执行时后端自行从库读最新台账与上一集正文，因此提交前本地章节必须已保存。
+const genBase = id => '/api/v1/content/works/' + encodeURIComponent(id) + '/gen-jobs'
+export const createGenJob = (workId, body) => data(genBase(workId), { method: 'POST', body })
+export const getLatestGenJob = workId => data(genBase(workId) + '/latest')
+export const getGenJob = (workId, jobId) => data(genBase(workId) + '/' + encodeURIComponent(jobId))
+export const resumeGenJob = (workId, jobId) => data(genBase(workId) + '/' + encodeURIComponent(jobId) + '/resume', { method: 'POST' })
+export const cancelGenJob = (workId, jobId) => data(genBase(workId) + '/' + encodeURIComponent(jobId) + '/cancel', { method: 'POST' })
+
+// ──── 创作台账（跨端共享：故事简介 / 主要人物 / 人物关系 / 伏笔 / 时间线 / 物品位置 / 未解线索） ────
+// 与 App 同一接口 /api/v1/content/works/{workId}/ledger；作品归属由后端校验（非本人 403）。
+const ledgerPath = id => '/api/v1/content/works/' + encodeURIComponent(id) + '/ledger'
+export const getWorkLedger = id => data(ledgerPath(id))
+export const saveWorkLedger = (id, ledger) => data(ledgerPath(id), { method: 'PUT', body: ledger })
+
+// 导演(skill) 列表（E 模块，供「导演(skill)选择」下拉）
+export const listAiSkills = async () => asList(await data('/api/v1/content/ai/skills'))
+
+// AI 渠道模型列表（E 模块，供「模型选择」下拉；返回 [{channelId,channelName,provider,models:[],defaultModel}]，无 apiKey）
+export const listAiModels = async () => asList(await data('/api/v1/content/ai/models'))
+
+// ──── AI 流式生成（SSE，逐块回调 delta）────
+// 协议与后端 AppAiController 一致：data:{"delta":"..."} 逐块下发，
+// data:{"done":true,...} 结束；event:error + data:{"code","message"} 失败。
+// 流成功结束才由服务端落记录、按实际 token 扣积分；失败不落库不扣积分。
+const STREAM_BASE = import.meta.env?.VITE_APP_BASE_API || '/dev-api'
+export async function generateStream(type, form, onDelta) {
+  const token = getToken()
+  const headers = { Accept: 'text/event-stream' }
+  if (form !== undefined) headers['Content-Type'] = 'application/json'
+  if (token) headers.Authorization = 'Bearer ' + token
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 600000)
+  try {
+    const response = await fetch(STREAM_BASE + '/api/v1/content/ai/' + type + '/stream', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(form),
+      signal: controller.signal,
+    })
+    if (!response.ok || !response.body) {
+      const result = await response.json().catch(() => null)
+      const error = new Error(friendlyErrorMessage({ status: response.status, message: result?.msg || result?.message, fallback: 'AI 生成失败，请稍后重试' }))
+      error.status = response.status
+      error.code = result?.code
+      throw error
+    }
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = '', delta = '', done = null
+    const consume = block => {
+      const event = parseSseBlock(block)
+      if (event.delta) { delta += event.delta; onDelta(event.delta) }
+      if (event.done) done = event.done
+    }
+    try {
+      while (!done) {
+        const { value, done: finished } = await reader.read()
+        buffer += finished ? decoder.decode() : decoder.decode(value, { stream: true })
+        let boundary
+        while ((boundary = /\r?\n\r?\n/.exec(buffer))) {
+          consume(buffer.slice(0, boundary.index))
+          buffer = buffer.slice(boundary.index + boundary[0].length)
+          if (done) break
+        }
+        if (finished) {
+          if (!done && buffer.trim()) consume(buffer)
+          break
+        }
+      }
+    } catch (failure) {
+      if (!delta.trim() || failure.code != null || failure.status != null) throw failure
+      throw new Error('生成中断，已保留收到的内容，请重试', { cause: failure })
+    } finally {
+      await reader.cancel().catch(() => {})
+      reader.releaseLock()
+    }
+    if (!done) throw new Error('生成中断，已保留收到的内容，请重试')
+    if (!delta.trim()) throw new Error('本次未返回生成内容，请重试')
+    // 大纲分段/分批生成时，以 done 下发的规整全文为准（逐块 delta 可能在集号处缺少换行）；
+    // 其余类型仍用 delta 拼接。
+    if (type === 'outline') return { outline: (done.content || delta), ...done }
+    return { content: delta, ...done }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** 解析单个 SSE 事件块，返回 {delta|done|error}；空块返回 {}。 */
+function parseSseBlock(block) {
+  const dataLines = []
+  for (const line of block.split(/\r?\n/)) {
+    if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
+  }
+  if (!dataLines.length) return {}
+  let payload
+  try { payload = JSON.parse(dataLines.join('\n')) } catch { return {} }
+  if (payload.error || (typeof payload.code === 'number' && payload.message)) {
+    const error = new Error(friendlyErrorMessage({ message: payload.message || (typeof payload.error === 'string' ? payload.error : null), fallback: 'AI 生成失败，请稍后重试' }))
+    error.code = payload.code
+    throw error
+  }
+  return {
+    delta: typeof payload.delta === 'string' ? payload.delta : undefined,
+    done: payload.done === true ? payload : undefined,
+  }
+}
+const listWriteRecords = async () => asList(await data('/api/v1/content/ai/write-records'))
+// 生成记录统一读 write-records（write/outline/script/storyboard/polish 全量，
+// 与 App 端一致），按时间倒序；outline/script 同样带输入输出。
+// 不再合并 outline-records：后端每次生成会双写 sys_ai_request 与 write 记录，
+// 合并会导致同一生成重复展示且类型错乱。
+// 【去次数化】消耗统一为实际 token（tokens_used）。
+export const listAiRecords = async () => {
+  const writes = await listWriteRecords()
+  const items = writes.map(w => ({
+    recordId: w.recordId,
+    type: w.writeType === 'outline' ? 'outline' : w.writeType === 'storyboard' ? 'storyboard' : w.writeType === 'polish' ? 'polish' : 'write',
+    title: w.title || '独立创作',
+    input: w.inputPrompt || '',
+    output: w.outputContent || '',
+    tokens: w.tokensUsed ?? null,
+    status: w.status,
+    createdAt: w.createdAt,
+  }))
+  return items.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+}
+// 批量删除本人的 AI 生成记录（PC 创作者端「记录管理」）。
+export const deleteAiRecords = recordIds => data('/api/v1/content/ai/write-records', { method: 'DELETE', body: { recordIds } })
+// 积分余额（AI 创作按 token 消耗直接扣积分，前端展示剩余积分）。
+export const getAiQuota = async userId => {
+  const result = await data(`/api/v1/welfare/points/balance?userId=${encodeURIComponent(userId)}`)
+  return { available: Number(result.balance) || 0 }
+}
+// ──── E 模块：积分充值（金额↔积分换算、模拟支付入账；真实微信/支付宝由支付组接入） ────
+// 换算比例、档位、金额区间全部由后端返回，前端不写死。
+export const getRechargeConfig = userId => data(`/api/v1/welfare/recharge/config?userId=${encodeURIComponent(userId)}`)
+export const createRechargeOrder = ({ userId, yuan, channel }) => data('/api/v1/welfare/recharge/order', { method: 'POST', body: { userId, yuan, channel } })
+export const mockPayRecharge = ({ userId, orderNo }) => data('/api/v1/welfare/recharge/mock-pay', { method: 'POST', body: { userId, orderNo } })
+export const listRechargeOrders = (userId, limit = 20) => data(`/api/v1/welfare/recharge/orders?userId=${encodeURIComponent(userId)}&limit=${encodeURIComponent(limit)}`)
+// 创作者端=卖方门户：交易通知只取 SELLER/BOTH（及无受众的通用通知），买方视角通知（如询盘已被接受）不进此端。
+export const listMessages = async () => asList(await data('/api/v1/messages' + qs({ pageSize: 100, portalRole: 'SELLER' }))).map(item => ({ ...item, isRead: item.read, content: item.summary, createTime: item.createdAt }))
+export const getMessage = id => data(`/api/v1/messages/${encodeURIComponent(id)}`)
+export const unreadCount = async () => (await data('/api/v1/messages/unread-count')).total
+export const readMessage = id => data(`/api/v1/messages/${encodeURIComponent(id)}/read`, { method: 'PUT' })
+export const readAllMessages = () => data('/api/v1/messages/read-all', { method: 'PUT' })
+export const openChat = () => data('/api/v1/users/me/chat/sessions', { method: 'POST', body: { businessType: 'GENERAL', businessName: '平台沟通' } })
+export const getSessionDetail = id => data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}`)
+// 「与平台沟通」只列与管理员/平台的会话（sessionType=ADMIN，后端含 ADMIN/CHAT），过滤掉与交易对手的个人会话（TRADE）。
+export const listSessions = async () => asList(await data('/api/v1/users/me/chat/sessions' + qs({ sessionType: 'ADMIN' })))
+export const listTradeSessions = () => data('/api/v1/users/me/chat/sessions?sessionType=TRADE')
+export const listChat = async id => asList(await data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/messages`))
+export const sendChat = (id, content) => data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/messages`, { method: 'POST', body: { msgType: 'TEXT', content } })
+export const readChatSession = id => data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/read`, { method: 'PUT' })
+// 聊天未读总数（顶栏「沟通」徽标）；后端不区分会话类型，含交易会话的未读。
+export const chatUnreadCount = async () => Number((await data('/api/v1/users/me/chat/unread-count'))?.chatUnread || 0)
+export const getProfile = () => data('/api/v1/users/me/profile')
+export const saveProfile = form => data('/api/v1/users/me/profile', { method: 'PUT', body: { nickname: form.nickname, avatar: form.avatar, bio: form.bio } })
+export const getRealName = () => data('/api/v1/users/me/real-name')
+export const submitRealName = (form, resubmit = false) => { const body = new FormData(); for (const key of ['realName', 'idNumber', 'front', 'back']) body.append(key, form[key]); return data('/api/v1/users/me/real-name' + (resubmit ? '/resubmit' : ''), { method: 'POST', body }) }
+export const changePassword = form => data('/api/v1/auth/password/change', { method: 'POST', body: form })
+export const phoneChange = (step, body) => data('/api/v1/users/me/phone/change/' + step, { method: 'POST', body })
+export const listFeedback = async () => asList(await data('/api/v1/feedback'))
+export const sendFeedback = form => data('/api/v1/feedback', { method: 'POST', body: { category: form.category, content: form.content, attachmentRef: form.attachmentRef } })
+
+// ──── C 交易域：询盘 / 报价 / 订单（后端金额单位：分） ────
+// 询盘
+export const listInquiries = (params) => data('/api/v1/trade/inquiry/list' + (params ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))).toString() : ''))
+export const getInquiry = id => data(`/api/v1/trade/inquiry/${encodeURIComponent(id)}`)
+export const acceptInquiry = id => data(`/api/v1/trade/inquiry/${encodeURIComponent(id)}/accept`, { method: 'PUT' })
+export const rejectInquiry = id => data(`/api/v1/trade/inquiry/${encodeURIComponent(id)}/reject`, { method: 'PUT' })
+export const createTradeChat = inquiryId => data('/api/v1/trade/inquiry/chat/sessions?' + new URLSearchParams({ inquiryId }).toString(), { method: 'POST' })
+// 报价
+export const getLatestQuote = inquiryId => data('/api/v1/trade/quote/latest?' + new URLSearchParams({ inquiryId }).toString())
+export const createQuote = form => data('/api/v1/trade/quote', { method: 'POST', body: form })
+export const counterOffer = form => data('/api/v1/trade/quote/counter-offer', { method: 'POST', body: form })
+export const modifyQuote = (id, form) => data(`/api/v1/trade/quote/${encodeURIComponent(id)}`, { method: 'PUT', body: form })
+export const acceptQuote = id => data(`/api/v1/trade/quote/${encodeURIComponent(id)}/accept`, { method: 'PUT' })
+// 订单
+export const listOrders = params => data('/api/v1/trade/order/list?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))).toString())
+// refresh=true 让服务端换新商户单号重出收款码（旧码失效后用）
+export const payOrder = (id, refresh = false) => data(`/api/v1/trade/order/${encodeURIComponent(id)}/pay${refresh ? '?refresh=true' : ''}`, { method: 'POST' })
+// 沙箱支付：服务端向支付宝查单确认后才推进订单（与 App / 企业端同一接口）
+export const confirmSandboxPayment = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/pay/confirm`, { method: 'POST' })
+export const completeOrder = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/complete`, { method: 'POST' })
+// 取消订单（仅 confirmed 可取消）；reason 选填，走 query 参数
+export const cancelOrder = (id, reason) => data(`/api/v1/trade/order/${encodeURIComponent(id)}/cancel${reason ? '?' + new URLSearchParams({ reason }).toString() : ''}`, { method: 'POST' })
+
+// ──── 版权交割（与 App 共用 /api/v1/trade/delivery，付款后建单；卖方上传、买方确认） ────
+const deliveryBase = '/api/v1/trade/delivery'
+export const listDeliveries = (params = {}) =>
+  data(deliveryBase + '/list' + qs({ pageNum: 1, pageSize: 10, ...params }))
+export const getDelivery = id =>
+  data(deliveryBase + '/' + encodeURIComponent(id))
+export const getDeliveryByOrder = orderId =>
+  data(deliveryBase + '/by-order/' + encodeURIComponent(orderId))
+export const uploadDelivery = (id, body) =>
+  data(deliveryBase + '/' + encodeURIComponent(id) + '/upload', { method: 'POST', body })
+export const confirmDelivery = id =>
+  data(deliveryBase + '/' + encodeURIComponent(id) + '/confirm', { method: 'POST' })
+
+// ──── 购买获得的版权材料（与 App/企业端共用 /api/v1/trade/copyright；确认收货后的交割 cert） ────
+const buyerCopyrightBase = '/api/v1/trade/copyright'
+export async function listBuyerCopyrights(params = {}) {
+  const result = await data(buyerCopyrightBase + '/list' + qs({ pageNum: 1, pageSize: 50, ...params }))
+  return { total: Number(result?.total || 0), list: asList(result) }
+}
+export const getBuyerCopyright = fileId =>
+  data(buyerCopyrightBase + '/' + encodeURIComponent(fileId))
+
+// ──── C 交易域：合同（签署前置实名认证由后端校验） ────
+export const listContracts = params => data('/api/v1/trade/contracts/list?' + new URLSearchParams(Object.fromEntries(Object.entries(params || {}).filter(([, v]) => v != null && v !== ''))).toString())
+export const getContractByOrder = orderId => data(`/api/v1/trade/contracts/${encodeURIComponent(orderId)}`)
+export const signContract = (contractId, formData) => data(`/api/v1/trade/contracts/${encodeURIComponent(contractId)}/sign`, { method: 'POST', body: formData })
+// 合同模板目录（传 contractId 时按该合同生成贴合默认条款）与正文条款编辑（进入签署即锁定）
+export const listContractTemplates = async contractId => asList(await data('/api/v1/trade/contracts/templates' + (contractId ? '?' + new URLSearchParams({ contractId }).toString() : '')))
+export const updateContractContent = (contractId, payload) => data(`/api/v1/trade/contracts/${encodeURIComponent(contractId)}/content`, { method: 'PUT', body: payload })
+// 上传 PDF 替换模板（multipart：file）与从上传件切回平台模板（body：{ templateId }）；均在进入签署后锁定
+export const uploadContractSourcePdf = (contractId, file) => {
+  const body = new FormData()
+  body.append('file', file, file.name || 'contract.pdf')
+  return data(`/api/v1/trade/contracts/${encodeURIComponent(contractId)}/source-pdf`, { method: 'POST', body })
+}
+export const switchContractToTemplate = (contractId, templateId) => data(`/api/v1/trade/contracts/${encodeURIComponent(contractId)}/source-pdf/off`, { method: 'PUT', body: { templateId } })
+
+// ──── 交易会话定型文（与 APP 同源：/users/me/chat/trade-templates） ────
+export const listTradeTemplates = async () => asList(await data('/api/v1/users/me/chat/trade-templates'))
+
+// ──── 印章：签约时可选已审核通过的印章 ────
+export const listMySeals = async () => asList(await data('/api/v1/content/copyright-seals'))
+
+// ──── 收益 / 结算 / 提现（与 App 共用 /api/v1/trade/finance） ────
+const financeBase = '/api/v1/trade/finance'
+export const getIncomeOverview = () => data(financeBase + '/income/overview')
+export const getIncomeStats = (period = 'month') => data(financeBase + '/income/stats' + qs({ period }))
+export const listIncomeDetails = (params = {}) =>
+  data(financeBase + '/income/detail' + qs({ pageNum: 1, pageSize: 20, ...params }))
+export const getIncomeBillDetail = id =>
+  data(financeBase + '/income/detail/' + encodeURIComponent(id))
+export const listIncomeSettles = (params = {}) =>
+  data(financeBase + '/income/settle/list' + qs({ pageNum: 1, pageSize: 20, ...params }))
+export const getIncomeSettle = id =>
+  data(financeBase + '/income/settle/' + encodeURIComponent(id))
+export const confirmIncomeSettle = id =>
+  data(financeBase + '/income/settle/' + encodeURIComponent(id) + '/confirm', { method: 'POST' })
+export const disputeIncomeSettle = (id, reason) =>
+  data(financeBase + '/income/settle/' + encodeURIComponent(id) + '/dispute', { method: 'POST', body: { reason } })
+export const applyWithdraw = form => data(financeBase + '/withdraw/apply', { method: 'POST', body: form })
+export const listWithdraws = (params = {}) =>
+  data(financeBase + '/withdraw/list' + qs({ pageNum: 1, pageSize: 20, ...params }))
+
+// ──── 任务广场（需求悬赏）：创作者侧只读广场 + 接单 + 交付，发布与买方动作归管理端 ────
+const demandBase = '/api/v1/trade/demand'
+const demandPath = id => demandBase + '/' + encodeURIComponent(id)
+// 金额口径：入参 budget 与 budgetMin/budgetMax 为分，stages[].amount 为元，出参一律为分（展示时 /100）。
+export async function listDemands({ status, genreId, taskType, keyword, mine, sortBy, order, budgetMin, budgetMax, episodesMin, pageNum = 1, pageSize = 20 } = {}) {
+  const result = await data(demandBase + '/list' + qs({ status, genreId, taskType, keyword, mine, sortBy, order, budgetMin, budgetMax, episodesMin, pageNum, pageSize }))
+  return { total: Number(result?.total || 0), list: asList(result) }
+}
+// 广场统计：availableCount / prizePoolFen(分) / todayNewCount / genreCounts:[{genreId,count}] / typeCounts:[{taskType,count}]，公开可接单口径
+export const demandStats = () => data(demandBase + '/stats')
+export const getDemand = id => data(demandPath(id))
+// 分镜类任务的源剧本（接单前评估用）：{ work?, chapters?, fileUrl?, fileName? }
+export const sourceScript = demandId => data(demandPath(demandId) + '/source-script')
+// 验收轮次（出参 amount 为分）；可交付作品=本人且非已上架售卖
+export const demandStages = demandId => data(demandPath(demandId) + '/stages')
+export const deliverableWorks = () => data(demandBase + '/deliverable-works')
+// 创作者提交本轮交付物：{ workId, deliverableDesc, deliverableUrl }
+// 剧本类（script/script_storyboard）workId 必填；「提供剧本做分镜」可只交分镜文件链接+说明，workId 可选
+export const deliverStage = (demandId, stageId, body) => data(`${demandPath(demandId)}/stage/${encodeURIComponent(stageId)}/deliver`, { method: 'POST', body })
+// 延时：创作者只能发起申请与查看记录，决定权在平台运营
+export const requestStageExtend = (demandId, stageId, body) => data(`${demandPath(demandId)}/stage/${encodeURIComponent(stageId)}/extend/request`, { method: 'POST', body })
+export const stageExtendHistory = (demandId, stageId) => data(`${demandPath(demandId)}/stage/${encodeURIComponent(stageId)}/extend/history`)
+export const demandExtendHistory = demandId => data(demandPath(demandId) + '/extend/history')
+// 接单：先到先得，无押金环节，点一下即锁定任务并开始首轮计时
+export const claimDemand = demandId => data(demandPath(demandId) + '/claim', { method: 'POST' })
+// 任务会话（创作者发起不带 targetUserId），返回会话 VO；后续收发与聊天列表沿用合作抽屉的会话能力
+export const demandChatSession = demandId => data(demandPath(demandId) + '/chat/session', { method: 'POST' })
+
