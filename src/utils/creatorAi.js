@@ -439,8 +439,11 @@ export function checkGenerationRules({ outline, chapters, ledger }) {
     if (new Set(heads).size !== heads.length) issues.push('大纲存在重复集号')
     heads.forEach((no, index) => { if (no !== index + 1) issues.push(`大纲集号不连续：第 ${index + 1} 个标题是第 ${no} 集`) })
     const blocks = source.split(/^第\s*\d{1,3}\s*集[：:]/gm).slice(1)
+    // 新大纲是五段（多「开场承接」）；旧大纲只有四段，不能因为没这一段就整份报缺。
+    const five = blocks.some(block => block.includes('开场承接'))
+    const labels = five ? ['开场承接', '本集事件', '冲突与推进', '结果或反转', '结尾钩子'] : ['本集事件', '冲突与推进', '结果或反转', '结尾钩子']
     blocks.forEach((block, index) => {
-      ;['本集事件', '冲突与推进', '结果或反转', '结尾钩子'].forEach(label => {
+      labels.forEach(label => {
         if (!block.includes(label)) issues.push(`第 ${heads[index] || index + 1} 集缺少「${label}」`)
       })
     })
@@ -844,7 +847,8 @@ export function continuationOutlinePrompt({ title, summary, outline, prevSummari
     '人物增补：',
     '（只列本次续写新增的人物，或身份/立场/关系发生变化的人物；格式「姓名（身份）：新增或变化」，没有则写“无”。不要重复已有人物介绍）',
     `分集事件卡：从第 ${from} 集开始连续编号，每集按下面格式：`,
-    `第${from}集：事件名\n本集事件：……\n冲突与推进：……\n结果或反转：……\n结尾钩子：……`,
+    `第${from}集：事件名\n开场承接：……\n本集事件：……\n冲突与推进：……\n结果或反转：……\n结尾钩子：……`,
+    `「开场承接」写清上一集最后停在哪个动作或画面、本集从哪个动作接起、中间隔了多久；确需换场时写明理由（上集已收束／开启新的过渡事件／切到另一视角）。同一人物不经任何交代就跳到新场景做新的事，视为不合格。`,
     `每集是一件完整的事（有开场、交锋、结果），结尾钩子要具体；不要写场景头、镜号、景别、运镜。每集按一集 ${minuteText} 的短剧容量写：一集只承载一个场景或一次交锋，不要塞进多天多地的内容。`,
   ]
   return parts.filter(Boolean).join('\n')
