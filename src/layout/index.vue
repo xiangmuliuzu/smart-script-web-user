@@ -122,12 +122,13 @@ onMounted(load)
 // 长连接在线时角标无需定时轮询：帧到达即补拉一次；断开则退回 60s 兜底轮询。
 let realtimeOff = []
 let unreadTimer = null
+let unreadInterval = 0
 function applyUnreadCadence() {
   const wanted = isRealtimeConnected() ? 60000 : 5000
-  if (unreadTimer && unreadTimer.__interval === wanted) return
+  if (unreadTimer && unreadInterval === wanted) return
   clearInterval(unreadTimer)
   unreadTimer = setInterval(refreshUnread, wanted)
-  unreadTimer.__interval = wanted
+  unreadInterval = wanted
 }
 onMounted(() => {
   connectRealtime()

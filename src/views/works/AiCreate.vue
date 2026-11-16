@@ -45,9 +45,21 @@
               <label class="reg-row">
                 <span class="reg-key">集数</span>
                 <span class="reg-inline">
-                  <input v-model.number="setup.episodes" class="reg-count" aria-label="集数" type="number" min="1" max="50" />
-                  <span class="reg-hint">集，1–50</span>
+                  <input v-model.number="setup.episodes" class="reg-count" aria-label="集数" type="number" min="1" max="10" />
+                  <span class="reg-hint">集，1–10</span>
                 </span>
+              </label>
+              <label class="reg-row">
+                <span class="reg-key">一集时长</span>
+                <select v-model.number="setup.minutes" aria-label="一集时长">
+                  <option :value="1">1 分钟</option>
+                  <option :value="1.5">1.5 分钟</option>
+                  <option :value="2">2 分钟</option>
+                </select>
+              </label>
+              <label class="reg-row">
+                <span class="reg-key">你的要求</span>
+                <textarea v-model="setup.prompt" class="reg-idea" aria-label="你的要求" rows="3" placeholder="怎么写、要避免什么，例如：第一集就要见血，别用旁白交代身世，可留空"></textarea>
               </label>
               <label class="reg-row">
                 <span class="reg-key">导演 (skill)</span>
@@ -327,7 +339,7 @@ const LINE_BREAK = String.fromCharCode(10)
 const router = useRouter()
 
 const step = ref(1)
-const setup = reactive({ title: '', idea: '', genre: '', episodes: 12, skillId: '', model: '' })
+const setup = reactive({ title: '', idea: '', genre: '', episodes: 10, minutes: 1, prompt: '', skillId: '', model: '' })
 const skills = ref([])
 const skillError = ref('')
 const modelChannels = ref([])
@@ -339,7 +351,12 @@ const statusText = ref('先填写作品设定，AI 会先生成剧本大纲。')
 // 设定与大纲在两栏间往返时沿用同一份数据。
 let skillPromise = null
 let modelPromise = null
-const loadSkills = () => skillPromise ||= (api.value.listAiSkills ? api.value.listAiSkills().then(rows => { skills.value = rows || [] }, failure => { skillError.value = failure.message; return handleError(failure) }) : Promise.resolve())
+// 起稿页只写剧本，分镜类（skillType=storyboard）不属于这里的「导演」，不能出现在下拉里。
+const loadSkills = () => skillPromise ||= (api.value.listAiSkills ? api.value.listAiSkills().then(rows => {
+  skills.value = (rows || []).filter(skill => !skill.skillType || skill.skillType === 'write')
+  // 草稿里若还留着分镜类 skillId，过滤后要清掉，否则会带着分镜导演去写剧本。
+  if (setup.skillId && !skills.value.some(skill => String(skill.id) === String(setup.skillId))) setup.skillId = ''
+}, failure => { skillError.value = failure.message; return handleError(failure) }) : Promise.resolve())
 const loadModels = () => modelPromise ||= (api.value.listAiModels ? api.value.listAiModels().then(rows => { modelChannels.value = rows || [] }, failure => { modelError.value = failure.message; return handleError(failure) }) : Promise.resolve())
 const modelOptions = computed(() => (modelChannels.value || []).flatMap(channel => (channel.models || []).map(model => ({ value: model, label: `${channel.channelName} · ${model}${model === channel.defaultModel ? '（默认）' : ''}` }))))
 const skillName = computed(() => (skills.value || []).find(skill => String(skill.id) === String(setup.skillId))?.skillName || '默认导演')
@@ -492,7 +509,11 @@ async function generateOutline() {
   statusText.value = '正在生成大纲…'
   outline.value = ''
   try {
-    const body = { inspiration: outlineInspiration({ title: setup.title, idea: setup.idea, episodes: setup.episodes }), genre: setup.genre, style: `共 ${setup.episodes} 集`, skillId: setup.skillId || undefined, model: setup.model || undefined }
+    const minutes = Number(setup.minutes) || 1
+    // 结构与段名由后端 system 提示词统一下发（设定五段 + 分集事件卡两阶段）；
+    // 前端只补用户要求，不再塞结构要求，否则两套要求会在同一次调用里互相冲突。
+    const sections = setup.prompt.trim() ? `你的要求：\n${setup.prompt.trim()}` : ''
+    const body = { inspiration: `${outlineInspiration({ title: setup.title, idea: setup.idea, episodes: setup.episodes })}\n${sections}`, genre: setup.genre, style: `共 ${setup.episodes} 集，每集 ${minutes} 分钟`, skillId: setup.skillId || undefined, model: setup.model || undefined }
     let rest = outline.value
     const response = await api.value.generateStream('outline', body, delta => {
       rest += delta
@@ -518,7 +539,7 @@ async function generateOutline() {
 async function goOutline() {
   if (!setup.title.trim()) return (error.value = '请输入书名')
   if (!setup.idea.trim()) return (error.value = '请先输入故事灵感或主题')
-  if (!Number.isInteger(Number(setup.episodes)) || Number(setup.episodes) < 1 || Number(setup.episodes) > 50) return (error.value = '集数需为 1–50 的整数')
+  if (!Number.isInteger(Number(setup.episodes)) || Number(setup.episodes) < 1 || Number(setup.episodes) > 10) return (error.value = '集数需为 1–10 的整数')
   if (!canCreate.value) return
   error.value = ''
   step.value = 2
@@ -843,8 +864,12 @@ async function insertToWork() {
       if (chapter.state === 'generated' && chapter.content && !chapter.remote) await saveChapterContent(chapter, chapter.content)
     }
     const first = chapters.value.find(chapter => chapter.state === 'generated' && chapter.remote)
+    // 三段式大纲交给编辑器分别落位：故事简介 / 主要人物 / 分集事件卡（走 sessionStorage，不塞进 URL）。
+    try {
+      sessionStorage.setItem(`PcUser-AiCreateSeed:${workId.value}`, JSON.stringify({ title: setup.title, text: outline.value }))
+    } catch { ElMessage.warning('大纲暂存失败，请手动复制大纲到编辑器') }
     inserted.value = true
-    await router.push({ path: '/works/create', query: { workId: String(workId.value), ...(first ? { chapterId: String(first.chapterId) } : {}) } })
+    await router.push({ path: '/works/create', query: { workId: String(workId.value), aiCreate: '1', ...(first ? { chapterId: String(first.chapterId) } : {}) } })
   } catch (failure) { await handleError(failure) }
   finally { saving.value = false }
 }

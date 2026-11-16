@@ -747,9 +747,10 @@ export function splitOutlineSections(content) {
     { key: 'props', re: /^[\s#*>【\[『「]*(?:重要道具档案|道具档案)[】\]』」*]{0,3}\s*[：:]?\s*(.*)$/ },
     { key: 'styleGuide', re: /^[\s#*>【\[『「]*写法基线[】\]』」*]{0,3}\s*[：:]?\s*(.*)$/ },
     { key: 'notes', re: /^[\s#*>【\[『「]*人物便签[】\]』」*]{0,3}\s*[：:]?\s*(.*)$/ },
+    { key: 'peopleUpdate', re: /^[\s#*>【\[『「]*(?:人物增补|新增人物|人物变化|人物与状态变化)[】\]』」*]{0,3}\s*[：:]?\s*(.*)$/ },
   ]
   const episodeHead = /^[\s#>*]*第\d{1,3}[集章][：:]/
-  const buckets = { summary: [], people: [], relation: [], props: [], styleGuide: [], notes: [] }
+  const buckets = { summary: [], people: [], relation: [], props: [], styleGuide: [], notes: [], peopleUpdate: [] }
   let current = null
   let episodeIndex = -1
   for (let i = 0; i < lines.length; i += 1) {
@@ -757,6 +758,9 @@ export function splitOutlineSections(content) {
     if (episodeHead.test(line)) { episodeIndex = i; break }
     const hit = heads.find(item => item.re.test(line))
     if (hit) {
+      // 模型偶发把整段设定重写一遍再继续：同名段再次出现时用最新一份覆盖，
+      // 否则「故事简介」会被拼成两版并排（用户看到两段自相矛盾的简介）。
+      buckets[hit.key] = []
       current = hit.key
       const rest = line.replace(hit.re, '$1').trim()
       if (rest) buckets[current].push(rest)
@@ -770,15 +774,168 @@ export function splitOutlineSections(content) {
   const props = buckets.props.join('\n').trim()
   const styleGuide = buckets.styleGuide.join('\n').trim()
   const notes = buckets.notes.join('\n').trim()
+  const peopleUpdate = buckets.peopleUpdate.join('\n').trim()
   const characterParts = []
   if (notes) characterParts.push(notes)
   if (people) characterParts.push('主要人物\n' + people)
+  if (peopleUpdate) characterParts.push('人物增补\n' + peopleUpdate)
   if (relation) characterParts.push('人物关系\n' + relation)
   return {
     summary,
     characters: characterParts.join('\n\n').trim(),
+    peopleUpdate,
     props,
     styleGuide,
     outline: episodeIndex >= 0 ? lines.slice(episodeIndex).join('\n').trim() : '',
   }
+}
+
+/** 分集标题里的集号：兼容阿拉伯数字与中文数字，取不到返回 0。 */
+export function episodeNoFromTitle(title) {
+  const source = String(title || '')
+  const arabic = source.match(/第\s*(\d{1,3})\s*[集章]/)
+  if (arabic) return Number(arabic[1]) || 0
+  const chinese = source.match(/第\s*([一二三四五六七八九十百零〇]+)\s*[集章]/)
+  return chinese ? cnToNumber(chinese[1]) || 0 : 0
+}
+
+/**
+ * 大纲里已排到的最大集号（按集号取最大，不按条目数）。
+ * 直接扫全文的「第N集/章/节/回」，不依赖「每集都必须有概要」的整份校验，
+ * 避免某集缺概要时把整份大纲判为无效、把续写起点退回第 1 集。
+ */
+export function outlineMaxNo(outline) {
+  const pattern = /第\s*(\d{1,3}|[一二三四五六七八九十百零〇]+)\s*[集章节回]/g
+  let max = 0
+  for (const match of String(outline || '').matchAll(pattern)) {
+    const raw = match[1]
+    const no = /^\d/.test(raw) ? Number(raw) : cnToNumber(raw)
+    if (no > 0 && no <= 999) max = Math.max(max, no)
+  }
+  return max
+}
+
+/** 续写的起点：已有大纲最大集号与已有正文最大集号取大者 + 1。 */
+export function outlineNextNo(outline, knownChapterNo = 0) {
+  return Math.max(Number(knownChapterNo) || 0, outlineMaxNo(outline)) + 1
+}
+
+/**
+ * 「AI 剧本续写」提示词：已有起稿内容或自写大纲/正文都在上文，只往后写新的分集事件卡。
+ * 明确禁止重写已有集，避免同一集出现两份大纲、正文重复生成。
+ */
+export function continuationOutlinePrompt({ title, summary, outline, prevSummaries, characters, relations, startNo, episodes, minutes, requirement }) {
+  const from = Math.max(1, Number(startNo) || 1)
+  const count = Math.max(1, Number(episodes) || 1)
+  const to = from + count - 1
+  const minuteText = `${Number(minutes) || 1} 分钟`
+  const parts = [
+    '这是一次「续写」，不是重新起稿：下面给出的故事简介、人物便签、已有剧本大纲和已写正文都属于既定内容，必须沿用，不得改写、不得重写、不得重复输出。',
+    title?.trim() ? `作品名：${title.trim()}` : '',
+    summary?.trim() ? `已有故事简介（沿用，可在此基础上补充后续走向）：\n${summary.trim()}` : '',
+    characters?.trim() ? `已有主要人物/人物便签（沿用，如需新增人物或状态变化，只在「人物增补」里写）：\n${characters.trim()}` : '',
+    relations?.trim() ? `已有的人物关系（沿用）：\n${relations.trim()}` : '',
+    outline?.trim() ? `已有剧本大纲（已写过的事件卡，禁止重复输出）：\n${outline.trim().slice(-9000)}` : '',
+    prevSummaries?.trim() ? `已写正文的前情摘要：\n${prevSummaries.trim()}` : '',
+    requirement?.trim() ? `本次续写的写法要求：\n${requirement.trim()}` : '',
+    `请只输出第 ${from} 集到第 ${to} 集（共 ${count} 集）的新内容，严格沿用上面的设定与人物，事件必须从已有大纲的结尾继续往前推进。输出分三段：`,
+    '故事简介：',
+    '（用一段话概括到最新进度为止的故事走向；若与已有简介一致，写“沿用原简介”）',
+    '人物增补：',
+    '（只列本次续写新增的人物，或身份/立场/关系发生变化的人物；格式「姓名（身份）：新增或变化」，没有则写“无”。不要重复已有人物介绍）',
+    `分集事件卡：从第 ${from} 集开始连续编号，每集按下面格式：`,
+    `第${from}集：事件名\n本集事件：……\n冲突与推进：……\n结果或反转：……\n结尾钩子：……`,
+    `每集是一件完整的事（有开场、交锋、结果），结尾钩子要具体；不要写场景头、镜号、景别、运镜。每集按一集 ${minuteText} 的短剧容量写：一集只承载一个场景或一次交锋，不要塞进多天多地的内容。`,
+  ]
+  return parts.filter(Boolean).join('\n')
+}
+
+/** 把人物便签拆成「姓名 → 条目」块，供增量合并按人更新。 */
+function characterBlocks(text) {
+  const blocks = []
+  let current = null
+  const heading = /^(?:主要人物|人物关系|人物便签|人物增补|新增人物|人物变化)$/
+  const nameHead = /^[-*·•\s]*([\u4e00-\u9fa5A-Za-z0-9·]{1,12})\s*[（(：:]/
+  for (const raw of String(text || '').replace(/\r\n?/g, '\n').split('\n')) {
+    const line = raw.trim()
+    if (!line) { current = null; continue }
+    if (heading.test(line)) { current = { key: line, lines: [line], heading: true }; blocks.push(current); continue }
+    const hit = line.match(nameHead)
+    if (hit && !/^(?:姓名|身份|性格|关系|备注)$/.test(hit[1])) {
+      current = { key: hit[1], lines: [line] }
+      blocks.push(current)
+      continue
+    }
+    if (current) current.lines.push(line)
+    else { current = { key: `#${blocks.length}`, lines: [line], loose: true }; blocks.push(current) }
+  }
+  return blocks
+}
+
+/**
+ * 人物便签增量合并：同名条目用新内容替换，新人物追加到末尾，其余老条目原样保留。
+ * 编辑台续写会带出新人物与新状态，整段覆盖会丢掉用户手改过的设定。
+ */
+export function mergeCharacters(existing, incoming) {
+  const next = String(incoming || '').trim()
+  if (!next) return String(existing || '')
+  const base = characterBlocks(existing)
+  const patch = characterBlocks(next)
+  for (const block of patch) {
+    if (block.heading || block.loose) {
+      if (!base.some(item => item.key === block.key)) base.push(block)
+      continue
+    }
+    const index = base.findIndex(item => item.key === block.key)
+    if (index < 0) { base.push(block); continue }
+    const old = base[index]
+    const oldText = old.lines.join('\n')
+    const newText = block.lines.join('\n')
+    // 续写常给「顾守山（状态变化）：…」这种短补丁；直接替换会把原有的外貌/说话方式等
+    // 设定冲掉（人设越续越薄）。只有新内容确实重写了整条（含旧文开头）才替换，否则追加。
+    if (newText.length < oldText.length * 0.7 && !newText.includes(oldText.slice(0, 10))) {
+      const merged = [...old.lines]
+      for (const line of block.lines) if (!merged.includes(line)) merged.push(line)
+      base[index] = { ...old, lines: merged }
+    } else {
+      base[index] = block
+    }
+  }
+  return base.map(item => item.lines.join('\n')).join('\n\n').trim()
+}
+
+/** 把大纲拆成「集号 → 事件卡」块；不可识别时返回空，交回原文追加。 */
+function outlineCardBlocks(text) {
+  const src = String(text || '').replace(/\r\n?/g, '\n')
+  const blocks = []
+  let preamble = []
+  let current = null
+  for (const line of src.split('\n')) {
+    const no = episodeNoFromTitle(line)
+    if (no && /^(?:#{1,6}\s*)?第\s*[0-9一二三四五六七八九十百零〇]+\s*[集章]\s*[：:]/.test(line.trim())) {
+      current = { no, lines: [line.trim()] }
+      blocks.push(current)
+      continue
+    }
+    if (current) current.lines.push(line)
+    else preamble.push(line)
+  }
+  return { preamble: preamble.join('\n').trim(), blocks }
+}
+
+/** 新事件卡并入已有大纲：同集号替换，新集号按序号追加，绝不让同名集出现两份。 */
+export function mergeOutlineCards(existing, incoming) {
+  const next = String(incoming || '').trim()
+  if (!next) return String(existing || '')
+  const base = outlineCardBlocks(existing)
+  const patch = outlineCardBlocks(next)
+  if (!patch.blocks.length) {
+    const joiner = String(existing || '').trim() ? '\n\n' : ''
+    return `${String(existing || '').trim()}${joiner}${next}`.trim()
+  }
+  const map = new Map(base.blocks.map(block => [block.no, block]))
+  for (const block of patch.blocks) map.set(block.no, block)
+  const ordered = [...map.values()].sort((a, b) => a.no - b.no)
+  const head = base.preamble || patch.preamble
+  return [head, ...ordered.map(block => block.lines.join('\n').trim())].filter(Boolean).join('\n\n').trim()
 }
