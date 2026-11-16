@@ -49,11 +49,17 @@ export function mediaUrl(raw, apiBase = import.meta.env?.VITE_APP_BASE_API || '/
 
 /** 对路径每一段 decode 后再 encode，避免中文未编码或二次编码。 */
 export function encodeMediaPath(path) {
-  return String(path || '').split('/').map(seg => {
+  // 查询串（合同材料的 exp/sig 签名）原样保留：逐段 encode 会把 ? = & 转义成 %3F/%26/%3D，
+  // 后端拿到的是一个普通文件名，签名校验不过 → 403。
+  const value = String(path || '')
+  const queryIndex = value.indexOf('?')
+  const pathname = queryIndex >= 0 ? value.slice(0, queryIndex) : value
+  const query = queryIndex >= 0 ? value.slice(queryIndex) : ''
+  return pathname.split('/').map(seg => {
     if (!seg) return ''
     try { return encodeURIComponent(decodeURIComponent(seg)) }
     catch { return encodeURIComponent(seg) }
-  }).join('/')
+  }).join('/') + query
 }
 
 /**
