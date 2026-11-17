@@ -17,7 +17,6 @@
       <div class="toolbar">
         <select v-model="settleStatus" class="toolbar-control" :disabled="listPending" @change="reloadList">
           <option value="pending">待确认</option>
-          <option value="disputed">有异议</option>
           <option value="confirmed">已入账</option>
           <option value="">全部</option>
         </select>
@@ -133,17 +132,12 @@
           <li><span class="k">创建时间</span><span class="v muted">{{ dateText(settleDetail.createdAt) }}</span></li>
         </ul>
         <p class="cost explain">{{ settleDetail.bizType === 'demand_stage' ? '任务逐轮验收通过先进入待结算。作者实得 = 本轮金额 − 平台抽成。仅在确认无误后入账。' : '订单完成后先进入待结算。作者实得 = 订单总额 − 平台抽成。仅在确认无误后入账。' }}</p>
-        <ul v-if="settleDetail.status === 'disputed'" class="rows detail-rows">
-          <li><span class="k">异议原因</span><span class="v muted">{{ settleDetail.disputeReason || '—' }}</span></li>
-          <li><span class="k">异议时间</span><span class="v muted">{{ dateText(settleDetail.disputeTime) }}</span></li>
-        </ul>
         <ul v-if="settleDetail.status === 'confirmed'" class="rows detail-rows">
           <li><span class="k">确认时间</span><span class="v muted">{{ dateText(settleDetail.confirmTime) }}</span></li>
           <li><span class="k">关联账单</span><span class="v muted">{{ settleDetail.billId ? '#' + settleDetail.billId : '—' }}</span></li>
         </ul>
         <div class="action-bar">
           <button v-if="canConfirmSettle(settleDetail.status)" class="btn sm" type="button" :disabled="busy" @click="confirmSettle">确认入账</button>
-          <button v-if="canDisputeSettle(settleDetail.status)" class="btn quiet sm" type="button" :disabled="busy" @click="disputeSettle">提出异议</button>
         </div>
       </template>
     </PortalLayer>
@@ -194,7 +188,6 @@ import { dateText } from '../../../utils/creator.js'
 import {
   billTypeLabel,
   canConfirmSettle,
-  canDisputeSettle,
   fenText,
   settleStatusLabel,
   settleStatusTone,
@@ -334,36 +327,6 @@ async function confirmSettle() {
   try {
     settleDetail.value = await api.value.confirmIncomeSettle(id)
     ElMessage.success('已确认，收益已到账')
-    await Promise.all([loadOverview(), loadList()])
-  } catch (failure) {
-    await handleError(failure)
-  } finally {
-    busy.value = false
-  }
-}
-
-async function disputeSettle() {
-  const id = settleDetail.value?.settleId
-  if (!id || busy.value) return
-  let reason = ''
-  try {
-    const result = await ElMessageBox.prompt('请说明异议原因（1–500 字）', '提出异议', {
-      inputType: 'textarea',
-      inputValidator: value => {
-        const text = (value || '').trim()
-        if (!text) return '请填写异议原因'
-        if (text.length > 500) return '异议原因最多 500 字'
-        return true
-      }
-    })
-    reason = String(result.value || '').trim()
-  } catch {
-    return
-  }
-  busy.value = true
-  try {
-    settleDetail.value = await api.value.disputeIncomeSettle(id, reason)
-    ElMessage.success('已提交异议')
     await Promise.all([loadOverview(), loadList()])
   } catch (failure) {
     await handleError(failure)
