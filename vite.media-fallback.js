@@ -41,7 +41,9 @@ function toMediaPath(rawUrl, apiPrefix) {
 }
 
 function localFileExists(rootDir, mediaPath) {
-  const absolute = path.resolve(rootDir, mediaPath.slice('/profile'.length))
+  // 前导斜杠必须去掉：Windows 下 path.resolve 见绝对片段会丢掉 rootDir，把本机原件判成不存在
+  const relative = mediaPath.slice('/profile'.length).replace(/^\/+/, '')
+  const absolute = path.resolve(rootDir, relative)
   const inside = absolute === rootDir || absolute.startsWith(rootDir + path.sep)
   return inside && fs.existsSync(absolute)
 }
