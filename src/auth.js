@@ -75,15 +75,28 @@ export async function getAgreements() {
 
 // ---- 扫码登录：PC 出码 → App 扫码确认 → PC 轮询取令牌 ----
 // 令牌只由服务端在轮询命中「已确认」时签发一次，前端不参与任何凭证拼接。
+//
+// 后端这几个接口用的是若依 AjaxResult 信封（字段在 data 里，成功时 code=200），
+// 与登录接口把 token 摊在顶层的写法不同，这里统一解包一次：
+// 直接读 result.qrToken 会拿到 undefined，二维码里就只剩 t=undefined。
+
+/** 取 200 响应里的 data；同时兼容顶层字段（以后接口改成顶层时不必再改调用方）。 */
+function qrPayload(result, field) {
+  return (result?.data && result.data[field] !== undefined ? result.data : result) || {}
+}
 
 /** 出码。portal 决定服务端准入口径：创作者端要求作者能力，企业端不要求。 */
-export function createQrLogin() {
-  return request('/api/v1/auth/qr/create', { method: 'POST', authenticated: false, body: { portal: 'creator' } })
+export async function createQrLogin() {
+  const result = await request('/api/v1/auth/qr/create', { method: 'POST', authenticated: false, body: { portal: 'creator' } })
+  const data = qrPayload(result, 'qrToken')
+  if (typeof data.qrToken !== 'string' || !data.qrToken) throw new Error('二维码生成失败，请刷新后重试')
+  return data
 }
 
 /** 轮询票据状态；票据被 App 确认后，同一次响应里带回 token 与 user。 */
-export function pollQrLogin(qrToken) {
-  return request('/api/v1/auth/qr/poll', { method: 'POST', authenticated: false, body: { qrToken } })
+export async function pollQrLogin(qrToken) {
+  const result = await request('/api/v1/auth/qr/poll', { method: 'POST', authenticated: false, body: { qrToken } })
+  return qrPayload(result, 'status')
 }
 
 /** 拒绝一次已被扫的票据（抢扫防护）：令牌只在出码方浏览器里，无需登录身份。 */
