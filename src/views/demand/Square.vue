@@ -10,7 +10,6 @@
       </div>
       <dl class="head-stats">
         <div><dt>可接单任务</dt><dd>{{ stats.availableCount ?? '—' }}</dd></div>
-        <div><dt>在途奖池</dt><dd class="money">{{ prizePoolText }}</dd></div>
         <div><dt>今日新发布</dt><dd>{{ stats.todayNewCount ?? '—' }}</dd></div>
       </dl>
     </header>
@@ -95,7 +94,7 @@ import { usePortal } from '../../utils/portal.js'
 import LoadState from '../../components/LoadState.vue'
 import DemandTabs from '../../components/demand/DemandTabs.vue'
 import DemandCard from '../../components/demand/DemandCard.vue'
-import { money, genreOptions, genreLabel, taskTypeOptions, taskTypeLabel, SORT_OPTIONS } from '../../utils/demand.js'
+import { genreOptions, genreLabel, taskTypeOptions, taskTypeLabel, SORT_OPTIONS } from '../../utils/demand.js'
 const { api, goDemandDetail, handleError } = usePortal()
 // 分页口径与 APP 及 API 默认值一致
 const PAGE_SIZE = 20
@@ -112,8 +111,6 @@ const pageCount = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE))
 const filterCount = computed(() => (filters.genreId ? 1 : 0) + (filters.taskType ? 1 : 0) + (Number(filters.budgetMinYuan) > 0 ? 1 : 0) + (Number(filters.budgetMaxYuan) > 0 ? 1 : 0) + (Number(filters.episodesMin) > 0 ? 1 : 0))
 const filterLabels = computed(() => [filters.genreId ? genreLabel(filters.genreId) : null, filters.taskType ? taskTypeLabel(filters.taskType) : null].filter(Boolean).join(' · '))
 const resultTitle = computed(() => (filterLabels.value ? `征集中的任务 · ${filterLabels.value}` : '征集中的任务'))
-// 奖池口径与列表一致（公开可接单），后端给的是分
-const prizePoolText = computed(() => money(stats.value.prizePoolFen))
 // 题材角标直接用后端的 genreCounts（按 genreId 聚合），字典只负责取名
 const genreCounts = computed(() => {
   const map = {}
@@ -205,7 +202,6 @@ onMounted(async () => { await Promise.all([loadMeta(), load()]) })
 .head-stats > div:last-child { padding-right: 0 }
 .head-stats dt { font-size: 12px; letter-spacing: .06em; color: var(--ink-3); white-space: nowrap }
 .head-stats dd { margin: 5px 0 0; font-family: var(--serif); font-size: 23px; line-height: 1.15; font-variant-numeric: tabular-nums; white-space: nowrap }
-.head-stats dd.money { color: var(--cinnabar) }
 
 /* 工具带：搜索 + 排序 + 筛选入口 */
 .toolbar { display: flex; align-items: flex-end; gap: 12px; margin-top: 18px; padding-bottom: 13px; border-bottom: 1px solid var(--rule) }
