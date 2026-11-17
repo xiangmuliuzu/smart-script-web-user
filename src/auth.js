@@ -73,6 +73,33 @@ export async function getAgreements() {
   return list
 }
 
+// ---- 扫码登录：PC 出码 → App 扫码确认 → PC 轮询取令牌 ----
+// 令牌只由服务端在轮询命中「已确认」时签发一次，前端不参与任何凭证拼接。
+
+/** 出码。portal 决定服务端准入口径：创作者端要求作者能力，企业端不要求。 */
+export function createQrLogin() {
+  return request('/api/v1/auth/qr/create', { method: 'POST', authenticated: false, body: { portal: 'creator' } })
+}
+
+/** 轮询票据状态；票据被 App 确认后，同一次响应里带回 token 与 user。 */
+export function pollQrLogin(qrToken) {
+  return request('/api/v1/auth/qr/poll', { method: 'POST', authenticated: false, body: { qrToken } })
+}
+
+/** 拒绝一次已被扫的票据（抢扫防护）：令牌只在出码方浏览器里，无需登录身份。 */
+export function abortQrLogin(qrToken) {
+  return request('/api/v1/auth/qr/abort', { method: 'POST', authenticated: false, body: { qrToken } })
+}
+
+/** 扫码登录成功后的落地：与密码登录同一套校验（账号域 + 创作者能力）。 */
+export function acceptQrLogin(result) {
+  assertUser(result.user)
+  if (typeof result.token !== 'string' || !result.token) throw new Error('登录失败，请稍后重试')
+  clearSession()
+  localStorage.setItem(portal.tokenKey, result.token)
+  return result.user
+}
+
 /** 发送短信验证码，scene 取 REGISTER / RESET_PASSWORD。返回 cooldownSeconds 供倒计时使用。 */
 export async function sendSmsCode({ phone, scene }) {
   return request('/api/v1/auth/sms/send', {
