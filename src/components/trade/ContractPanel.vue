@@ -1,7 +1,7 @@
 <template>
   <div class="contract-panel">
     <div class="filter-bar">
-      <select v-model="role" class="filter-select" @change="reload"><option value="">我的全部</option><option value="seller">我卖出的</option><option value="buyer">我买入的</option></select>
+      <span class="role-note cost">我卖出的合同</span>
       <select v-model="status" class="filter-select" @change="reload"><option value="">全部状态</option><option value="pending">待签署</option><option value="partial_signed">部分签署</option><option value="completed">已完成</option></select>
       <input v-model="keyword" class="filter-input" placeholder="搜索合同号/订单号/作品/对方" @keyup.enter="reload">
     </div>
@@ -16,7 +16,7 @@
         <div class="contract-top">
           <b>《{{ c.workTitle || '合同#' + c.contractId }}》</b>
           <span class="status-tag" :class="'tag-' + c.status">{{ contractStatusLabel(c.status) }}</span>
-          <span class="mine-role cost">{{ isBuyerOf(c) ? '我是买方' : '我是卖方' }}</span>
+          <span class="mine-role cost">我是卖方</span>
         </div>
         <p class="contract-meta">合同编号：{{ c.contractNo || '#' + c.contractId }} · 订单号：{{ c.orderNo || '#' + c.orderId }}</p>
         <p class="contract-meta">金额：{{ money(c.amount) }} · 授权：{{ licenseLabel(c.licenseType) }}</p>
@@ -116,7 +116,6 @@ const PAGE_SIZE = 10
 const contracts = ref([])
 const pending = ref(false)
 const error = ref('')
-const role = ref('')
 const status = ref('')
 const keyword = ref('')
 const pageNum = ref(1)
@@ -150,7 +149,6 @@ const editForm = ref({ contractId: 0, templateId: '', clausesText: '' })
 // 合同 amount 接口直接返回元（未转分），展示不除 100
 const licenseLabel = t => ({ exclusive: '独家授权', non_exclusive: '非独家授权', adaptation: '改编授权' })[t] || t || '未指定'
 const contractStatusLabel = s => ({ pending: '待签署', partial_signed: '部分签署', completed: '已完成' })[s] || s || '-'
-const isBuyerOf = c => Number(c?.buyerId) === props.userId
 const isSigned = v => Number(v) === 1
 const signedText = v => (isSigned(v) ? '已签' : '未签')
 const signedClass = v => (isSigned(v) ? 'sign-done' : 'sign-todo')
@@ -167,16 +165,16 @@ async function downloadSignedPdf(c) {
   }
 }
 
-/** 我可签署：仅 pending/partial_signed 且我这一侧未签（completed/archived/cancelled 均不可，问题6）。 */
+/** 我可签署：仅 pending/partial_signed 且卖方侧未签（completed/archived/cancelled 均不可，问题6）。 */
 function canSign(c) {
   if (!c || !['pending', 'partial_signed'].includes(c.status)) return false
-  return isBuyerOf(c) ? !isSigned(c.buyerSignStatus) : !isSigned(c.sellerSignStatus)
+  return !isSigned(c.sellerSignStatus)
 }
 
 async function load() {
   pending.value = true; error.value = ''
   try {
-    const result = await api.value.listContracts({ role: role.value, status: status.value, keyword: keyword.value.trim(), pageNum: pageNum.value, pageSize: PAGE_SIZE })
+    const result = await api.value.listContracts({ role: 'seller', status: status.value, keyword: keyword.value.trim(), pageNum: pageNum.value, pageSize: PAGE_SIZE })
     contracts.value = asList(result)
     total.value = Number(result?.total) || 0
   } catch (e) {
@@ -364,6 +362,7 @@ function openSignById(contract) {
 .contract-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
 .contract-top b { font-size: 14px }
 .mine-role { font-size: 12px }
+.role-note { font-size: 13px; color: #303133; font-weight: 500 }
 .contract-meta { font-size: 12.5px; color: var(--ink-2); margin: 0 }
 .sign-line { display: flex; gap: 12px }
 .sign-done { color: #67c23a; font-weight: 500 }
