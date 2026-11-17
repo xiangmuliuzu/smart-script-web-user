@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { login, getCaptcha, getInfo, logout, request, getToken, safeRedirect, assertUser, register, sendSmsCode, sendEmailCode, resetPassword } from '../src/auth.js'
+import { login, getCaptcha, getInfo, logout, request, getToken, safeRedirect, assertUser, register, sendSmsCode, sendEmailCode, resetPassword, createQrLogin, pollQrLogin } from '../src/auth.js'
 import { portal } from '../src/portal.js'
 const storage = new Map()
 globalThis.localStorage = { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, String(value)), removeItem: key => storage.delete(key) }
@@ -197,4 +197,32 @@ test('login redirects only to implemented local pages', () => {
   for (const raw of [null, '//evil.test', 'https://evil.test', '/login', '/pc/user', '/session/../login', '/\\evil.test', '/%5cevil.test']) assert.equal(safeRedirect(raw), '/session')
   assert.equal(safeRedirect('/session?tab=1#ok'), '/session?tab=1#ok')
   assert.equal(safeRedirect('/session-check'), '/session-check')
+})
+
+test('扫码登录从 AjaxResult.data 里取票据，不把 undefined 写进二维码', async () => {
+  const token = 'b'.repeat(64)
+  let calls = 0
+  globalThis.fetch = async (url, options) => {
+    calls++
+    if (url.endsWith('/api/v1/auth/qr/create')) {
+      assert.deepEqual(JSON.parse(options.body), { portal: 'creator' })
+      return { ok: true, status: 200, json: async () => ({ code: 200, msg: '操作成功', data: { status: 'WAITING', portal: 'creator', qrToken: token, expiresIn: 120, pollInterval: 2 } }) }
+    }
+    if (url.endsWith('/api/v1/auth/qr/poll')) {
+      assert.deepEqual(JSON.parse(options.body), { qrToken: token })
+      return { ok: true, status: 200, json: async () => ({ code: 200, msg: '操作成功', data: { status: 'SCANNED', nickname: '编剧甲', phoneMasked: '139****0000' } }) }
+    }
+    throw new Error('unexpected ' + url)
+  }
+  const created = await createQrLogin()
+  assert.equal(created.qrToken, token)
+  const polled = await pollQrLogin(created.qrToken)
+  assert.equal(polled.status, 'SCANNED')
+  assert.equal(polled.nickname, '编剧甲')
+  assert.equal(calls, 2)
+})
+
+test('出码响应缺票据时直接报错，不生成一张无效二维码', async () => {
+  globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ code: 200, msg: '操作成功', data: { status: 'WAITING' } }) })
+  await assert.rejects(createQrLogin(), /二维码生成失败/)
 })
