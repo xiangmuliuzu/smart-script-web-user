@@ -33,7 +33,7 @@
         <div class="editor-location"><span>{{ section === 'summary' ? '作品资料 / 故事简介' : section === 'outline' ? '作品资料 / 剧本大纲' : section === 'characters' ? '作品资料 / 人物便签' : section === 'storyboard' ? '分镜目录 / 分镜成果' : '正文分集 / 第 ' + (activeChapter + 1) + ' 集' }}</span><span>{{ wordCount(currentText).toLocaleString() }} 字</span><div class="view-mode" role="group" aria-label="创作模式"><button type="button" :aria-pressed="!readOnly" :disabled="busy" @click="readOnly = false">编辑</button><button type="button" :aria-pressed="readOnly" :disabled="busy" @click="readOnly = true">阅读</button></div></div>
         <div v-if="section === 'chapter'" class="chapter-trial-setting"><el-switch v-model="currentChapter.isFree" active-value="1" inactive-value="0" aria-label="设为试读章节（免费阅读）" :disabled="busy || !editable || readOnly" /><span>设为试读章节（免费阅读）</span><small>开启试读后立即生效，无需单独审核或手动发布，读者即可免费阅读</small></div>
         <ScriptEditor v-if="section === 'chapter'" ref="scriptEditor" :key="currentChapter.draftId" v-model="currentChapter.content" v-model:title="currentChapter.chapterTitle" :disabled="busy || !editable" :read-only="readOnly" />
-        <div v-else-if="section === 'storyboard'" class="script-paper notes-paper storyboard-editor"><h2>分镜成果</h2><p class="notes-description">分镜与章节是同级目录。分镜标题必须关联当前作品已有章节，内容可以由 AI 生成后继续修改。</p><label class="field">关联章节<select v-model="storyboardDraft.title" :disabled="busy || !editable || readOnly"><option value="">请选择章节目录标题</option><option v-for="chapter in chapters" :key="chapter.draftId" :value="chapter.chapterTitle">{{ chapter.chapterTitle || `第 ${chapter.chapterNo} 集` }}</option></select></label><textarea v-model="storyboardDraft.content" aria-label="分镜内容" :disabled="busy || !editable || readOnly" placeholder="场次 / 镜号 / 景别 / 运镜 / 画面 / 台词 / 音效与转场…" /><div class="row top-gap"><button class="btn" :disabled="busy || !editable || readOnly || !storyboardDraft.content.trim() || storyboardSaving" @click="saveStoryboard">{{ storyboardSaving ? '保存中…' : '保存到分镜目录' }}</button><span class="cost">保存后会进入当前作品的分镜审核流程</span></div></div><div v-else class="script-paper notes-paper"><h2>{{ section === 'summary' ? '故事简介' : section === 'outline' ? '剧本大纲' : '人物便签' }}</h2><p class="notes-description">{{ section === 'summary' ? '用一段话讲清人物、冲突与故事走向，保存时同步至作品简介。' : section === 'outline' ? 'AI 剧本生成的每集事件卡会存到这里：可在此直接修改，再点「根据大纲生成各章」把正文写出来。大纲随保存草稿在本机存档。' : '记录人物关系、动机与成长线，保存时同步到作品台账（PC 与 App 共用）。' }}</p><textarea v-if="section === 'summary'" v-model="form.summary" aria-label="故事简介" :disabled="busy || !editable" :readonly="readOnly" placeholder="这个故事从谁开始，又将走向哪里？" /><textarea v-else-if="section === 'outline'" v-model="scriptOutline" class="outline-textarea" aria-label="剧本大纲" :disabled="busy || !editable" :readonly="readOnly" placeholder="AI 剧本生成的分集事件卡会出现在这里，也可以自己写一份骨架：第1集：事件名 / 开场承接 / 本集事件 / 冲突与推进 / 结果或反转 / 结尾钩子" /><textarea v-else v-model="characters" aria-label="人物便签" :disabled="busy || !editable" :readonly="readOnly" placeholder="姓名 / 身份 / 性格 / 人物关系…" /><div v-if="section === 'characters'" class="ledger-block"><h3>创作台账（其余七类）</h3><p class="cost">台账存服务器、三端共用；续写与「根据大纲生成各章」时自动注入。道具档案的件数与「已交付给谁」是全书唯一依据，写法基线一旦定下就不要改，否则读者会觉得换了写手。</p><label class="field">人物关系<textarea v-model="ledger.relations" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：顾守山—顾星宇：父子，因旧案生隙" /></label><label class="field">伏笔（埋在哪集/是否回收）<textarea v-model="ledger.foreshadow" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第3集铜铃——第9集已回收" /></label><label class="field">时间线<textarea v-model="ledger.timeline" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第1集 雨夜；第2集 次日清晨" /></label><label class="field">物品位置<textarea v-model="ledger.items" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：铜铃在顾星宇房梁上" /></label><label class="field">重要道具档案（名称｜件数｜持有人｜状态｜外观）<textarea v-model="ledger.props" :disabled="busy || !editable" :readonly="readOnly" placeholder="一行一件，例如：傩面具｜十二面｜顾守山｜在手｜明代木雕；铜钥匙｜1把｜雷老幺｜已交付给吴德贵｜黄铜" /></label><label class="field">写法基线（人称/句式/对白比例/禁用写法）<textarea v-model="ledger.styleGuide" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第三人称限知；短句为主；对白占六成；不用全角括号补叙，不写场景头" /></label><label class="field">未解线索<textarea v-model="ledger.threads" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：老照片背面的人是谁" /></label></div><div v-if="section === 'outline'" class="row top-gap"><button class="btn ghost sm" :disabled="!scriptOutline.trim()" @click="copyOutline">复制大纲</button><button class="btn ghost sm" :disabled="busy || !editable || readOnly || !scriptOutline.trim()" @click="clearOutline">清空</button><button class="btn sm" style="margin-left:auto" :disabled="busy || !editable || readOnly || !scriptOutline.trim() || genJobRunning" title="把当前大纲逐集写成正文：提交后台队列，关闭页面也不中断，失败可续跑" @click="openChapterPicker()">{{ genJobRunning ? '正在生成…' : '根据大纲生成各章' }}</button></div><button v-if="section === 'characters'" class="btn ghost sm" :disabled="!characters.trim()" @click="exportNotes()">导出人物便签</button><details v-if="section === 'characters' && noteBackups.length" class="notes-backups"><summary>已保存作品的便签存档</summary><button v-for="note in noteBackups" :key="note.title" @click="exportNotes(note.characters, note.title)">下载 · {{ note.title }}</button></details></div>
+        <div v-else-if="section === 'storyboard'" class="script-paper notes-paper storyboard-editor"><h2>分镜成果</h2><p class="notes-description">分镜与章节是同级目录。分镜标题必须关联当前作品已有章节，试读权限跟随关联章节设置；章节开启试读后，审核通过的分镜会同步对读者开放。</p><label class="field">关联章节<select v-model="storyboardDraft.title" :disabled="busy || !editable || readOnly"><option value="">请选择章节目录标题</option><option v-for="chapter in chapters" :key="chapter.draftId" :value="chapter.chapterTitle">{{ chapter.chapterTitle || `第 ${chapter.chapterNo} 集` }}</option></select></label><div class="storyboard-trial-setting"><el-switch :model-value="storyboardTrialEnabled" :active-value="true" :inactive-value="false" aria-label="开放分镜试读" :disabled="busy || !editable || readOnly || !selectedStoryboardChapter?.chapterId || storyboardTrialSaving" @change="setStoryboardTrial" /><div><strong>{{ storyboardTrialEnabled ? '已开启分镜试读' : '未开启分镜试读' }}</strong><small>{{ selectedStoryboardChapter?.chapterId ? '分镜跟随所选章节的试读设置，修改后立即保存。' : '请先保存关联章节，再设置分镜试读。' }}</small></div></div><textarea v-model="storyboardDraft.content" aria-label="分镜内容" :disabled="busy || !editable || readOnly" placeholder="场次 / 镜号 / 景别 / 运镜 / 画面 / 台词 / 音效与转场…" /><div class="row top-gap"><button class="btn" :disabled="busy || !editable || readOnly || !storyboardDraft.content.trim() || storyboardSaving" @click="saveStoryboard">{{ storyboardSaving ? '保存中…' : '保存到分镜目录' }}</button><span class="cost">保存后会进入当前作品的分镜审核流程，审核通过且关联章节开放试读后，读者才能看到分镜正文</span></div></div><div v-else class="script-paper notes-paper"><h2>{{ section === 'summary' ? '故事简介' : section === 'outline' ? '剧本大纲' : '人物便签' }}</h2><p class="notes-description">{{ section === 'summary' ? '用一段话讲清人物、冲突与故事走向，保存时同步至作品简介。' : section === 'outline' ? 'AI 剧本生成的每集事件卡会存到这里：可在此直接修改，再点「根据大纲生成各章」把正文写出来。大纲随保存草稿在本机存档。' : '记录人物关系、动机与成长线，保存时同步到作品台账（PC 与 App 共用）。' }}</p><textarea v-if="section === 'summary'" v-model="form.summary" aria-label="故事简介" :disabled="busy || !editable" :readonly="readOnly" placeholder="这个故事从谁开始，又将走向哪里？" /><textarea v-else-if="section === 'outline'" v-model="scriptOutline" class="outline-textarea" aria-label="剧本大纲" :disabled="busy || !editable" :readonly="readOnly" placeholder="AI 剧本生成的分集事件卡会出现在这里，也可以自己写一份骨架：第1集：事件名 / 开场承接 / 本集事件 / 冲突与推进 / 结果或反转 / 结尾钩子" /><textarea v-else v-model="characters" aria-label="人物便签" :disabled="busy || !editable" :readonly="readOnly" placeholder="姓名 / 身份 / 性格 / 人物关系…" /><div v-if="section === 'characters'" class="ledger-block"><h3>创作台账（其余七类）</h3><p class="cost">台账存服务器、三端共用；续写与「根据大纲生成各章」时自动注入。道具档案的件数与「已交付给谁」是全书唯一依据，写法基线一旦定下就不要改，否则读者会觉得换了写手。</p><label class="field">人物关系<textarea v-model="ledger.relations" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：顾守山—顾星宇：父子，因旧案生隙" /></label><label class="field">伏笔（埋在哪集/是否回收）<textarea v-model="ledger.foreshadow" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第3集铜铃——第9集已回收" /></label><label class="field">时间线<textarea v-model="ledger.timeline" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第1集 雨夜；第2集 次日清晨" /></label><label class="field">物品位置<textarea v-model="ledger.items" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：铜铃在顾星宇房梁上" /></label><label class="field">重要道具档案（名称｜件数｜持有人｜状态｜外观）<textarea v-model="ledger.props" :disabled="busy || !editable" :readonly="readOnly" placeholder="一行一件，例如：傩面具｜十二面｜顾守山｜在手｜明代木雕；铜钥匙｜1把｜雷老幺｜已交付给吴德贵｜黄铜" /></label><label class="field">写法基线（人称/句式/对白比例/禁用写法）<textarea v-model="ledger.styleGuide" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：第三人称限知；短句为主；对白占六成；不用全角括号补叙，不写场景头" /></label><label class="field">未解线索<textarea v-model="ledger.threads" :disabled="busy || !editable" :readonly="readOnly" placeholder="例如：老照片背面的人是谁" /></label></div><div v-if="section === 'outline'" class="row top-gap"><button class="btn ghost sm" :disabled="!scriptOutline.trim()" @click="copyOutline">复制大纲</button><button class="btn ghost sm" :disabled="busy || !editable || readOnly || !scriptOutline.trim()" @click="clearOutline">清空</button><button class="btn sm" style="margin-left:auto" :disabled="busy || !editable || readOnly || !scriptOutline.trim() || genJobRunning" title="把当前大纲逐集写成正文：提交后台队列，关闭页面也不中断，失败可续跑" @click="openChapterPicker()">{{ genJobRunning ? '正在生成…' : '根据大纲生成各章' }}</button></div><button v-if="section === 'characters'" class="btn ghost sm" :disabled="!characters.trim()" @click="exportNotes()">导出人物便签</button><details v-if="section === 'characters' && noteBackups.length" class="notes-backups"><summary>已保存作品的便签存档</summary><button v-for="note in noteBackups" :key="note.title" @click="exportNotes(note.characters, note.title)">下载 · {{ note.title }}</button></details></div>
         <footer class="editor-footer"><span>{{ readOnly ? '阅读模式 · 内容不可编辑' : section === 'chapter' ? '格式随正文保存 · Ctrl+Z 撤销 · Ctrl+B 加粗' : section === 'storyboard' ? '分镜目录独立保存 · 可由 AI 生成后继续修改' : '让故事的骨架更清晰' }}</span><span>共 {{ chapters.length }} 集 · {{ totalWords.toLocaleString() }} 字</span></footer>
       </div>
       <aside class="creation-ai" aria-label="AI 编剧助手"><AiStudio v-if="!compactAi" :key="workspaceRevision" embedded :workspace-state="aiState" :insert-disabled="busy || !editable || readOnly" :current-content="currentText" :outline="scriptOutline" :ledger="ledger" :volumes="volumes" :prev-chapter="prevChapterText" :prev-summaries="prevSummaries" :chapter-no="activeChapter + 1" :chapters="chapters" :work-id="createdId" @insert="insertAi" @fill-outline="openChapterPicker" @create-outline="applyOutline" /></aside>
@@ -108,6 +108,15 @@ const currentChapter = computed(() => chapters.value[activeChapter.value])
 const storyboardDraft = reactive({ title: '', content: '' })
 const storyboards = ref([])
 const storyboardSaving = ref(false)
+const storyboardTrialSaving = ref(false)
+const selectedStoryboardChapter = computed(() => chapters.value.find(chapter => String(chapter.chapterTitle || '').trim() === String(storyboardDraft.title || '').trim()))
+const selectedStoryboard = computed(() => storyboards.value.find(item => String(item.chapterTitle || item.title || item.name || '').trim() === String(storyboardDraft.title || '').trim()))
+// 分镜试读权限跟随关联章节；作者本人可看到正文，但不代表读者已经开放试读。
+const storyboardTrialEnabled = computed(() => {
+  const chapter = selectedStoryboardChapter.value
+  if (chapter) return chapter.isFree === '1' || chapter.isFree === 1 || chapter.isFree === true || selectedStoryboard.value?.trialEnabled === true || selectedStoryboard.value?.trialEnabled === 1 || selectedStoryboard.value?.trialEnabled === '1'
+  return selectedStoryboard.value?.trialEnabled === true || selectedStoryboard.value?.trialEnabled === 1 || selectedStoryboard.value?.trialEnabled === '1'
+})
 const currentText = computed(() => section.value === 'summary' ? form.summary : section.value === 'outline' ? scriptOutline.value : section.value === 'characters' ? characters.value : section.value === 'storyboard' ? storyboardDraft.content : currentChapter.value.content)
 const totalWords = computed(() => chapters.value.reduce((count, chapter) => count + wordCount(chapter.content), 0))
 const works = ref([])
@@ -137,6 +146,7 @@ let originalWorkFields = ''
 let originalChapters = new Map()
 let completed = false
 let timer
+let autoSaveTimer
 let media
 let ready = false
 let disposed = false
@@ -158,7 +168,21 @@ watch([form, chapters, characters, scriptOutline, storyboardDraft, createdId], (
   if (!ready || completed) return
   draftStatus.value = '正在保存本机草稿…'
   clearTimeout(timer); timer = setTimeout(cacheDraft, 400)
+  scheduleAutoSave()
 }, { deep: true })
+
+// 服务器草稿自动保存：用户停止编辑 5 秒后保存一次，避免每次按键都请求后端。
+// 本机草稿仍按短延迟保存，断网或关闭页面时可以恢复最新内容。
+function scheduleAutoSave() {
+  clearTimeout(autoSaveTimer)
+  if (!ready || completed || !editable.value || !hasContent()) return
+  autoSaveTimer = setTimeout(() => {
+    autoSaveTimer = null
+    if (snapshot() === savedSnapshot) return
+    if (busy.value) { scheduleAutoSave(); return }
+    save(false, { navigate: false, review: false, silent: true, auto: true })
+  }, 5000)
+}
 
 // 目录在桌面和抽屉中复用，业务状态仍由本页统一维护。
 const DirectoryContents = defineComponent({ setup() { return () => h('div', { class: 'directory-content' }, [
@@ -171,9 +195,10 @@ const DirectoryContents = defineComponent({ setup() { return () => h('div', { cl
     h('button', { class: 'episode-delete', title: '删除分集', 'aria-label': `删除分集：${chapter.chapterTitle || '未命名分集'}`, disabled: busy.value || !editable.value || readOnly.value || chapters.value.length <= 1, onClick: () => removeChapter(index) }, '删除')
   ]))),
   h('div', { class: 'directory-heading storyboard-heading' }, [h('h2', '分镜目录'), h('button', { title: '新建分镜', 'aria-label': '新建分镜', disabled: busy.value || !editable.value || readOnly.value, onClick: () => { storyboardDraft.title = ''; storyboardDraft.content = ''; selectSection('storyboard') } }, [h(VideoCamera, { class: 'directory-icon' }), '新建'])]),
-  h('nav', { class: 'episode-list storyboard-list', 'aria-label': '分镜目录' }, storyboards.value.map((storyboard, index) => h('button', { key: storyboard.storyboardId || storyboard.id || index, class: ['episode-card', { selected: section.value === 'storyboard' && storyboardDraft.title === (storyboard.title || storyboard.name) }], onClick: () => { storyboardDraft.title = storyboard.title || storyboard.name || `分镜 ${index + 1}`; storyboardDraft.content = storyboard.content || storyboard.description || ''; selectSection('storyboard') } }, [h('span', { class: 'episode-index' }, String(index + 1).padStart(2, '0')), h('span', { class: 'episode-name' }, storyboard.title || storyboard.name || '未命名分镜'), h('small', `${storyboard.shotCount ?? storyboard.totalShots ?? '—'} 镜头`)]))),
+  h('nav', { class: 'episode-list storyboard-list', 'aria-label': '分镜目录' }, storyboards.value.map((storyboard, index) => h('button', { key: storyboard.storyboardId || storyboard.id || index, class: ['episode-card', { selected: section.value === 'storyboard' && storyboardDraft.title === (storyboard.chapterTitle || storyboard.title || storyboard.name) }], onClick: () => { storyboardDraft.title = storyboard.chapterTitle || storyboard.title || storyboard.name || ''; storyboardDraft.content = storyboard.content || storyboard.description || ''; selectSection('storyboard') } }, [h('span', { class: 'episode-index' }, String(index + 1).padStart(2, '0')), h('span', { class: 'episode-name' }, storyboard.chapterTitle || storyboard.title || storyboard.name || '未命名分镜'), h('small', `${storyboard.shotCount ?? storyboard.totalShots ?? storyboard.wordCount ?? '—'} ${storyboard.shotCount || storyboard.totalShots ? '镜头' : '字'} · ${storyboardStatus(storyboard.status)}`)]))),
   h('div', { class: 'create-upload directory-upload' }, [h('button', { class: 'directory-drop', disabled: busy.value || !editable.value || readOnly.value, onClick: () => fileInput.value.click(), onDragover: event => event.preventDefault(), onDrop: event => { event.preventDefault(); importFile(event.dataTransfer.files[0]) } }, [h(Upload, { class: 'upload-icon' }), h('b', importing.value ? '正在读取剧本…' : '导入本地剧本'), h('span', '点击选择，或拖拽文件到这里'), h('small', '.docx / .txt / .md · 最大 10 MB')]), form.scriptName ? h('p', { class: 'import-file-name' }, form.scriptName) : null, form.scriptName ? h('p', { class: 'cost' }, `已读取 ${totalWords.value.toLocaleString()} 字 · 导入到当前分集`) : null])
 ]) } })
+const storyboardStatus = status => ({ ai_reviewing: 'AI审核中', pending: '待人工审核', approved: '审核通过', rejected: '审核驳回' })[status] || '待审核'
 function selectSection(value) { section.value = value; if (value === 'storyboard') aiState.tab = 'storyboard'; directoryVisible.value = false }
 
 // 当前分集的上一章末尾（续写注入锚点）。
@@ -292,9 +317,8 @@ async function insertAi(content) {
   if (busy.value || !editable.value || readOnly.value) return
   if (section.value === 'storyboard') {
     storyboardDraft.content = content
-    if (!storyboardDraft.title.trim()) storyboardDraft.title = `分镜成果 · ${form.title || '未命名作品'}`
     aiVisible.value = false
-    ElMessage.success('已写入分镜编辑区，请确认后保存到分镜目录')
+    ElMessage.success(storyboardDraft.title.trim() ? '已写入分镜编辑区，请确认后保存到分镜目录' : '已写入分镜编辑区，请先选择已有章节目录标题')
     return
   }
   const target = currentChapter.value
@@ -311,15 +335,42 @@ async function loadStoryboards(id) {
   } catch { /* 后端未接入分镜目录时保留空目录，不影响章节编辑 */ }
 }
 async function saveStoryboard() {
-  if (!createdId.value || !storyboardDraft.title.trim() || !storyboardDraft.content.trim() || storyboardSaving.value) return
+  if (!createdId.value || storyboardSaving.value) return
+  if (!storyboardDraft.title.trim()) { ElMessage.warning('请选择已有章节目录标题'); return }
+  if (!storyboardDraft.content.trim()) { ElMessage.warning('请输入分镜内容'); return }
   storyboardSaving.value = true
   try {
-    await api.value.createWorkStoryboard(createdId.value, { title: storyboardDraft.title.trim() || '未命名分镜', content: storyboardDraft.content, source: 'manual' })
+    await api.value.createWorkStoryboard(createdId.value, { title: storyboardDraft.title.trim(), content: storyboardDraft.content, source: 'manual' })
     await loadStoryboards(createdId.value)
     ElMessage.success('分镜已保存到作品目录，等待审核')
   } catch (failure) {
     await handleError(failure)
   } finally { storyboardSaving.value = false }
+}
+async function setStoryboardTrial(value) {
+  const chapter = selectedStoryboardChapter.value
+  if (!createdId.value || !chapter?.chapterId || storyboardTrialSaving.value) {
+    ElMessage.warning('请先选择并保存关联章节，再设置分镜试读')
+    return
+  }
+  if (!editable.value || readOnly.value) return
+  const enabled = value === true || value === 1 || value === '1'
+  storyboardTrialSaving.value = true
+  try {
+    await api.value.saveChapter(createdId.value, { ...chapter, isFree: enabled ? '1' : '0' })
+    chapter.isFree = enabled ? '1' : '0'
+    const original = originalChapters.get(Number(chapter.chapterId))
+    if (original) original.isFree = chapter.isFree
+    for (const item of storyboards.value) {
+      const itemTitle = String(item.chapterTitle || item.title || item.name || '').trim()
+      if (itemTitle === String(chapter.chapterTitle || '').trim()) item.trialEnabled = enabled
+    }
+    ElMessage.success(enabled ? '分镜试读已开启' : '分镜试读已关闭')
+  } catch (failure) {
+    await handleError(failure)
+  } finally {
+    storyboardTrialSaving.value = false
+  }
 }
 // 方案 2：正文定稿后单独一次 AI 调用，产出本章摘要 + 台账更新，由后端落库；正文本身不做任何改动。
 // 只有已保存过的章节（有 chapterId）才触发；新章先保存再插入时才生成摘要。
@@ -674,8 +725,8 @@ function exportNotes(content = characters.value, title = form.title) {
   const link = document.createElement('a'); link.href = url; link.download = (title.trim() || '未命名剧本') + '-人物便签.txt'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 async function save(submit, options = {}) {
-  const { navigate = true, review = true } = options
-  if (!editable.value || busy.value) return
+  const { navigate = true, review = true, silent = false } = options
+  if (!editable.value || busy.value) { if (options.auto) scheduleAutoSave(); return false }
   error.value = validateWork(form)
   if (!error.value) {
     for (let index = 0; index < chapters.value.length; index++) {
@@ -687,7 +738,11 @@ async function save(submit, options = {}) {
       if (problem) { error.value = `第 ${index + 1} 集：${problem}`; activeChapter.value = index; section.value = 'chapter'; break }
     }
   }
-  if (error.value) { ElMessage.warning(error.value); return }
+  if (error.value) {
+    if (silent) draftStatus.value = '草稿暂未上传，内容已保存在本机'
+    else ElMessage.warning(error.value)
+    return false
+  }
   saving.value = true
   try {
     if (submit) { try { await ElMessageBox.confirm('保存全部分集并提交内容审核。审核期间作品将锁定编辑，通过后不会自动上架，需要你确认后手动上架。', '提交审核', { confirmButtonText: '保存并提交', cancelButtonText: '继续编辑' }) } catch { return } }
@@ -749,7 +804,8 @@ async function save(submit, options = {}) {
       else storage.removeItem(draftBase + ':outline:' + createdId.value)
     } catch { cacheDraft(); storageFailed.value = true; ElMessage.warning('作品已保存，剧本大纲未能在本机存档，请先复制大纲'); return }
     savedSnapshot = snapshot(); cacheDraft(); draftStatus.value = '作品已保存'
-    ElMessage.success(submit ? '已提交内容审核' : '草稿已保存至作品')
+    if (silent) draftStatus.value = '草稿已自动保存'
+    else ElMessage.success(submit ? '已提交内容审核' : '草稿已保存至作品')
     // 批量生成的章节落库后才拿得到 chapterId，验收与卷快照必须在这之后补跑。
     if (review && batchPendingReview.value) {
       const count = batchPendingReview.value
@@ -759,10 +815,22 @@ async function save(submit, options = {}) {
         await runBatchReview(count)
       } catch { ElMessage.info('已跳过逐集验收，可在单集「更新摘要」时单独验收') }
     }
-    completed = true
-    if (navigate) { storage.removeItem(draftKey); await goWork(createdId.value) }
-  } catch (failure) { error.value = '保存未完成，已保留内容，请重试。' + failure.message; cacheDraft(); await handleError(failure) }
-  finally { saving.value = false }
+    if (navigate) {
+      completed = true
+      storage.removeItem(draftKey)
+      await goWork(createdId.value)
+    }
+    return true
+  } catch (failure) {
+    error.value = '保存未完成，已保留内容，请重试。' + failure.message
+    cacheDraft()
+    if (silent) draftStatus.value = '自动保存失败，内容已保存在本机'
+    else await handleError(failure)
+    return false
+  } finally {
+    saving.value = false
+    if (options.auto && !completed && snapshot() !== savedSnapshot) scheduleAutoSave()
+  }
 }
 function protectUnload(event) { cacheDraft(); if (busy.value || (storageFailed.value && hasContent())) { event.preventDefault(); event.returnValue = '' } }
 async function allowNavigation(to, switchingWork = false) {
@@ -799,7 +867,7 @@ function restoreDraft(draft) {
   draftStatus.value = '已恢复本机草稿'
 }
 async function loadWorkspace() {
-  clearTimeout(timer); ready = false; initializing.value = true; completed = false; error.value = ''; workLoadFailed.value = false; storageFailed.value = false
+  clearTimeout(timer); clearTimeout(autoSaveTimer); autoSaveTimer = null; ready = false; initializing.value = true; completed = false; error.value = ''; workLoadFailed.value = false; storageFailed.value = false
   loadedWork.value = null; createdId.value = null; originalChapters = new Map(); activeChapter.value = 0; section.value = 'chapter'; storyboardDraft.title = ''; storyboardDraft.content = ''; storyboards.value = []
   directoryVisible.value = false; aiVisible.value = false; settingsVisible.value = false
   Object.assign(form, { title: '', summary: '', scriptUrl: '', scriptName: '', scriptSize: 0 })
@@ -871,5 +939,5 @@ onMounted(async () => {
   window.addEventListener('beforeunload', protectUnload)
   await Promise.all([loadWorks(), loadWorkspace()])
 })
-onBeforeUnmount(() => { cacheDraft(); disposed = true; ready = false; clearTimeout(timer); media?.removeEventListener('change', resizeAi); window.removeEventListener('beforeunload', protectUnload) })
+onBeforeUnmount(() => { cacheDraft(); disposed = true; ready = false; clearTimeout(timer); clearTimeout(autoSaveTimer); autoSaveTimer = null; media?.removeEventListener('change', resizeAi); window.removeEventListener('beforeunload', protectUnload) })
 </script>

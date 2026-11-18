@@ -17,7 +17,7 @@
           <summary><span><strong>分镜目录</strong><em>{{ storyboards.length }} 条</em></span><small>按场次、镜号查看分镜成果</small></summary>
           <div class="creator-catalog-scroll storyboard-scroll">
             <div v-if="storyboardLoading" class="catalog-placeholder">正在加载分镜目录…</div>
-            <div v-else-if="storyboards.length" class="tbl"><table><thead><tr><th>分镜标题</th><th>关联章节</th><th>镜头数</th><th>状态</th><th>更新时间</th></tr></thead><tbody><tr v-for="storyboard in storyboards" :key="storyboard.storyboardId || storyboard.id"><td>{{ storyboard.title || storyboard.name || '未命名分镜' }}</td><td>{{ storyboard.chapterTitle || (storyboard.chapterNo ? `第 ${storyboard.chapterNo} 章` : '作品级') }}</td><td>{{ storyboard.shotCount ?? storyboard.totalShots ?? '—' }}</td><td><span class="tag" :class="storyboard.status === 'approved' || storyboard.status === 'published' ? 'ok' : ''">{{ storyboardStatus(storyboard.status) }}</span></td><td>{{ storyboard.updateTime || storyboard.updatedAt || '—' }}</td></tr></tbody></table></div>
+            <div v-else-if="storyboards.length" class="tbl"><table><thead><tr><th>分镜标题</th><th>关联章节</th><th>镜头数</th><th>审核状态</th><th>试读</th><th>更新时间</th><th>操作</th></tr></thead><tbody><tr v-for="storyboard in storyboards" :key="storyboard.storyboardId || storyboard.id"><td>{{ storyboard.chapterTitle || storyboard.title || storyboard.name || '未命名分镜' }}</td><td>{{ storyboard.chapterTitle || (storyboard.chapterNo ? `第 ${storyboard.chapterNo} 章` : '作品级') }}</td><td>{{ storyboard.shotCount ?? storyboard.totalShots ?? storyboard.wordCount ?? '—' }}</td><td><span class="tag" :class="storyboard.status === 'approved' ? 'ok' : ''">{{ storyboardStatus(storyboard.status) }}</span></td><td><span class="tag" :class="storyboardTrialEnabled(storyboard) ? 'ok' : 'off'">{{ storyboardTrialEnabled(storyboard) ? '已开启' : '未开启' }}</span><small class="trial-source">跟随关联章节</small></td><td>{{ storyboard.updateTime || storyboard.updatedAt || '—' }}</td><td><button class="btn quiet sm" :disabled="!editable || storyboardDeleting !== null" @click="removeStoryboard(storyboard)">{{ storyboardDeleting === (storyboard.storyboardId || storyboard.id) ? '删除中…' : '删除' }}</button></td></tr></tbody></table></div>
             <div v-else class="catalog-placeholder storyboard-empty"><span class="storyboard-glyph">▦</span><strong>分镜目录已建立</strong><p>当前还没有分镜成果。使用 AI 分镜生成，或完成分镜任务交付后，内容会按场次和镜号显示在这里。</p></div>
           </div>
         </details>
@@ -46,7 +46,7 @@ import LoadState from '../../components/LoadState.vue'
 import PortalLayer from '../../components/PortalLayer.vue'
 import WorkSettings from './Settings.vue'
 import WorkDelete from './Delete.vue'
-import { changeShelfStatus, listWorkStoryboards } from '../../api/creator.js'
+import { changeShelfStatus, deleteWorkStoryboard, listWorkStoryboards } from '../../api/creator.js'
 const { api, user, canCreate, goWorks, handleError } = usePortal()
 const route = useRoute()
 const router = useRouter()
@@ -62,6 +62,7 @@ const error = ref('')
 const reviewError = ref('')
 const submitting = ref(false)
 const deleting = ref(null)
+const storyboardDeleting = ref(null)
 const settingsVisible = ref(false)
 const deleteVisible = ref(false)
 const versionsVisible = ref(false)
@@ -77,7 +78,15 @@ const workDisplayState = computed(() => reviewApproved.value
   : stateOf(work.value?.status))
 const reviewLabels = { approved: '通过', pending: '等待审核', ai_reviewing: 'AI 审核中', reviewing: '审核中', revision: '需修改', rejected: '驳回' }
 const chapterState = status => status === '0' ? { label: '已生效', tone: 'ok' } : status === '1' ? { label: '草稿', tone: 'off' } : status === 'approved' ? { label: '已通过', tone: 'ok' } : stateOf(status)
-const storyboardStatus = status => ({ draft: '草稿', reviewing: '审核中', approved: '已通过', published: '已生效', rejected: '已驳回' })[status] || status || '待整理'
+const storyboardStatus = status => ({ ai_reviewing: 'AI审核中', pending: '待人工审核', approved: '审核通过', rejected: '审核驳回' })[status] || '待审核'
+// 作者视角的 readable 包含本人权限，不能用它判断是否对读者开放试读。
+const storyboardTrialEnabled = storyboard => {
+  const explicit = storyboard?.trialEnabled === true || storyboard?.trialEnabled === 1 || storyboard?.trialEnabled === '1'
+  if (explicit) return true
+  const title = String(storyboard?.chapterTitle || storyboard?.title || storyboard?.name || '').trim()
+  const chapter = chapters.value.find(item => String(item.chapterTitle || '').trim() === title)
+  return chapter?.isFree === true || chapter?.isFree === 1 || chapter?.isFree === '1'
+}
 async function loadReviews() {
   reviewError.value = ''
   try { reviews.value = await api.value.listReviews(route.params.id) }
@@ -126,6 +135,15 @@ async function remove(chapter) {
   try { await api.value.deleteChapter(work.value.workId, chapter.chapterId); ElMessage.success('章节已删除'); await load() }
   catch (failure) { await handleError(failure) }
   finally { deleting.value = null }
+}
+async function removeStoryboard(storyboard) {
+  const storyboardId = storyboard.storyboardId || storyboard.id
+  if (!editable.value || !storyboardId || storyboardDeleting.value !== null) return
+  try { await ElMessageBox.confirm(`确定删除关联章节“${storyboard.chapterTitle || '未命名章节'}”的分镜？删除后无法恢复。`, '删除分镜', { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }) } catch { return }
+  storyboardDeleting.value = storyboardId
+  try { await deleteWorkStoryboard(work.value.workId, storyboardId); ElMessage.success('分镜已删除'); await load() }
+  catch (failure) { await handleError(failure) }
+  finally { storyboardDeleting.value = null }
 }
 async function submit() {
   if (!editable.value || submitting.value) return

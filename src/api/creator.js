@@ -22,6 +22,10 @@ export const createWorkStoryboard = (workId, form) =>
     method: 'POST',
     body: { title: form.title, content: form.content, source: form.source || 'manual' }
   })
+export const deleteWorkStoryboard = (workId, storyboardId) =>
+  data(`/api/v1/content/works/${encodeURIComponent(workId)}/storyboards/${encodeURIComponent(storyboardId)}`, {
+    method: 'DELETE'
+  })
 export const listReviews = async id => asList(await data(workPath(id) + '/review-records'))
 export const listVersions = async id => asList(await data(`/api/v1/content/works/${encodeURIComponent(id)}/versions`))
 export const createWork = form => data('/api/v1/content/works', { method: 'POST', body: { title: form.title.trim(), description: form.summary, scriptUrl: form.scriptUrl, scriptName: form.scriptName, scriptSize: form.scriptSize } })
