@@ -149,6 +149,16 @@ const ledgerPath = id => '/api/v1/content/works/' + encodeURIComponent(id) + '/l
 export const getWorkLedger = id => data(ledgerPath(id))
 export const saveWorkLedger = (id, ledger) => data(ledgerPath(id), { method: 'PUT', body: ledger })
 
+// ──── 时间线（只追加：约定/伏笔/道具转移等事件，按集号检索） ────
+const timelinePath = id => '/api/v1/content/works/' + encodeURIComponent(id) + '/timeline'
+export const listWorkTimeline = (id, params = {}) => {
+  const query = Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => key + '=' + encodeURIComponent(value))
+    .join('&')
+  return asList(data(timelinePath(id) + (query ? '?' + query : '')))
+}
+
 // 导演(skill) 列表（E 模块，供「导演(skill)选择」下拉）
 export const listAiSkills = async () => asList(await data('/api/v1/content/ai/skills'))
 
