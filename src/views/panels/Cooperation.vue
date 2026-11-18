@@ -4,7 +4,7 @@
       <!-- ═══ 询盘 Tab ═══ -->
       <template v-if="tab === 'inquiry'">
         <div class="filter-bar">
-          <select v-model="inquiryRole" class="filter-select" @change="loadInquiries"><option value="seller">我收到的</option><option value="buyer">我发起的</option></select>
+          <span class="role-note cost">我收到的询盘</span>
           <select v-model="inquiryStatus" class="filter-select" @change="inquiryPageNum = 1; loadInquiries()"><option value="">全部状态</option><option value="pending">待处理</option><option value="quoted">议价中</option><option value="deal">已达成</option><option value="rejected">已拒绝</option><option value="closed">已关闭</option></select>
           <input v-model="inquiryKeyword" class="filter-input" placeholder="搜索作品/询盘号" @keyup.enter="inquiryPageNum = 1; loadInquiries()">
         </div>
@@ -98,7 +98,7 @@
       <!-- ═══ 订单 Tab ═══ -->
       <template v-else-if="tab === 'order'">
         <div class="filter-bar">
-          <select v-model="orderRole" class="filter-select" @change="orderPageNum = 1; loadOrders()"><option value="seller">我卖出的</option><option value="buyer">我买入的</option></select>
+          <span class="role-note cost">我卖出的订单</span>
           <select v-model="orderStatus" class="filter-select" @change="orderPageNum = 1; loadOrders()"><option value="">全部状态</option><option value="confirmed">待签署</option><option value="paying">付款中</option><option value="delivering">交割中</option><option value="completed">已完成</option></select>
           <input v-model="orderKeyword" class="filter-input" placeholder="搜索订单号/作品/对方" @keyup.enter="orderPageNum = 1; loadOrders()">
         </div>
@@ -220,7 +220,6 @@ const counterpartyOf = r => {
 const inquiries = ref([])
 const inquiryPending = ref(false)
 const inquiryError = ref('')
-const inquiryRole = ref('seller')
 const inquiryStatus = ref('')
 const inquiryKeyword = ref(props.initialKeyword || '')
 const inquiryPageNum = ref(1)
@@ -230,8 +229,7 @@ const PAGE_SIZE = 10
 async function loadInquiries() {
   inquiryPending.value = true; inquiryError.value = ''
   try {
-    const params = { pageNum: inquiryPageNum.value, pageSize: PAGE_SIZE }
-    if (inquiryRole.value) params.role = inquiryRole.value
+    const params = { role: 'seller', pageNum: inquiryPageNum.value, pageSize: PAGE_SIZE }
     if (inquiryStatus.value) params.status = inquiryStatus.value
     if (inquiryKeyword.value.trim()) params.keyword = inquiryKeyword.value.trim()
     const result = await api.value.listInquiries(params)
@@ -521,7 +519,6 @@ async function doAcceptLatestQuote() {
 const orders = ref([])
 const orderPending = ref(false)
 const orderError = ref('')
-const orderRole = ref('seller')
 const orderStatus = ref('')
 const orderKeyword = ref(props.initialKeyword || '')
 const orderPageNum = ref(1)
@@ -547,7 +544,7 @@ async function attachDeliveryStatus(rows) {
 async function loadOrders() {
   orderPending.value = true; orderError.value = ''
   try {
-    const params = { role: orderRole.value, pageNum: orderPageNum.value, pageSize: PAGE_SIZE }
+    const params = { role: 'seller', pageNum: orderPageNum.value, pageSize: PAGE_SIZE }
     if (orderStatus.value) params.status = orderStatus.value
     if (orderKeyword.value.trim()) params.keyword = orderKeyword.value.trim()
     const result = await api.value.listOrders(params)
@@ -707,7 +704,7 @@ watch(tab, v => {
 })
 watch(() => props.initialTab, v => { if (v) tab.value = v })
 function applyOrderSearch(value) {
-  if (value) { orderRole.value = 'seller'; orderStatus.value = ''; orderPageNum.value = 1 }
+  if (value) { orderStatus.value = ''; orderPageNum.value = 1 }
   orderKeyword.value = value
 }
 watch(() => props.orderSearch, applyOrderSearch)
@@ -801,6 +798,7 @@ onUnmounted(() => { realtimeOff.forEach(off => off()); realtimeOff = []; stopCha
 .progress-step.active .progress-label { color: var(--indigo); font-weight: 500 }
 
 .filter-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap }
+.role-note { font-size: 13px; color: #303133; font-weight: 500 }
 .filter-select { padding: 4px 8px; border: 1px solid #dcdfe6; border-radius: 4px; font-size: 13px; background: #fff }
 .filter-input { padding: 4px 8px; border: 1px solid #dcdfe6; border-radius: 4px; font-size: 13px; background: #fff; width: 140px }
 .pagination-bar { display: flex; gap: 8px; align-items: center; justify-content: center; padding: 8px 0; margin-top: 4px }

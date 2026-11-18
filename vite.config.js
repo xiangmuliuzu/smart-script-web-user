@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import { remoteMediaFallback } from './vite.media-fallback'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
@@ -7,7 +8,15 @@ export default defineConfig(({ mode }) => {
   const target = env.VITE_API_TARGET || 'http://localhost:8080'
   return {
     base: '/user/',
-    plugins: [vue()],
+    plugins: [
+      vue(),
+      // 本机 uploadPath 缺的媒体从远端存储回源（仅 dev server 生效）
+      remoteMediaFallback({
+        apiPrefix: prefix,
+        remoteBase: env.VITE_REMOTE_MEDIA_BASE,
+        localDir: env.VITE_LOCAL_PROFILE_DIR
+      })
+    ],
     server: {
       port: 3001,
       strictPort: true,

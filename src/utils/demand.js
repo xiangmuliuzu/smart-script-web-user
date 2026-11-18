@@ -62,7 +62,7 @@ export const extendTone = (status, applyType) => {
   return 'off'
 }
 
-/* 金额：后端出参一律为分（/list、/{id}、/stages、/stats 的 prizePoolFen），展示时除以 100。
+/* 金额：后端出参一律为分（/list、/{id}、/stages），展示时除以 100。
    格式化复用收益域同一个 fenText（tests/finance.test.js 已锁定 ¥64,000.00 这种两位小数），
    本文件不再自行决定补不补零，避免同一页面出现 ¥600 与 ¥600.00 两种位数。 */
 export const fenToYuan = fen => (Number(fen) || 0) / 100
