@@ -7,7 +7,7 @@
       <div class="chapter-trial-setting"><el-switch v-model="form.isFree" active-value="1" inactive-value="0" aria-label="设为试读章节（免费阅读）" :disabled="saving || importing" /><span>设为试读章节（免费阅读）</span></div>
       <div class="field"><label>或从草稿上传</label><label class="drop upload-control" :class="{ done: imported }" @dragover.prevent @drop.prevent="importFile($event.dataTransfer.files[0])"><input type="file" accept=".txt,.md,.docx" @change="importFile($event.target.files[0]); $event.target.value = ''" /><span>{{ importing ? '正在读取草稿…' : imported || '点击选择草稿文件（.txt / .docx / .md），也可以直接拖进来' }}</span></label></div>
       <p v-if="error" class="note bad" role="alert">{{ error }}</p>
-      <div class="row"><button class="btn" :disabled="saving || importing" type="submit">{{ saving ? '正在保存…' : '保存' }}</button><button class="btn quiet" :disabled="saving || importing" type="button" @click="save">存为草稿</button><span class="cost">{{ wordCount(form.content).toLocaleString() }} 字 · 保存后可提交审核</span></div>
+      <div class="row"><button class="btn" :disabled="saving || importing" type="submit">{{ saving ? '正在保存…' : '保存' }}</button><button class="btn quiet" :disabled="saving || importing" type="button" @click="save">存为草稿</button><span class="cost">{{ wordCount(form.content).toLocaleString() }} 字 · 试读设置保存后立即生效</span></div>
     </form>
   </PortalLayer>
 </template>

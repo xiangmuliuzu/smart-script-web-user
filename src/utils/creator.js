@@ -5,7 +5,8 @@ export const workStates = {
   reviewing: { label: '审核中', tone: 'wait', stamp: 'review', action: '查看进度' },
   revision: { label: '待修改', tone: 'bad', stamp: 'revise', action: '修改并重新提交' },
   rejected: { label: '待修改', tone: 'bad', stamp: 'revise', action: '修改并重新提交' },
-  published: { label: '已发布', tone: 'ok', stamp: 'passed', action: '审核记录' }
+  // 后端 published 表示最新审核已通过；是否已进入书城由 shelfStatus 单独决定。
+  published: { label: '审核通过', tone: 'ok', stamp: 'passed', action: '上架到书城' }
 }
 export const stateOf = status => workStates[status] || { label: '状态待确认', tone: 'off', stamp: 'draft', action: '查看详情' }
 export const canEdit = (user, work) => user?.authorCapability === true && Object.hasOwn(workStates, work?.status) && work.status !== 'reviewing'

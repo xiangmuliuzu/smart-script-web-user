@@ -6,6 +6,7 @@
         <label class="field">导演(skill)<select aria-label="导演(skill)" v-model="form.skillId" :disabled="generating"><option value="">默认导演</option><option v-for="skill in visibleSkills" :key="skill.id" :value="skill.id">{{ skill.skillName }}</option></select></label>
         <label class="field">模型<select aria-label="模型" v-model="form.model" :disabled="generating"><option value="">默认模型</option><option v-for="opt in modelOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option></select></label>
         <label v-if="!embedded" class="field">作品<select aria-label="作品" v-model="form.workId" :disabled="generating"><option value="">选择作品（选填）</option><option v-for="work in works" :key="work.workId" :value="work.workId" :disabled="work.status === 'reviewing'">{{ work.title }}（{{ stateOf(work.status).label }}）</option></select></label>
+        <label v-if="tab === 'storyboard' && form.workId" class="field">分镜标题（关联章节）<select aria-label="分镜标题（关联章节）" v-model="form.chapterTitle" :disabled="generating || chapterLoading"><option value="">{{ chapterLoading ? '正在加载章节目录…' : storyboardChapters.length ? '请选择已有章节目录标题' : '该作品暂无可用章节' }}</option><option v-for="chapter in storyboardChapters" :key="chapter.chapterId || `${chapter.chapterNo}-${chapter.chapterTitle}`" :value="chapter.chapterTitle">{{ chapter.chapterTitle || `第 ${chapter.chapterNo} 集` }}</option></select><small class="field-help">选择章节后，剧本文本会自动带入该章节正文，也可以继续编辑。</small></label>
         <template v-if="tab === 'outline'"><div class="ai-outline-meta"><label class="field">续写集数<input v-model="form.episodes" type="number" min="1" max="10" /></label><label class="field">一集时长<select aria-label="一集时长" v-model.number="form.episodeMinutes"><option :value="1">1 分钟</option><option :value="1.5">1.5 分钟</option><option :value="2">2 分钟</option></select></label></div><label class="field">你的要求<textarea v-model="form.prompt" placeholder="续写方向与写法，例如：接着现有冲突往下推，反派提前暴露，节奏要更紧…" /></label><p v-if="!embedded" class="cost">AI 剧本续写需要已有的大纲或正文，请到「创作上传」写稿页使用。</p></template>
         <template v-else-if="tab === 'storyboard'"><div v-if="hasGeneratedText" class="row top-gap"><button class="text-button" type="button" :disabled="generating" @click="fillScriptFromResult">一键带入：用刚才的{{ lastGeneratedLabel }}当剧本文本</button></div><label class="field">剧本文本<textarea aria-label="剧本文本" v-model="form.script" placeholder="粘贴或带入 AI 剧本/正文，AI 将拆解为可直接出售的分镜脚本…" /></label><label class="field">分镜风格<select aria-label="分镜风格" v-model="form.sbStyle"><option>电影感</option><option>短剧竖屏</option><option>动漫风</option></select></label></template>
         <template v-else><button v-if="embedded" class="text-button ai-read-current" type="button" :disabled="generating || !currentContent.trim()" @click="form.content = documentText(currentContent)">读取当前分集正文</button><label class="field">要润色的原文<textarea v-model="form.content" placeholder="粘贴需要润色的片段" /></label><label class="field">润色方向<select v-model="form.style"><option>增强画面感</option><option>精简啰嗦</option><option>加强情绪</option></select></label></template>
@@ -14,8 +15,8 @@
       <div class="compose-out"><h3>{{ tab === 'polish' ? '润色结果' : '生成结果' }}</h3><div class="ai-scroll"><p v-if="generating && result" class="cost" role="status">正在生成，内容持续更新…</p><div v-if="result" class="prose ai-result">{{ displayResult }}</div><LoadState v-else :pending="generating" :empty="!generating" empty-text="写下你的想法，故事将在这里展开。" /><div v-if="result" class="row top-gap">
           <button v-if="embedded && tab === 'outline'" class="btn sm" :disabled="generating || insertDisabled || outlineIncomplete" @click="chooseFillOutline">根据大纲生成各章</button>
           <button v-if="embedded && tab === 'outline'" class="btn sm" :disabled="generating || insertDisabled" @click="$emit('create-outline', displayResult)">并入大纲与人物便签</button>
-          <button v-else-if="embedded" class="btn sm" :disabled="generating || insertDisabled" @click="$emit('insert', displayResult)">插入正文</button>
-          <button v-else class="btn sm" :disabled="generating || copying" @click="adopt">{{ tab === 'outline' ? '采用' : '写入章节' }}</button>
+          <button v-else-if="embedded" class="btn sm" :disabled="generating || insertDisabled" @click="$emit('insert', displayResult)">{{ tab === 'storyboard' ? '写入分镜' : '插入正文' }}</button>
+          <button v-else class="btn sm" :disabled="generating || copying" @click="adopt">{{ tab === 'outline' ? '采用' : tab === 'storyboard' ? '保存到作品分镜' : '写入章节' }}</button>
           <button class="btn quiet sm" :disabled="generating || insertDisabled" @click="regenerate">重新生成</button>
           <button v-if="embedded" class="btn quiet sm" :disabled="copying" @click="copyResult">复制</button>
           <button v-else class="btn quiet sm" :disabled="generating" @click="results[tab] = ''">丢弃</button>
@@ -60,6 +61,9 @@ const tabs = [{ value: 'outline', label: 'AI 剧本续写' }, { value: 'polish',
 const typeLabels = { outline: 'AI 剧本续写', polish: 'AI 润色', storyboard: 'AI 分镜' }
 const tabHeading = computed(() => tab.value === 'outline' ? '续写剧本大纲' : tab.value === 'storyboard' ? '生成分镜' : '润色片段')
 const form = props.workspaceState?.form || reactive({ workId: '', episodes: 3, episodeMinutes: 1, prompt: '', content: '', style: '增强画面感', chapterTitle: '', skillId: '', model: '', script: '', sbStyle: '电影感' })
+const selectedWorkChapters = ref([])
+const chapterLoading = ref(false)
+const storyboardChapters = computed(() => props.embedded ? (props.chapters || []) : selectedWorkChapters.value)
 // 续写起点：分别按「大纲已排到的最大集号」和「已写正文的最大集号」取大者，不用编辑位置或条目数估算。
 // 只用于计算 startNo，不在界面上展示集数提示，避免与作品实际数据产生歧义。
 const continuationBase = computed(() => {
@@ -110,6 +114,31 @@ async function loadModels() {
   modelError.value = ''
   try { modelChannels.value = await api.value.listAiModels() }
   catch (failure) { modelError.value = failure.message; await handleError(failure) }
+}
+async function loadStoryboardChapters(workId) {
+  if (props.embedded || !workId || !api.value?.getWork) {
+    selectedWorkChapters.value = []
+    return
+  }
+  chapterLoading.value = true
+  try {
+    const detail = await api.value.getWork(workId)
+    selectedWorkChapters.value = Array.isArray(detail?.chapters) ? detail.chapters : []
+  } catch (failure) {
+    selectedWorkChapters.value = []
+    await handleError(failure)
+  } finally {
+    chapterLoading.value = false
+  }
+}
+function fillStoryboardScriptFromChapter(title) {
+  const target = String(title || '').trim()
+  if (!target) {
+    form.script = ''
+    return
+  }
+  const chapter = storyboardChapters.value.find(item => String(item.chapterTitle || '').trim() === target)
+  form.script = chapter ? documentText(chapter.content || chapter.formattedContent || '') : ''
 }
 const outlineIncomplete = props.workspaceState ? toRef(props.workspaceState, 'outlineIncomplete') : ref(false)
 const result = computed(() => results[tab.value] || '')
@@ -260,6 +289,22 @@ async function adopt() {
   copying.value = true
   try {
     if (!form.workId) { await navigator.clipboard.writeText(displayResult.value); ElMessage.success('已复制生成内容') }
+    else if (tab.value === 'storyboard') {
+      // AI 分镜必须写入分镜目录，不能复用 ChapterEditor 的章节保存接口。
+      // 之前这里打开的是新建章节弹窗，用户点击保存时会把分镜结果提交到章节接口，
+      // 因而出现“操作未完成，请稍后再试”。
+      const title = String(form.chapterTitle || '').trim()
+      if (!title) throw new Error('请先选择已有章节目录标题')
+      if (!api.value?.createWorkStoryboard) throw new Error('分镜保存接口未加载，请刷新页面后重试')
+      const detail = await api.value.getWork(form.workId)
+      if (detail?.work?.status === 'reviewing') throw new Error('作品正在审核中，暂不可编辑')
+      await api.value.createWorkStoryboard(form.workId, {
+        title,
+        content: displayResult.value,
+        source: 'ai'
+      })
+      ElMessage.success('分镜已保存到作品分镜目录，等待审核')
+    }
     else { const detail = await api.value.getWork(form.workId); if (detail.work.status === 'reviewing') throw new Error('作品正在审核中，暂不可编辑'); nextChapterNo.value = (detail.chapters || []).length + 1; adopted.value = displayResult.value; editorVisible.value = true }
   } catch (failure) { await handleError(failure) }
   finally { copying.value = false }
@@ -281,10 +326,28 @@ watch(tab, value => {
   error.value = ''
   loadQuota()
   if (value === 'log') loadRecords()
+  else if (value === 'storyboard') loadStoryboardChapters(form.workId)
   else if (form.skillId && !visibleSkills.value.some(s => String(s.id) === String(form.skillId))) form.skillId = ''
 })
+watch(() => form.workId, async value => {
+  if (tab.value !== 'storyboard') return
+  form.chapterTitle = ''
+  form.script = ''
+  await loadStoryboardChapters(value)
+})
+watch(() => form.chapterTitle, value => {
+  if (tab.value === 'storyboard') fillStoryboardScriptFromChapter(value)
+})
 watch(() => props.insertDisabled, (disabled, previous) => { if (previous && !disabled) loadQuota() })
-watch(() => props.workId, value => { if (props.embedded) form.workId = value || '' }, { immediate: true })
+watch(() => props.workId, async value => {
+  if (!props.embedded) return
+  form.workId = value || ''
+  if (tab.value === 'storyboard') {
+    form.chapterTitle = ''
+    form.script = ''
+    await loadStoryboardChapters(value)
+  }
+}, { immediate: true })
 watch(user, value => { if (value?.userId) loadQuota() }, { immediate: true })
 // 积分余额实时刷新：组件常驻时 onMounted 只执行一次，补上页面切回/窗口聚焦时的重取。
 function refreshQuotaWhenVisible() {

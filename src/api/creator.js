@@ -8,9 +8,20 @@ const workPath = id => '/api/v1/users/me/works/' + encodeURIComponent(id)
 export const listWorks = async () => asList(await data('/api/v1/users/me/works'))
 export const getWork = async id => {
   const detail = await data(workPath(id))
+  // 作品审核状态由 work.status 派生；上架状态由详情顶层 shelfStatus 返回。
+  // 合并到 work 上，避免页面把“审核通过”误当成“已上架”。
+  if (detail?.work) detail.work.shelfStatus = detail.shelfStatus || detail.work.shelfStatus || 'off_shelf'
   if (detail?.chapters) detail.chapters = detail.chapters.map(chapter => ({ ...chapter, isFree: String(chapter.isFree ?? '0'), content: chapter.formattedContent || chapter.content || '' }))
   return detail
 }
+// 作品分镜目录：与章节目录同级；后端尚未接入时由详情页降级为空目录。
+export const listWorkStoryboards = async workId =>
+  data(`/api/v1/content/works/${encodeURIComponent(workId)}/storyboards?pageNum=1&pageSize=100`)
+export const createWorkStoryboard = (workId, form) =>
+  data(`/api/v1/content/works/${encodeURIComponent(workId)}/storyboards`, {
+    method: 'POST',
+    body: { title: form.title, content: form.content, source: form.source || 'manual' }
+  })
 export const listReviews = async id => asList(await data(workPath(id) + '/review-records'))
 export const listVersions = async id => asList(await data(`/api/v1/content/works/${encodeURIComponent(id)}/versions`))
 export const createWork = form => data('/api/v1/content/works', { method: 'POST', body: { title: form.title.trim(), description: form.summary, scriptUrl: form.scriptUrl, scriptName: form.scriptName, scriptSize: form.scriptSize } })
@@ -18,6 +29,8 @@ export const updateWork = (id, form) => data(workPath(id), { method: 'PUT', body
 export const sendWorkDeletionCode = id => data(`/api/v1/content/works/${encodeURIComponent(id)}/delete-code`, { method: 'POST' })
 export const deleteWork = (id, code) => data(`/api/v1/content/works/${encodeURIComponent(id)}`, { method: 'DELETE', body: { code } })
 export const submitWork = id => data(workPath(id) + '/submit', { method: 'POST' })
+// 审核通过后由作者主动控制上架/下架；审核通过本身不会自动上架。
+export const changeShelfStatus = (id, status) => data(workPath(id) + '/shelf?status=' + encodeURIComponent(status), { method: 'PUT' })
 export const saveChapter = (id, chapter) => {
   const body = { chapterTitle: chapter.chapterTitle.trim(), content: chapter.content, isFree: chapter.isFree }
   // 摘要：只有调用方显式给出字符串才下发（空串=清空）。不传表示“本次不改”，

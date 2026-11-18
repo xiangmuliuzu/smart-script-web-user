@@ -10,7 +10,7 @@ export const demandStatusOptions = Object.entries(DEMAND_STATUS_LABELS).map(([va
 
 /* 验收轮次：后端激活某轮只写 started_at/due_at，status 仍是 pending，
    所以「进行中」必须由 startedAt 判定，不能只看 status。 */
-const STAGE_STATUS_LABELS = { ai_reviewing: 'AI 审核中', submitted: '待验收', approved: '已通过', rejected: '已驳回' }
+const STAGE_STATUS_LABELS = { ai_reviewing: 'AI 审核中', submitted: '待验收', approved: '任务验收通过', rejected: '已驳回' }
 export function stageStatusLabel(stage) {
   if (!stage) return '-'
   if (STAGE_STATUS_LABELS[stage.status]) return STAGE_STATUS_LABELS[stage.status]
@@ -19,7 +19,7 @@ export function stageStatusLabel(stage) {
 }
 export const stageTone = stage => {
   const label = stageStatusLabel(stage)
-  if (label === '已通过') return 'ok'
+  if (label === '任务验收通过') return 'ok'
   if (label === '已驳回' || label === '已逾期') return 'danger'
   if (label === '待验收' || label === 'AI 审核中') return 'warn'
   if (label === '进行中') return 'info'

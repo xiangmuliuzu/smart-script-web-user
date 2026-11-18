@@ -37,7 +37,8 @@ async function openMessage(message) {
   try {
     const detail = await api.value.getMessage(message.messageId)
     await api.value.readMessage(message.messageId); message.isRead = true; await refreshUnread()
-    if (message.workId) { visible.value = false; await goWork(message.workId) }
+    if (message.businessType === 'WORK' && message.businessId) { visible.value = false; await goWork(message.businessId) }
+    else if (message.workId) { visible.value = false; await goWork(message.workId) }
     else if (message.panel) { visible.value = false; openPanel(message.panel, message.tab) }
     else { selected.value = { ...message, content: detail?.content || message.content }; detailVisible.value = true }
   } catch (failure) { await handleError(failure) }

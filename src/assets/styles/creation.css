@@ -31,6 +31,13 @@
 .directory-heading h2 { font-size: 15px; font-family: var(--sans); }
 .directory-heading button { display: flex; align-items: center; gap: 3px; border: 0; padding: 3px 0; background: none; color: var(--indigo); font-size: 12px; }
 .episode-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 24px; }
+.storyboard-heading { border-top: 1px solid var(--rule); }
+.storyboard-list { max-height: 180px; overflow-y: auto; padding-right: 3px; }
+.storyboard-list .episode-card { width: 100%; display: grid; grid-template-columns: 30px 1fr; align-items: center; gap: 8px; padding: 8px; border: 0; border-radius: 5px; background: transparent; text-align: left; color: var(--ink-2); }
+.storyboard-editor .field { display: block; margin-bottom: 14px; }
+.storyboard-editor .field input, .storyboard-editor .field select { display: block; width: 100%; margin-top: 7px; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 4px; background: #fff; color: var(--ink); }
+.storyboard-editor .field input:focus, .storyboard-editor .field select:focus { outline: none; border-color: var(--indigo); }
+.storyboard-editor .notes-description { margin-bottom: 20px; }
 .episode-card { position: relative; border-radius: 5px; }
 .episode-select { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: start; gap: 1px 8px; background: transparent; border: 0; border-radius: 5px; text-align: left; padding: 10px 9px 30px; width: 100%; }
 .episode-delete { position: absolute; right: 9px; bottom: 6px; border: 0; background: transparent; padding: 2px 4px; color: var(--ink-3); font-size: 10px; }
