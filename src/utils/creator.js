@@ -68,10 +68,15 @@ export function outlineChapters(text) {
   const kinds = new Set()
   // 长文生成常把「第N集：」粘在上一段句末，先按句末标点切开，避免整集被吞进上一集。
   const normalized = String(text || '').replace(new RegExp(`([。！？…”』」）])\\s*(第\\s*[${NUMBER}]+\\s*[章节節集回]\\s*[:：])`, 'g'), '$1\n$2')
-  for (const line of normalized.split(/\r?\n/)) {
-    const heading = line.trim().replace(/^#{1,6}\s*/, '').replace(/^\*\*(.*?)\*\*$/, '$1')
-    if (chapterIdentity(heading).numbered) {
-      kinds.add(chapterIdentity(heading).explicit ? 'explicit' : 'list')
+  const lines = normalized.split(/\r?\n/)
+  const headingOf = line => line.trim().replace(/^#{1,6}\s*/, '').replace(/^\*\*(.*?)\*\*$/, '$1')
+  // 设定段里的「12. 对白节奏…」这类编号细则不是分集标题：只要存在显式的「第N集/章」标题，就不按列表式章节处理。
+  const hasExplicit = lines.some(line => chapterIdentity(headingOf(line)).explicit)
+  for (const line of lines) {
+    const heading = headingOf(line)
+    const identity = chapterIdentity(heading)
+    if (identity.numbered && (identity.explicit || !hasExplicit)) {
+      kinds.add(identity.explicit ? 'explicit' : 'list')
       chapters.push({ title: heading, summary: '' })
     } else if (chapters.length) {
       chapters[chapters.length - 1].summary += line + '\n'

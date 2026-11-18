@@ -402,24 +402,51 @@ export function chapterTail(content, limit = 800) {
  * 续写提示词：本集事件卡（含本集出场）→ 卷快照 → 前情摘要 → 出场人物设定 → 上一章末尾 → 本集已有正文 → 作者要求。
  * 卷快照优先；没有快照时台账兜底，且台账按出场人物筛选。
  */
-export function continuationPrompt({ title, chapterNo, outline, ledger, volumes, prevChapter, prevSummaries, currentContent, requirement }) {
+export function continuationPrompt({ title, chapterNo, outline, ledger, volumes, prevChapter, prevSummaries, currentContent, requirement, timelineBlock }) {
   const card = episodeCardFrom(outline, title, chapterNo)
   const cast = episodeCastFrom(card)
   const volumeText = volumeSnapshotBlock(volumes, chapterNo)
   const ledgerText = ledgerPromptBlockByCast(ledger, cast)
-  const parts = [`请续写“${title || '本集'}”，只写这一集，以动作和对白推进，700-900 字，结尾留一个具体钩子。`]
+  const parts = [`请续写“${title || '本集'}”，只写这一集：小说体散文，不超过 1500 字、不设下限；第一段必须接住上一集最后一句（由当事人当场回应），写清本集从哪个动作接起、隔了多久；以动作和对白推进，对白用中文引号、不写「角色：」前缀，结尾留一个具体钩子。`]
   if (card) parts.push(`【本集事件卡】\n${card}`)
   if (volumeText) parts.push(volumeText)
   if (prevSummaries) parts.push(prevSummaries)
   if (ledgerText) parts.push(ledgerText)
   const schedule = threadScheduleBlock(ledger && ledger.threads, chapterNo)
   if (schedule) parts.push(schedule)
+  if (timelineBlock) parts.push(timelineBlock)
   const prev = chapterTail(prevChapter)
   if (prev) parts.push(`【上一章末尾（承接语气与处境，勿重复）】\n${prev}`)
   const current = documentText(currentContent)
   if (current) parts.push(`【本集已有正文（从末尾接着写）】\n${chapterTail(current, 1500)}`)
   if (String(requirement || '').trim()) parts.push(`【本集要求】\n${String(requirement).trim()}`)
   return parts.join('\n\n')
+}
+
+/**
+ * 时间线注入块：未兑现优先，再补最近事件，最多 12 条。
+ * 与后端 WorkTimelineSupport.block 同格式，便于两端提示词一致。
+ */
+export function timelinePromptBlock(events) {
+  if (!Array.isArray(events) || !events.length) return ''
+  const open = events.filter(item => item && item.status === '未兑现').slice(0, 12)
+  const recent = events.slice(0, 8)
+  const picked = []
+  const seen = new Set()
+  for (const item of [...open, ...recent]) {
+    const key = item.eventId ?? `${item.chapterNo}-${item.seq}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    picked.push(item)
+  }
+  if (!picked.length) return ''
+  const lines = picked.map(item => {
+    const actors = item.actors ? `｜${item.actors}` : ''
+    const deadline = item.status === '未兑现' && item.deadlineNo ? `，应在第${item.deadlineNo}集兑现` : ''
+    return `第${item.chapterNo}集｜${item.eventType || '其他'}｜${item.fact || ''}${actors}（${item.status || '未兑现'}${deadline}）`
+  })
+  return ['【时间线（已发生的事实，不可改写；括号内为状态）】', ...lines,
+    '未兑现的约定/伏笔/期限，如果本集剧情能自然兑现，优先兑现；不能自然兑现就保留，不许硬收。'].join('\n')
 }
 
 /**
