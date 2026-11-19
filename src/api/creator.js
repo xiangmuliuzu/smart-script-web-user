@@ -286,7 +286,8 @@ export const getSessionDetail = id => data(`/api/v1/users/me/chat/sessions/${enc
 export const listSessions = async () => asList(await data('/api/v1/users/me/chat/sessions' + qs({ sessionType: 'ADMIN' })))
 export const listTradeSessions = () => data('/api/v1/users/me/chat/sessions?sessionType=TRADE')
 export const listChat = async id => asList(await data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/messages`))
-export const sendChat = (id, content) => data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/messages`, { method: 'POST', body: { msgType: 'TEXT', content } })
+export const sendChat = (id, content, quoteMessageId) => data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/messages`, { method: 'POST', body: { msgType: 'TEXT', content, ...(quoteMessageId ? { quoteMessageId } : {}) } })
+export const recallChat = (id, messageId) => data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/messages/${encodeURIComponent(messageId)}/recall`, { method: 'PUT' })
 export const readChatSession = id => data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/read`, { method: 'PUT' })
 // 聊天未读总数（顶栏「沟通」徽标）；后端不区分会话类型，含交易会话的未读。
 export const chatUnreadCount = async () => Number((await data('/api/v1/users/me/chat/unread-count'))?.chatUnread || 0)

@@ -38,13 +38,26 @@
             <span>{{ active ? (active.status === 2 ? '已结束' : '沟通中') + ' · 最后更新 ' + relativeText(active.lastMessageTime || active.createdAt) : '选择历史会话或直接输入发起新咨询' }}</span>
           </header>
           <div class="conversation-messages" ref="messagesBox">
-            <div v-for="message in messages" :key="message.messageId || message.msgId" class="conversation-message" :class="Number(message.senderId) === Number(user?.userId) ? 'me' : 'other'">
-              <div class="conversation-bubble">{{ message.content }}<time>{{ relativeText(message.createdAt || message.createTime).replace(/^.*\s/, '') }}</time></div>
+            <div v-for="message in messages" :key="message.messageId || message.msgId" class="conversation-message"
+                 :class="[(Number(message.senderId) === Number(user?.userId) ? 'me' : 'other'), message.recalled ? 'recalled' : '']">
+              <div v-if="message.recalled" class="conversation-recalled">{{ Number(message.senderId) === Number(user?.userId) ? '你撤回了一条消息' : '对方撤回了一条消息' }}</div>
+              <template v-else>
+                <button v-if="canQuote(message)" type="button" class="quote-action" :disabled="!!quoting" @click="startQuote(message)">引用</button>
+                <button v-if="canRecall(message)" type="button" class="recall-action" :disabled="recalling" @click="recall(message)">撤回</button>
+                <div class="conversation-bubble">
+                  <div v-if="message.quoteMessageId" class="conversation-quote">{{ message.quoteRecalled ? '原消息已撤回' : (message.quoteSender || '引用') + '：' + (message.quoteText || '') }}</div>
+                  {{ message.content }}<time>{{ relativeText(message.createdAt || message.createTime).replace(/^.*\s/, '') }}</time>
+                </div>
+              </template>
             </div>
             <p v-if="!messages.length" class="rights-note">{{ active ? '还没有消息记录。' : sessions.length ? '请从左侧选择一个会话。' : '暂无会话，直接输入消息即可自动发起客服会话。' }}</p>
           </div>
           <form class="conversation-compose" @submit.prevent="send">
-            <input v-model="draft" maxlength="500" placeholder="输入消息" :disabled="active?.status === 2">
+            <div v-if="quoting" class="conversation-quoting">
+              <span>引用 {{ isMine(quoting) ? '我' : quoting.senderName || '对方' }}：{{ quoting.content }}</span>
+              <button type="button" @click="quoting = null">×</button>
+            </div>
+            <input v-model="draft" maxlength="500" :placeholder="quoting ? '回复引用消息' : '输入消息'" :disabled="active?.status === 2">
             <button class="btn" type="submit" :disabled="sending || !draft.trim() || active?.status === 2">{{ sending ? '发送中…' : '发送' }}</button>
           </form>
         </section>
@@ -73,6 +86,7 @@ const sending = ref(false)
 const marking = ref(false)
 const starting = ref(false)
 const messagesBox = ref(null)
+const recalling = ref(false)
 let poll = null
 
 const active = computed(() => sessions.value.find(s => String(s.sessionId) === String(activeId.value)) || null)
@@ -135,6 +149,7 @@ async function startChat() {
 }
 async function select(id) {
   activeId.value = id
+  quoting.value = null
   await loadMessages()
   const session = sessions.value.find(s => String(s.sessionId) === String(id))
   if (session?.unread) {
@@ -154,13 +169,34 @@ async function send() {
       if (!activeId.value) { ElMessage.error('客服会话创建失败，请稍后重试'); return }
       await loadMessages()
     }
-    await api.value.sendChat(activeId.value, draft.value.trim())
+    await api.value.sendChat(activeId.value, draft.value.trim(), quoting.value?.messageId)
     draft.value = ''
+    quoting.value = null
     await loadMessages()
   } catch (failure) { await handleError(failure) } finally { sending.value = false }
 }
-async function markAllRead() {
-  if (marking.value) return
+const RECALL_WINDOW_MS = 120000
+const quoting = ref(null)
+function isMine(message) { return Number(message.senderId) === Number(user.value?.userId) }
+function canQuote(message) { return !message.recalled && message.msgType !== 'SYSTEM' }
+function startQuote(message) { quoting.value = message }
+function canRecall(message) {
+  if (message.recalled) return false
+  if (Number(message.senderId) !== Number(user.value?.userId)) return false
+  if (message.msgType === 'SYSTEM') return false
+  const time = new Date(String(message.createdAt || message.createTime || '').replace('T', ' ').replace(/-/g, '/')).getTime()
+  return !Number.isNaN(time) && Date.now() - time <= RECALL_WINDOW_MS
+}
+async function recall(message) {
+  if (recalling.value) return
+  recalling.value = true
+  try {
+    await api.value.recallChat(activeId.value, message.messageId)
+    ElMessage.success('消息已撤回')
+    await loadMessages()
+  } catch (failure) { await handleError(failure) } finally { recalling.value = false }
+}
+async function markAllRead() {  if (marking.value) return
   marking.value = true
   try {
     await Promise.all(sessions.value.filter(s => s.unread).map(s => api.value.readChatSession(s.sessionId).catch(() => null)))
@@ -243,10 +279,24 @@ onBeforeUnmount(() => {
 .platform-service .conversation-messages { flex: 1; min-height: 300px; max-height: 360px; overflow: auto; padding: 16px; background: var(--bg); }
 .platform-service .conversation-message { display: flex; margin: 9px 0; }
 .platform-service .conversation-message.me { justify-content: flex-end; }
+.platform-service .conversation-message.recalled { justify-content: center; }
+.platform-service .conversation-recalled { color: var(--muted); font-size: 11px; background: var(--soft); border-radius: 2px; padding: 3px 10px; }
+.platform-service .recall-action { align-self: center; margin-right: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--muted); border-radius: 2px; padding: 3px 8px; font-size: 11px; display: none; }
+.platform-service .conversation-message:hover .quote-action { display: block; }
+.platform-service .conversation-message.me:hover .recall-action { display: block; }
+.platform-service .quote-action { align-self: center; margin-right: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--muted); border-radius: 2px; padding: 3px 8px; font-size: 11px; display: none; }
+.platform-service .quote-action:hover { color: var(--brand); border-color: var(--brand); }
+.platform-service .conversation-quote { border-left: 2px solid #c3d1cf; background: #ffffff88; border-radius: 2px; padding: 3px 8px; margin-bottom: 5px; color: var(--muted); font-size: 11px; line-height: 1.5; max-height: 44px; overflow: hidden; }
+.platform-service .conversation-message.me .conversation-quote { border-left-color: #ffffffb0; background: #ffffff30; color: #eef4f3; }
+.platform-service .recall-action:hover { color: var(--brand); border-color: var(--brand); }
 .platform-service .conversation-bubble { max-width: min(70%, 460px); border: 1px solid var(--line); border-radius: 2px; padding: 9px 11px; background: var(--soft); font-size: 12px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
 .platform-service .conversation-message.me .conversation-bubble { background: var(--brandsoft); border-color: #c3d1cf; }
 .platform-service .conversation-bubble time { display: block; color: var(--muted); font-size: 10px; margin-top: 4px; text-align: right; }
-.platform-service .conversation-compose { display: flex; gap: 9px; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--bg); }
+.platform-service .conversation-compose { display: flex; flex-wrap: wrap; gap: 9px; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--bg); }
+.platform-service .conversation-quoting { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-left: 2px solid var(--brand); background: var(--soft); border-radius: 2px; padding: 5px 9px; font-size: 11px; color: var(--muted); }
+.platform-service .conversation-quoting span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.platform-service .conversation-quoting button { border: 0; background: transparent; color: var(--muted); font-size: 14px; line-height: 1; }
+.platform-service .conversation-quoting button:hover { color: var(--red); }
 .platform-service .conversation-compose input { min-width: 0; flex: 1; border: 1px solid var(--line); border-radius: 2px; padding: 10px; background: var(--bg); color: var(--ink); }
 .platform-service .conversation-compose input:disabled { background: var(--soft); }
 .platform-service .rights-note { font-size: 12px; color: var(--muted); line-height: 1.7; margin: 8px 12px; }

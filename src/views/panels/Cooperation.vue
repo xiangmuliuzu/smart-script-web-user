@@ -67,14 +67,26 @@
                   <p v-if="!chatMessages.length" class="cost" style="text-align:center">暂无消息，开始沟通吧</p>
                   <div v-for="msg in chatMessages" :key="msg.msgId || msg.messageId">
                     <div v-if="isQuoteSysMsg(msg)" class="quote-sys-msg" :class="'qsys-' + parseQuoteSysMsg(msg.content).tag">{{ parseQuoteSysMsg(msg.content).label }}</div>
+                    <div v-else-if="msg.recalled" class="recalled-msg">{{ Number(msg.senderId) === userId ? '你撤回了一条消息' : '对方撤回了一条消息' }}</div>
                     <div v-else class="chat-bubble" :class="Number(msg.senderId) === userId ? 'me' : 'them'">
                       <div v-if="Number(msg.senderId) !== userId" class="bubble-name cost">{{ msg.senderName || '用户' + msg.senderId }}</div>
-                      <div class="bubble-body">{{ msg.content }}<time>{{ dateText(msg.createTime || msg.createdAt).slice(5) }}</time></div>
+                      <div class="bubble-body">
+                        <div v-if="msg.quoteMessageId" class="bubble-quote">{{ msg.quoteRecalled ? '原消息已撤回' : (msg.quoteSender || '引用') + '：' + (msg.quoteText || '') }}</div>
+                        {{ msg.content }}<time>{{ dateText(msg.createTime || msg.createdAt).slice(5) }}</time>
+                      </div>
+                      <div v-if="canQuote(msg) || canRecall(msg)" class="bubble-actions">
+                        <button v-if="canQuote(msg)" type="button" class="quote-btn" @click="startQuote(msg)">引用</button>
+                        <button v-if="canRecall(msg)" type="button" class="recall-btn" :disabled="recalling" @click="recallMessage(msg)">撤回</button>
+                      </div>
                     </div>
                   </div>
                 </template>
               </div>
               <TradeTemplatePanel v-model:visible="templateVisible" :session-id="chatSessionId" :inquiry-id="activeSessionInquiryId" :is-buyer="isCurrentBuyer" :license-type="currentLicenseType" @sent="onTemplateSent" />
+              <div v-if="chatQuoting" class="chat-quote-bar">
+                <span>引用 {{ Number(chatQuoting.senderId) === userId ? '我' : chatQuoting.senderName || '对方' }}：{{ chatQuoting.content }}</span>
+                <button type="button" @click="chatQuoting = null">×</button>
+              </div>
               <div class="chat-input-row">
                 <button type="button" class="template-toggle-btn" :class="{ active: templateVisible }" @click="templateVisible = !templateVisible">{{ templateVisible ? '收起定型文' : '定型文' }}</button>
                 <label class="quote-amount-box" :title="isCurrentBuyer ? '修改金额后可不带文字直接发送议价' : '修改金额后可不带文字直接发送报价'">
@@ -384,12 +396,38 @@ const fenToInputText = fen => (fen == null ? '' : String(Number(fen) / 100))
 // 会话切换或最新报价刷新时，金额框回填最新基准（用户正在输入时不会被轮询覆盖）
 watch([chatSessionId, () => latestQuote.value?.quoteId, () => sessionInquiry.value?.inquiryId], () => {
   quoteAmountInput.value = fenToInputText(quoteBaselineFen.value)
+  chatQuoting.value = null
 })
 
 function isQuoteSysMsg(msg) {
   if (!msg.isSystem && msg.msgType !== 'SYSTEM') return false
   const c = msg.content || ''
   return c.startsWith('[报价]') || c.startsWith('[议价]') || c.startsWith('[接受]') || c.startsWith('[拒绝]')
+}
+// 引用入口：任意未撤回的普通消息（含对方）可引用；SYSTEM/报价卡片除外
+const chatQuoting = ref(null)
+function canQuote(msg) {
+  if (msg.recalled) return false
+  return !msg.isSystem && msg.msgType !== 'SYSTEM'
+}
+function startQuote(msg) { chatQuoting.value = msg }
+// 撤回入口：仅本人 2 分钟内发送的普通文本（SYSTEM/报价卡片不可撤回）
+const RECALL_WINDOW_MS = 120000
+const recalling = ref(false)
+function canRecall(msg) {
+  if (msg.recalled || Number(msg.senderId) !== userId.value) return false
+  if (msg.isSystem || msg.msgType === 'SYSTEM') return false
+  const time = new Date(String(msg.createTime || msg.createdAt || '').replace('T', ' ').replace(/-/g, '/')).getTime()
+  return !Number.isNaN(time) && Date.now() - time <= RECALL_WINDOW_MS
+}
+async function recallMessage(msg) {
+  if (recalling.value) return
+  recalling.value = true
+  try {
+    await api.value.recallChat(chatSessionId.value, msg.messageId)
+    ElMessage.success('消息已撤回')
+    await loadChatMessages()
+  } catch (e) { await handleError(e) } finally { recalling.value = false }
 }
 function parseQuoteSysMsg(content) {
   const bracketEnd = content.indexOf(']')
@@ -489,9 +527,10 @@ async function sendFreeText() {
       quoteAmountInput.value = fenToInputText(quoteBaselineFen.value)
     }
     if (content) {
-      const msg = await api.value.sendChat(chatSessionId.value, content)
+      const msg = await api.value.sendChat(chatSessionId.value, content, chatQuoting.value?.messageId)
       if (!msg) throw new Error('发送响应不完整，请刷新会话确认')
       chatInput.value = ''
+      chatQuoting.value = null
       await onTemplateSent(msg)
     } else {
       ElMessage.success(isCurrentBuyer.value ? '议价已发送' : '报价已发送')
@@ -835,6 +874,17 @@ onUnmounted(() => { realtimeOff.forEach(off => off()); realtimeOff = []; stopCha
 .bubble-body time { display: block; font-size: 10px; opacity: .5; margin-top: 4px }
 .chat-bubble.me .bubble-body time { color: rgba(255,255,255,.7) }
 .quote-sys-msg { text-align: center; padding: 6px 16px; margin: 6px auto; border-radius: 10px; font-size: 12px; max-width: 80%; line-height: 1.5 }
+.recalled-msg { text-align: center; margin: 6px auto; font-size: 11px; color: #909399 }
+.chat-bubble .bubble-actions { display: none; flex-direction: row; justify-content: flex-end; gap: 4px; margin-top: 2px }
+.chat-bubble:hover .bubble-actions { display: flex }
+.chat-bubble .quote-btn, .chat-bubble .recall-btn { border: 1px solid #ebeef5; background: #fff; color: #909399; border-radius: 2px; font-size: 11px; padding: 1px 8px; cursor: pointer }
+.chat-bubble .quote-btn:hover, .chat-bubble .recall-btn:hover { color: #409eff; border-color: #409eff }
+.bubble-quote { border-left: 2px solid #c0c4cc; background: #f4f4f5; border-radius: 2px; padding: 2px 8px; margin: 2px 0 4px; font-size: 11px; color: #909399; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.chat-bubble.me .bubble-quote { border-left-color: rgba(255, 255, 255, .7); background: rgba(255, 255, 255, .15); color: rgba(255, 255, 255, .85) }
+.chat-quote-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 4px 8px 0; padding: 4px 10px; border-left: 2px solid var(--indigo); background: #f4f4f5; border-radius: 2px; font-size: 12px; color: #606266 }
+.chat-quote-bar span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.chat-quote-bar button { border: 0; background: transparent; color: #909399; font-size: 14px; line-height: 1; cursor: pointer }
+.chat-quote-bar button:hover { color: #f56c6c }
 .qsys-报价 { background: var(--ochre-w); color: var(--ochre) }
 .qsys-议价 { background: #fdf6ec; color: #e6a23c }
 .qsys-接受 { background: #f0f9eb; color: #67c23a }
