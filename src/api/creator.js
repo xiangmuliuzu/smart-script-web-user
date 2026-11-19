@@ -22,6 +22,10 @@ export const createWorkStoryboard = (workId, form) =>
     method: 'POST',
     body: { title: form.title, content: form.content, source: form.source || 'manual' }
   })
+export const deleteWorkStoryboard = (workId, storyboardId) =>
+  data(`/api/v1/content/works/${encodeURIComponent(workId)}/storyboards/${encodeURIComponent(storyboardId)}`, {
+    method: 'DELETE'
+  })
 export const listReviews = async id => asList(await data(workPath(id) + '/review-records'))
 export const listVersions = async id => asList(await data(`/api/v1/content/works/${encodeURIComponent(id)}/versions`))
 export const createWork = form => data('/api/v1/content/works', { method: 'POST', body: { title: form.title.trim(), description: form.summary, scriptUrl: form.scriptUrl, scriptName: form.scriptName, scriptSize: form.scriptSize } })
@@ -148,6 +152,16 @@ export const cancelGenJob = (workId, jobId) => data(genBase(workId) + '/' + enco
 const ledgerPath = id => '/api/v1/content/works/' + encodeURIComponent(id) + '/ledger'
 export const getWorkLedger = id => data(ledgerPath(id))
 export const saveWorkLedger = (id, ledger) => data(ledgerPath(id), { method: 'PUT', body: ledger })
+
+// ──── 时间线（只追加：约定/伏笔/道具转移等事件，按集号检索） ────
+const timelinePath = id => '/api/v1/content/works/' + encodeURIComponent(id) + '/timeline'
+export const listWorkTimeline = (id, params = {}) => {
+  const query = Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => key + '=' + encodeURIComponent(value))
+    .join('&')
+  return asList(data(timelinePath(id) + (query ? '?' + query : '')))
+}
 
 // 导演(skill) 列表（E 模块，供「导演(skill)选择」下拉）
 export const listAiSkills = async () => asList(await data('/api/v1/content/ai/skills'))

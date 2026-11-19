@@ -103,6 +103,7 @@ button.workitem { text-align: left; padding: 0; width: 100%; font: inherit; colo
 .creator-catalog summary::after { content: '⌄'; color: var(--ink-3); font-size: 18px; }
 .creator-catalog:not([open]) summary::after { content: '›'; }
 .creator-catalog-scroll { max-height: 350px; overflow: auto; border-top: 1px solid var(--rule); padding: 0 12px 12px; }
+.trial-source { display: block; margin-top: 3px; color: var(--ink-3); font-size: 10px; white-space: nowrap; }
 .storyboard-scroll { min-height: 150px; }
 .catalog-placeholder { min-height: 130px; display: grid; place-items: center; padding: 24px; color: var(--ink-3); text-align: center; }
 .storyboard-empty { gap: 4px; }
