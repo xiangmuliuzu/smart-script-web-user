@@ -111,7 +111,7 @@ function relativeText(value) {
   if (day === today) return time ? '今天 ' + time : '今天'
   const yesterday = dayText(new Date(Date.now() - 86400000).toISOString())
   if (day === yesterday) return time ? '昨天 ' + time : '昨天'
-  return day.slice(5)
+  return time ? day.slice(5) + ' ' + time : day.slice(5)
 }
 
 async function load() {
