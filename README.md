@@ -54,7 +54,7 @@ TXT/Markdown/DOCX 草稿使用原生浏览器文本读取与解压，不执行�
 
 ## 部署
 
-npm run build 输出 dist，固定挂载到 `/user/`，对应服务器 http://124.221.131.38/user/。Vite 资源前缀和 Vue Router history 使用同一基础路径；例如 `/user/login`、`/user/works/create`。将 dist 内容部署到用户端目录，`/user/*` 的 SPA 路由必须回退到该目录的 index.html。
+npm run build 输出 dist，固定挂载到 `/user/`，对应服务器 http://192.168.100.3:1100/user/。Vite 资源前缀和 Vue Router history 使用同一基础路径；例如 `/user/login`、`/user/works/create`。将 dist 内容部署到用户端目录，`/user/*` 的 SPA 路由必须回退到该目录的 index.html。
 
 生产默认 VITE_APP_BASE_API=/prod-api；网关需将站点根路径 /prod-api/* 去除前缀后转发至整体后端。接口地址不加 `/user/`，例如 `/prod-api/api/v1/auth/login`。不要把 `/user/login` SPA 地址代理到后端。
 
