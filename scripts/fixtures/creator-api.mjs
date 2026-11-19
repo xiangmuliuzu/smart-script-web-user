@@ -54,10 +54,12 @@ export async function mockCreatorApi(context, apiPrefix = '/dev-api') {
       } else if (action.startsWith('/chapters/')) {
         const index = list.findIndex(item => item.chapterId === Number(action.split('/').at(-1)))
         if (method === 'DELETE') list.splice(index, 1)
-        else Object.assign(list[index], body, { wordCount: wordCount(body.content) })
+        else Object.assign(list[index], body, typeof body.content === 'string' ? { wordCount: wordCount(body.content) } : {})
       } else result = { code: 404, message: '未配置测试接口：' + path }
       if (work) { work.episodeCount = list.length; work.wordCount = list.reduce((sum, chapter) => sum + chapter.wordCount, 0) }
-    } else if (path.endsWith('/versions')) result.data = []
+    } else if (/\/content\/works\/\d+\/(storyboards|volumes|timeline)$/.test(path)) result.data = []
+    else if (/\/content\/works\/\d+\/(ledger|gen-jobs\/latest)$/.test(path)) result.data = null
+    else if (path.endsWith('/versions')) result.data = []
     else if (path.endsWith('/ai/skills')) result.data = skills
     else if (path.includes('/content/ai/') && path.endsWith('/stream')) {
       const type = path.split('/').at(-2)

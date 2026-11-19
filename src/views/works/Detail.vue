@@ -4,12 +4,13 @@
   <div v-if="!pending && !error && work" class="work-detail-grid">
     <section class="work-detail-main">
       <div class="workhead"><div class="wh-cover" :class="{ 'script-cover': !(avatarUrl(work.cover) && !coverFailed) }"><img v-if="avatarUrl(work.cover) && !coverFailed" :src="avatarUrl(work.cover)" alt="作品封面" @error="coverFailed = true" /><template v-else><span class="script-slip">{{ work.title }}</span><span class="bg-glyph" aria-hidden="true">{{ work.title?.slice(0, 1) }}</span></template></div><div class="wh-body"><div class="row"><h1 class="detail-title">{{ work.title }}</h1><span class="stamp sm" :data-s="workDisplayState.stamp">{{ workDisplayState.label }}</span></div><p class="work-info">短剧 · {{ work.genreName || '未分类' }} ｜ {{ work.episodeCount ?? chapters.length }} 章 ｜ {{ words(work.wordCount) }} ｜ 最近更新 {{ dateText(work.updateTime).slice(5) }}</p><p class="wh-intro">{{ work.summary || '暂无简介' }}</p></div></div>
-      <div class="row section-actions"><button class="btn" :disabled="!editable" @click="editChapter(null)">＋ 写新章节</button><button class="btn quiet" :disabled="!editable" @click="editStoryboard()">＋ 写新分镜</button><span class="cost">{{ work.status === 'reviewing' ? '审核中暂不可编辑，可查看审核进度' : reviewApproved ? (onShelf ? '作品已上架到书城；修改后需重新提交审核' : '审核已通过，请确认信息后手动上架到书城') : '开启试读后立即生效，无需单独审核或手动发布；分镜提交后由平台审核' }}</span></div>
+      <div class="row section-actions"><button class="btn" :disabled="!editable" @click="editChapter(null)">＋ 写新章节</button><button class="btn quiet" :disabled="!editable" @click="editStoryboard()">＋ 写新分镜</button><span class="cost">{{ work.status === 'reviewing' ? '审核中暂不可编辑，可查看审核进度' : reviewApproved ? (onShelf ? '作品已上架到书城；修改后需重新提交审核' : '审核已通过，请确认信息后手动上架到书城') : '章节随作品审核，通过后可开启试读；分镜提交后由平台单独审核' }}</span></div>
       <div class="creator-catalogs">
         <details class="creator-catalog" open>
-          <summary><span><strong>章节目录</strong><em>{{ chapters.length }} 章</em></span><small>章节内容与发布状态</small></summary>
+          <summary><span><strong>章节目录</strong><em>{{ chapters.length }} 章</em></span><small>章节审核与试读设置</small></summary>
           <div class="creator-catalog-scroll">
-            <div v-if="chapters.length" class="tbl"><table><thead><tr><th class="seq-col">序</th><th>章节标题</th><th class="num">字数</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="chapter in chapters" :key="chapter.chapterId"><td class="num">{{ String(chapter.chapterNo).padStart(2, '0') }}</td><td>{{ chapter.chapterTitle }} <span v-if="chapter.isFree === '1'" class="tag ok">试读</span></td><td class="num">{{ Number(chapter.wordCount || 0).toLocaleString() }}</td><td><span class="tag" :class="chapterState(chapter.status).tone">{{ chapterState(chapter.status).label }}</span></td><td class="ops"><button class="btn sm" :class="{ quiet: chapter.status !== 'revision' }" :disabled="!editable || deleting !== null" @click="editChapter(chapter)">{{ chapter.status === 'revision' ? '修改' : '编辑' }}</button><button class="btn quiet sm" :disabled="!editable || deleting !== null" @click="remove(chapter)">{{ deleting === chapter.chapterId ? '删除中…' : '删除' }}</button></td></tr></tbody></table></div>
+            <div v-if="chapters.length" class="tbl"><table><thead><tr><th class="seq-col">序</th><th>章节标题</th><th class="num">字数</th><th>审核状态</th><th>开启试读</th><th>操作</th></tr></thead><tbody><tr v-for="chapter in chapters" :key="chapter.chapterId"><td class="num">{{ String(chapter.chapterNo).padStart(2, '0') }}</td><td>{{ chapter.chapterTitle }}</td><td class="num">{{ Number(chapter.wordCount || 0).toLocaleString() }}</td><td><span class="tag" :class="chapterState(chapter).tone">{{ chapterState(chapter).label }}</span></td>
+              <td><el-switch v-if="trialAllowed(chapter)" :model-value="chapter.isFree === '1'" :aria-label="'开启试读：' + chapter.chapterTitle" :disabled="!editable || trialSaving !== null" @change="value => updateTrial(chapter, value)" /><span v-else class="cost">—</span></td><td class="ops"><button class="btn sm" :class="{ quiet: chapterState(chapter).tone !== 'bad' }" :disabled="!editable || deleting !== null" @click="editChapter(chapter)">{{ chapterState(chapter).tone === 'bad' ? '修改' : '编辑' }}</button><button class="btn quiet sm" :disabled="!editable || deleting !== null" @click="remove(chapter)">{{ deleting === chapter.chapterId ? '删除中…' : '删除' }}</button></td></tr></tbody></table></div>
             <LoadState v-else empty-text="还没有章节，写下故事的第一幕。" />
           </div>
         </details>
@@ -26,7 +27,7 @@
     <aside class="work-detail-side">
       <div v-if="latestReview?.reviewOpinion && ['revision', 'rejected'].includes(work.status)" class="note bad">{{ latestReview.reviewOpinion }}</div>
       <div v-if="!canCreate" class="note info">创作者能力尚未开通，当前仅可查看作品。</div>
-      <div class="sub"><div class="sub-head"><h3>当前状态</h3></div><div class="panel attached"><dl class="summary"><div><dt>审核状态</dt><dd :class="workDisplayState.tone">{{ reviewApproved ? '已通过' : stateOf(work.status).label }}</dd></div><div><dt>书城状态</dt><dd :class="onShelf ? 'ok' : reviewApproved ? 'wait' : 'off'">{{ onShelf ? '已上架' : reviewApproved ? '待手动上架' : '未上架' }}</dd></div><div><dt>可用章节</dt><dd>{{ chapters.filter(c => c.status === 'approved' || c.status === 'published' || c.status === '0').length }} <small>/ {{ work.episodeCount ?? chapters.length }}</small></dd></div><div><dt>章节总数</dt><dd>{{ chapters.length }}</dd></div></dl><div v-if="reviewApproved" class="shelf-action"><button class="btn shelf-primary" :disabled="shelfing" @click="toggleShelf">{{ shelfing ? '处理中…' : onShelf ? '下架作品' : '上架到书城' }}</button><p>{{ onShelf ? '作品当前已在书城展示。' : '审核已通过，点击后才会展示在书城。' }}</p></div><div class="row section-actions"><button class="btn" :disabled="!editable || !chapters.length || submitting" @click="submit">{{ submitting ? '提交中…' : '提交审核' }}</button><button class="btn quiet" @click="showVersions">查看版本历史</button></div><p class="cost">审核通过不会自动上架；已上架作品改动后需要重新提交审核。</p></div></div>
+      <div class="sub"><div class="sub-head"><h3>当前状态</h3></div><div class="panel attached"><dl class="summary"><div><dt>审核状态</dt><dd :class="workDisplayState.tone">{{ reviewApproved ? '已通过' : stateOf(work.status).label }}</dd></div><div><dt>书城状态</dt><dd :class="onShelf ? 'ok' : reviewApproved ? 'wait' : 'off'">{{ onShelf ? '已上架' : reviewApproved ? '待手动上架' : '未上架' }}</dd></div><div><dt>审核通过章节</dt><dd>{{ chapters.filter(trialAllowed).length }} <small>/ {{ work.episodeCount ?? chapters.length }}</small></dd></div><div><dt>章节总数</dt><dd>{{ chapters.length }}</dd></div></dl><div v-if="reviewApproved" class="shelf-action"><button class="btn shelf-primary" :disabled="shelfing" @click="toggleShelf">{{ shelfing ? '处理中…' : onShelf ? '下架作品' : '上架到书城' }}</button><p>{{ onShelf ? '作品当前已在书城展示。' : '审核已通过，点击后才会展示在书城。' }}</p></div><div class="row section-actions"><button class="btn" :disabled="!editable || !chapters.length || submitting" @click="submit">{{ submitting ? '提交中…' : '提交审核' }}</button><button class="btn quiet" @click="showVersions">查看版本历史</button></div><p class="cost">审核通过不会自动上架；已上架作品改动后需要重新提交审核。</p></div></div>
       <div class="sub"><div class="sub-head"><h3>审核记录</h3></div><div class="panel attached"><LoadState :error="reviewError" :retry="loadReviews" :empty="!reviewError && !reviews.length" empty-text="暂无审核记录" /><ul v-if="!reviewError" class="timeline"><li v-for="review in reviews" :key="review.reviewId" :data-tone="review.status === 'approved' ? 'passed' : ['revision', 'rejected'].includes(review.status) ? 'revise' : ''"><time>{{ dateText(review.reviewEndTime || review.createdAt || review.createTime) }}</time><b>内容审核 · {{ reviewLabels[review.status] || '状态待确认' }}</b><p v-if="review.reviewOpinion">{{ review.reviewOpinion }}<span v-if="review.reviewerName"> —— 审核员 {{ review.reviewerName }}</span></p></li></ul></div></div>
     </aside>
   </div>
@@ -39,6 +40,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Setting } from '@element-plus/icons-vue'
+import { chapterReviewState, canSetChapterTrial } from '../../utils/chapterReview.js'
 import { usePortal } from '../../utils/portal.js'
 import { avatarUrl } from '../../utils/avatarUrl.js'
 import { canEdit, stateOf, words, dateText } from '../../utils/creator.js'
@@ -46,7 +48,7 @@ import LoadState from '../../components/LoadState.vue'
 import PortalLayer from '../../components/PortalLayer.vue'
 import WorkSettings from './Settings.vue'
 import WorkDelete from './Delete.vue'
-import { changeShelfStatus, deleteWorkStoryboard, listWorkStoryboards } from '../../api/creator.js'
+import { setChapterTrial, changeShelfStatus, deleteWorkStoryboard, listWorkStoryboards } from '../../api/creator.js'
 const { api, user, canCreate, goWorks, handleError } = usePortal()
 const route = useRoute()
 const router = useRouter()
@@ -77,7 +79,21 @@ const workDisplayState = computed(() => reviewApproved.value
   ? (onShelf.value ? { label: '已上架', tone: 'ok', stamp: 'passed' } : { label: '审核通过，待上架', tone: 'wait', stamp: 'passed' })
   : stateOf(work.value?.status))
 const reviewLabels = { approved: '通过', pending: '等待审核', ai_reviewing: 'AI 审核中', reviewing: '审核中', revision: '需修改', rejected: '驳回' }
-const chapterState = status => status === '0' ? { label: '已生效', tone: 'ok' } : status === '1' ? { label: '草稿', tone: 'off' } : status === 'approved' ? { label: '已通过', tone: 'ok' } : stateOf(status)
+const trialSaving = ref(null)
+const chapterState = chapter => chapterReviewState(chapter, work.value?.status)
+const trialAllowed = chapter => canSetChapterTrial(chapter, work.value?.status)
+async function updateTrial(chapter, enabled) {
+  if (!editable.value || !trialAllowed(chapter) || trialSaving.value !== null) return
+  trialSaving.value = chapter.chapterId
+  try {
+    await setChapterTrial(route.params.id, chapter.chapterId, enabled)
+    chapter.isFree = enabled ? '1' : '0'
+    ElMessage.success(enabled ? '已开启章节试读' : '已关闭章节试读')
+    await loadStoryboards()
+  } catch (failure) {
+    await handleError(failure)
+  } finally { trialSaving.value = null }
+}
 const storyboardStatus = status => ({ ai_reviewing: 'AI审核中', pending: '待人工审核', approved: '审核通过', rejected: '审核驳回' })[status] || '待审核'
 // 作者视角的 readable 包含本人权限，不能用它判断是否对读者开放试读。
 const storyboardTrialEnabled = storyboard => {
@@ -85,7 +101,7 @@ const storyboardTrialEnabled = storyboard => {
   if (explicit) return true
   const title = String(storyboard?.chapterTitle || storyboard?.title || storyboard?.name || '').trim()
   const chapter = chapters.value.find(item => String(item.chapterTitle || '').trim() === title)
-  return chapter?.isFree === true || chapter?.isFree === 1 || chapter?.isFree === '1'
+  return trialAllowed(chapter) && chapter.isFree === '1'
 }
 async function loadReviews() {
   reviewError.value = ''

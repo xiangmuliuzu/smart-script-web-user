@@ -36,13 +36,14 @@ export const submitWork = id => data(workPath(id) + '/submit', { method: 'POST' 
 // 审核通过后由作者主动控制上架/下架；审核通过本身不会自动上架。
 export const changeShelfStatus = (id, status) => data(workPath(id) + '/shelf?status=' + encodeURIComponent(status), { method: 'PUT' })
 export const saveChapter = (id, chapter) => {
-  const body = { chapterTitle: chapter.chapterTitle.trim(), content: chapter.content, isFree: chapter.isFree }
+  const body = { chapterTitle: chapter.chapterTitle.trim(), content: chapter.content }
   // 摘要：只有调用方显式给出字符串才下发（空串=清空）。不传表示“本次不改”，
   // 否则编辑正文时会把它清空——后端 null 不改、空串清空。
   if (typeof chapter.summary === 'string') body.summary = chapter.summary
   return data(workPath(id) + '/chapters' + (chapter.chapterId ? '/' + encodeURIComponent(chapter.chapterId) : ''), { method: chapter.chapterId ? 'PUT' : 'POST', body })
 }
-export const publishChapter = chapterId => data('/api/v1/content/chapters/' + encodeURIComponent(chapterId), { method: 'PUT', body: { status: '0' } })
+export const setChapterTrial = (workId, chapterId, enabled) =>
+  data(workPath(workId) + '/chapters/' + encodeURIComponent(chapterId), { method: 'PUT', body: { isFree: enabled ? '1' : '0' } })
 // 方案 2：正文定稿后单独调一次 AI，产出「本章摘要 + 台账更新」，后端写 summary 并合并台账（正文不变）。
 export const summarizeChapter = (workId, chapterId, content, model) => data('/api/v1/content/ai/chapter-summary', { method: 'POST', body: { workId, chapterId, content, model } })
 // 每集验收（5 项判定，≥4 项通过；只提示不改正文），结果后端落 sys_chapter_review。

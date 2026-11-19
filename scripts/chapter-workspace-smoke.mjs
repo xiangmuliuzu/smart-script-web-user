@@ -4,7 +4,10 @@ import { mockCreatorApi } from './fixtures/creator-api.mjs'
 import { documentText } from '../src/utils/document.js'
 
 const base = (process.env.PREVIEW_URL || 'http://127.0.0.1:3001/user').replace(/\/$/, '')
-const browser = await playwright.chromium.launch({ headless: true })
+const browser = await playwright.chromium.launch({
+  headless: true,
+  channel: process.env.PW_BROWSER || undefined,
+})
 const checks = []
 async function check(name, run) { await run(); checks.push(name); console.log('PASS ' + name) }
 try {
@@ -370,103 +373,54 @@ try {
     await legacyContext.close()
   })
 
-  await check('trial flags load per chapter, survive reload and save independently of text edits', async () => {
-    const trialContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
-    const trialState = await mockCreatorApi(trialContext)
-    trialState.chapters[3][1].isFree = '1'
-    await trialContext.addInitScript(() => localStorage.setItem('PcUser-Token', 'browser-test-only'))
-    const trialPage = await trialContext.newPage()
-    const toggle = trialPage.getByRole('switch', { name: '设为试读章节（免费阅读）', exact: true })
-    const ready = () => trialPage.waitForFunction(() => document.querySelector('.creation-title')?.disabled === false)
-    await trialPage.goto(base + '/works/create?workId=3&chapterId=31')
-    await ready()
-    assert.equal(await toggle.isChecked(), true)
-    await toggle.locator('..').click()
-    await trialPage.locator('.creation-directory .episode-select').first().click()
-    assert.equal(await toggle.isChecked(), false)
-    await trialPage.locator('.creation-directory .episode-select').nth(1).click()
-    assert.equal(await toggle.isChecked(), false)
-    await trialPage.waitForFunction(() => JSON.parse(localStorage.getItem('PcUser-CreationDraft:7:work:3'))?.chapters[1].isFree === '0')
-    await trialPage.reload()
-    await ready()
-    assert.equal(await toggle.isChecked(), false)
-    const before = trialState.calls.length
-    await trialPage.getByRole('button', { name: '保存草稿', exact: true }).click()
-    await trialPage.waitForURL(base + '/works/3')
-    assert.equal(trialState.chapters[3][1].isFree, '0')
-    assert.deepEqual(trialState.calls.slice(before).filter(call => call.method !== 'GET'), [{ path: '/api/v1/users/me/works/3/chapters/31', method: 'PUT' }])
-    await trialPage.locator('tbody tr').nth(1).getByRole('button', { name: '编辑', exact: true }).click()
-    await ready()
-    await toggle.locator('..').click()
-    await trialPage.getByRole('button', { name: '保存草稿', exact: true }).click()
-    await trialPage.waitForURL(base + '/works/3')
-    assert.equal(trialState.chapters[3][1].isFree, '1')
-    await trialPage.locator('tbody tr').nth(1).getByText('试读', { exact: true }).waitFor()
-    await trialPage.goto(base + '/works/create?workId=2')
-    await trialPage.getByRole('status').filter({ hasText: '作品正在审核中' }).waitFor()
-    assert.equal(await toggle.isDisabled(), true)
-    await trialContext.close()
-  })
-
-  await check('trial-only changes detect concurrent text edits and failed saves keep the selected flag', async () => {
+  await check('only approved chapters have an independent trial switch on the detail page', async () => {
     const trialContext = await browser.newContext()
-    const trialState = await mockCreatorApi(trialContext)
-    await trialContext.addInitScript(() => localStorage.setItem('PcUser-Token', 'browser-test-only'))
-    const trialPage = await trialContext.newPage()
-    await trialPage.goto(base + '/works/create?workId=3&chapterId=30')
-    await trialPage.waitForFunction(() => document.querySelector('.creation-title')?.disabled === false)
-    const toggle = trialPage.getByRole('switch', { name: '设为试读章节（免费阅读）', exact: true })
-    await toggle.locator('..').click()
-    const originalContent = trialState.chapters[3][0].content
-    trialState.chapters[3][0].content = '其他页面刚保存的正文，不能被试读设置覆盖。'
-    const before = trialState.calls.length
-    await trialPage.getByRole('button', { name: '保存草稿', exact: true }).click()
-    await trialPage.locator('.creation-error').filter({ hasText: '章节已在其他页面修改' }).waitFor()
-    assert.equal(trialState.calls.slice(before).filter(call => call.method !== 'GET').length, 0)
-    assert.equal(await toggle.isChecked(), true)
-    trialState.chapters[3][0].content = originalContent
-    await trialPage.route('**/api/v1/users/me/works/3/chapters/30', route => route.fulfill({ json: { code: 500, message: '试读设置保存失败' } }))
-    await trialPage.getByRole('button', { name: '保存草稿', exact: true }).click()
-    await trialPage.locator('.creation-error').filter({ hasText: '试读设置保存失败' }).waitFor()
-    assert.equal(await toggle.isChecked(), true)
-    await trialPage.unroute('**/api/v1/users/me/works/3/chapters/30')
-    await trialPage.getByRole('button', { name: '保存草稿', exact: true }).click()
-    await trialPage.waitForURL(base + '/works/3')
-    assert.equal(trialState.chapters[3][0].isFree, '1')
-    await trialContext.close()
+    try {
+      const state = await mockCreatorApi(trialContext)
+      const list = state.chapters[4]
+      list[0].isFree = '0'
+      list[1].status = '1'
+      list[2].status = '2'
+      await trialContext.addInitScript(() => localStorage.setItem('PcUser-Token', 'browser-test-only'))
+      const trialPage = await trialContext.newPage()
+      await trialPage.goto(base + '/works/4')
+      const rows = trialPage.locator('.creator-catalog').first().locator('tbody tr')
+      await rows.first().getByText('审核通过', { exact: true }).waitFor()
+      await rows.nth(1).getByText('草稿', { exact: true }).waitFor()
+      await rows.nth(2).getByText('未通过审核', { exact: true }).waitFor()
+      assert.equal(await rows.getByRole('switch').count(), 1)
+      const input = rows.first().getByRole('switch')
+      for (const enabled of [true, false]) {
+        const response = trialPage.waitForResponse(res => res.url().endsWith('/works/4/chapters/40') && res.request().method() === 'PUT')
+        await input.locator('..').click()
+        assert.deepEqual((await response).request().postDataJSON(), { isFree: enabled ? '1' : '0' })
+        await trialPage.waitForFunction(value => document.querySelector('.creator-catalog [role=switch]')?.getAttribute('aria-checked') === value, String(enabled))
+      }
+      await trialPage.reload()
+      await input.locator('..').waitFor()
+      assert.equal(await input.getAttribute('aria-checked'), 'false')
+      assert.equal(list[0].content, '雨夜，列车驶入站台。')
+    } finally { await trialContext.close() }
   })
-  await check('legacy drafts preserve existing trial flags and new chapters can be marked for trial', async () => {
+  await check('editing does not auto-save and a reload preserves the local draft', async () => {
     const trialContext = await browser.newContext()
-    const trialState = await mockCreatorApi(trialContext)
-    trialState.chapters[3][0].isFree = '1'
-    const legacyDraft = {
-      createdId: 3, form: { title: '第三次告白', genreId: '2', summary: '电台主播的故事。' },
-      chapters: trialState.chapters[3].map(({ chapterId, chapterTitle, content }) => ({ chapterId, chapterTitle, content })), characters: '',
-    }
-    await trialContext.addInitScript(draft => {
-      localStorage.setItem('PcUser-Token', 'browser-test-only')
-      localStorage.setItem('PcUser-CreationDraft:7:work:3', JSON.stringify(draft))
-    }, legacyDraft)
-    const trialPage = await trialContext.newPage()
-    const toggle = trialPage.getByRole('switch', { name: '设为试读章节（免费阅读）', exact: true })
-    await trialPage.goto(base + '/works/create?workId=3')
-    await trialPage.waitForFunction(() => document.querySelector('.creation-title')?.disabled === false)
-    assert.equal(await toggle.isChecked(), true)
-    await trialPage.goto(base + '/works/create')
-    await trialPage.waitForFunction(() => document.querySelector('.creation-title')?.disabled === false)
-    assert.equal(await toggle.isChecked(), false)
-    await trialPage.getByLabel('作品名称', { exact: true }).fill('新作品的试读章节')
-    await trialPage.getByLabel('分类', { exact: true }).selectOption('1')
-    await toggle.locator('..').click()
-    await trialPage.getByRole('button', { name: '保存草稿', exact: true }).click()
-    await trialPage.getByRole('alert').filter({ hasText: '请输入正文或上传草稿' }).first().waitFor()
-    assert.equal(trialState.works.length, 4)
-    await trialPage.getByLabel('分集正文', { exact: true }).fill('读者可以免费阅读这段新正文。')
-    await trialPage.getByRole('button', { name: '保存草稿', exact: true }).click()
-    await trialPage.waitForURL(base + '/works/5')
-    assert.equal(trialState.chapters[5][0].isFree, '1')
-    await trialPage.locator('tbody tr').first().getByText('试读', { exact: true }).waitFor()
-    await trialContext.close()
+    try {
+      const state = await mockCreatorApi(trialContext)
+      await trialContext.addInitScript(() => localStorage.setItem('PcUser-Token', 'browser-test-only'))
+      const trialPage = await trialContext.newPage()
+      await trialPage.goto(base + '/works/create?workId=4&chapterId=40')
+      const toggle = trialPage.getByRole('switch', { name: '开启章节试读' })
+      await toggle.locator('..').waitFor()
+      const before = state.calls.length
+      const title = trialPage.getByRole('textbox', { name: '分集标题' })
+      await title.fill('等待手动保存的分集')
+      await trialPage.getByText('有未保存的修改', { exact: true }).waitFor()
+      await trialPage.waitForTimeout(5600)
+      assert.equal(state.calls.slice(before).filter(call => call.method !== 'GET').length, 0)
+      assert.equal(await toggle.count(), 0)
+      await trialPage.reload()
+      await trialPage.waitForFunction(() => document.querySelector('.episode-title')?.value === '等待手动保存的分集')
+    } finally { await trialContext.close() }
   })
   assert.deepEqual(errors, [])
   console.log(`PASS ${checks.length} chapter workspace browser checks`)
