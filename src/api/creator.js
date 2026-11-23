@@ -334,6 +334,8 @@ export const listOrders = params => data('/api/v1/trade/order/list?' + new URLSe
 export const payOrder = (id, refresh = false) => data(`/api/v1/trade/order/${encodeURIComponent(id)}/pay${refresh ? '?refresh=true' : ''}`, { method: 'POST' })
 // 沙箱支付：服务端向支付宝查单确认后才推进订单（与 App / 企业端同一接口）
 export const confirmSandboxPayment = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/pay/confirm`, { method: 'POST' })
+// 测试直付：跳过支付宝沙箱，订单直接按已付款进入交割（与版权零元直付同性质）。
+export const directPayOrder = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/pay/direct-pay`, { method: 'POST' })
 export const completeOrder = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/complete`, { method: 'POST' })
 // 取消订单（仅 confirmed 可取消）；reason 选填，走 query 参数
 export const cancelOrder = (id, reason) => data(`/api/v1/trade/order/${encodeURIComponent(id)}/cancel${reason ? '?' + new URLSearchParams({ reason }).toString() : ''}`, { method: 'POST' })
