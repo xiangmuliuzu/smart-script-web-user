@@ -73,6 +73,7 @@ import { canEdit, validateWork, validateChapter, wordCount, outlineChapters, pla
 import { chapterReviewState, canSetChapterTrial } from '../../utils/chapterReview.js'
 import { setChapterTrial } from '../../api/creator.js'
 import { readDraft } from '../../utils/draft.js'
+import { uuid } from '../../utils/uuid.js'
 import { documentText } from '../../utils/document.js'
 import {
   chapterTail, episodeCardFrom, chapterSummaryBlock, checkGenerationRules,
@@ -89,7 +90,7 @@ const { api, user, canCreate, goWork, goWorks, handleError } = usePortal()
 const route = useRoute()
 const router = useRouter()
 const form = reactive({ title: '', summary: '', scriptUrl: '', scriptName: '', scriptSize: 0 })
-const newChapter = number => ({ draftId: crypto.randomUUID(), chapterTitle: `第 ${number} 集`, content: '', isFree: '0', status: '1' })
+const newChapter = number => ({ draftId: uuid(), chapterTitle: `第 ${number} 集`, content: '', isFree: '0', status: '1' })
 const sameChapter = (a, b) => a && b && a.chapterTitle === b.chapterTitle && a.content === b.content
 const chapters = ref([newChapter(1)])
 const characters = ref('')
@@ -593,7 +594,7 @@ async function applyAiCreateSeed(id) {
 /** 局部重载章节：只从服务器拉章节，不重置 AI 面板与正在看的续写结果。 */
 async function reloadChapters() {
   const detail = await api.value.getWork(createdId.value)
-  const remote = (detail.chapters || []).map(chapter => ({ chapterId: Number(chapter.chapterId), chapterNo: chapter.chapterNo, chapterTitle: chapter.chapterTitle || '', content: chapter.content || '', isFree: chapter.isFree, status: String(chapter.status ?? '1'), summary: chapter.summary || '', draftId: crypto.randomUUID() }))
+  const remote = (detail.chapters || []).map(chapter => ({ chapterId: Number(chapter.chapterId), chapterNo: chapter.chapterNo, chapterTitle: chapter.chapterTitle || '', content: chapter.content || '', isFree: chapter.isFree, status: String(chapter.status ?? '1'), summary: chapter.summary || '', draftId: uuid() }))
   chapters.value = remote.length ? remote : [newChapter(1)]
   originalChapters = new Map(remote.map(chapter => [chapter.chapterId, { chapterTitle: chapter.chapterTitle, content: chapter.content, isFree: chapter.isFree, status: String(chapter.status ?? '1'), summary: chapter.summary || '' }]))
   activeChapter.value = Math.min(activeChapter.value, chapters.value.length - 1)
@@ -869,7 +870,7 @@ function restoreDraft(draft) {
   for (const key of Object.keys(form)) {
     if (typeof draft.form[key] === typeof form[key]) form[key] = draft.form[key]
   }
-  chapters.value = draft.chapters.map((chapter, index) => ({ ...chapter, status: originalChapters.get(Number(chapter.chapterId))?.status ?? '1', isFree: String(originalChapters.get(Number(chapter.chapterId))?.isFree ?? '0'), chapterTitle: !createdId.value && index === 0 && chapter.chapterTitle === '第一集' ? '第 1 集' : chapter.chapterTitle, draftId: crypto.randomUUID() }))
+  chapters.value = draft.chapters.map((chapter, index) => ({ ...chapter, status: originalChapters.get(Number(chapter.chapterId))?.status ?? '1', isFree: String(originalChapters.get(Number(chapter.chapterId))?.isFree ?? '0'), chapterTitle: !createdId.value && index === 0 && chapter.chapterTitle === '第一集' ? '第 1 集' : chapter.chapterTitle, draftId: uuid() }))
   characters.value = typeof draft.characters === 'string' && draft.characters ? draft.characters : characters.value
   scriptOutline.value = typeof draft.outline === 'string' && draft.outline ? draft.outline : scriptOutline.value
   if (draft.storyboard && typeof draft.storyboard === 'object') {
@@ -895,7 +896,7 @@ async function loadWorkspace() {
       const detail = await api.value.getWork(id)
       loadedWork.value = detail.work
       Object.assign(form, { title: detail.work.title || '', summary: detail.work.summary || '' })
-      const remote = (detail.chapters || []).map(chapter => ({ chapterId: Number(chapter.chapterId), chapterNo: chapter.chapterNo, chapterTitle: chapter.chapterTitle || '', content: chapter.content || '', isFree: chapter.isFree, status: String(chapter.status ?? '1'), summary: chapter.summary || '', draftId: crypto.randomUUID() }))
+      const remote = (detail.chapters || []).map(chapter => ({ chapterId: Number(chapter.chapterId), chapterNo: chapter.chapterNo, chapterTitle: chapter.chapterTitle || '', content: chapter.content || '', isFree: chapter.isFree, status: String(chapter.status ?? '1'), summary: chapter.summary || '', draftId: uuid() }))
       chapters.value = remote.length ? remote : [newChapter(1)]
       originalChapters = new Map(remote.map(chapter => [chapter.chapterId, { chapterTitle: chapter.chapterTitle, content: chapter.content, isFree: chapter.isFree, status: String(chapter.status ?? '1'), summary: chapter.summary || '' }]))
       try { characters.value = JSON.parse(storage.getItem(draftBase + ':notes:' + id) || 'null')?.characters || '' } catch { /* 损坏的便签不影响正文。 */ }

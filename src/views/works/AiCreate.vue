@@ -327,6 +327,7 @@ import { usePortal } from '../../utils/portal.js'
 import { dateText, outlineChapters, outlineToText, wordCount } from '../../utils/creator.js'
 import { outlineInspiration, outlineSummary, listOutlineChapters, locateOutlineRange, outlineContext, outlineRevisePrompt, previewPassage, stripEchoedHeading, chapterWritePrompt, chapterContinuePrompt, parseAiCreateOutlineInput, buildAiCreateSession, groupAiCreateRecords, markAiCreatePrompt, AI_CREATE_MARK, stripRepeatedHead, clampEpisodeText, EPISODE_TEXT_MAX, rosterFromCharacters, stateGuardBlock, episodeCastFrom, auditEpisodeState } from '../../utils/creatorAi.js'
 import { documentText } from '../../utils/document.js'
+import { uuid } from '../../utils/uuid.js'
 import LoadState from '../../components/LoadState.vue'
 import '../../assets/styles/creation.css'
 
@@ -434,9 +435,9 @@ async function continueSession(record) {
   const recovered = target.chapters.map((chapter, index) => {
     // 恢复的内容还没落库：chapterId 只作显示占位（保证章节区渲染），真正保存时才写回。
     const placeholderId = Number(chapter.chapterId || 0) || null
-    return { key: crypto.randomUUID(), title: chapter.title || `第 ${index + 1} 集`, summary: parsed[index]?.summary || '', selected: true, state: 'generated', content: chapter.content, streaming: '', progress: '', chapterId: placeholderId, remote: false, recovered: true }
+    return { key: uuid(), title: chapter.title || `第 ${index + 1} 集`, summary: parsed[index]?.summary || '', selected: true, state: 'generated', content: chapter.content, streaming: '', progress: '', chapterId: placeholderId, remote: false, recovered: true }
   })
-  chapters.value = recovered.length ? recovered : parsed.map(item => ({ key: crypto.randomUUID(), title: item.title, summary: item.summary, selected: true, state: 'idle', content: '', streaming: '', progress: '', chapterId: null }))
+  chapters.value = recovered.length ? recovered : parsed.map(item => ({ key: uuid(), title: item.title, summary: item.summary, selected: true, state: 'idle', content: '', streaming: '', progress: '', chapterId: null }))
   step.value = target.outline ? 3 : 2
   historyOpen.value = false
   ElMessage.success(recovered.length ? `已恢复大纲和 ${recovered.length} 章正文` : '已恢复大纲，可以继续逐章生成')
@@ -722,7 +723,7 @@ async function goChapters() {
   error.value = ''
   step.value = 3
   if (!chapters.value.length || !outlineLocked) {
-    chapters.value = parsed.map(item => ({ key: crypto.randomUUID(), title: item.title, summary: item.summary, selected: true, state: 'idle', content: '', chapterId: null }))
+    chapters.value = parsed.map(item => ({ key: uuid(), title: item.title, summary: item.summary, selected: true, state: 'idle', content: '', chapterId: null }))
     outlineLocked = true
   }
   await ensureWork()

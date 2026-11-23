@@ -8,6 +8,7 @@
 import { computed, onUnmounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { usePortal } from '../../utils/portal.js'
+import { uuid } from '../../utils/uuid.js'
 const props = defineProps({ modelValue: Boolean, phone: String })
 const emit = defineEmits(['update:modelValue', 'saved'])
 const { api, handleError } = usePortal()
@@ -19,7 +20,7 @@ const token = ref('')
 const busy = ref(false)
 const error = ref('')
 const countdown = ref(0)
-const deviceId = crypto.randomUUID()
+const deviceId = uuid()
 let timer
 function beforeClose(done) { if (busy.value) return; code.value = ''; token.value = ''; newPhone.value = ''; done() }
 function startCountdown() { clearInterval(timer); countdown.value = 60; timer = setInterval(() => { countdown.value--; if (!countdown.value) clearInterval(timer) }, 1000) }
