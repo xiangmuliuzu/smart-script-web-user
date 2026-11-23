@@ -218,13 +218,18 @@ async function generate(feedback = '') {
         : { content: source, style: form.style, skillId, model }
     } else if (type === 'storyboard') {
       const script = documentText(form.script)
+      // 关联章节随请求下发：后端据此锁定集号并归一化输出首行标题，避免模型自拟「第一集」
+      const chapterTitle = (form.chapterTitle || '').trim() || undefined
       body = feedback
-        ? { script: `剧本文本：\n${script}\n上一版分镜：\n${previous}\n修改意见：${feedback}\n请按修改意见重写分镜，保持场次与镜号结构，保留景别/运镜/时长/画面/台词/音效转场。`, style: form.sbStyle, workId: form.workId || undefined, skillId, model }
-        : { script, style: form.sbStyle, workId: form.workId || undefined, skillId, model }
+        ? { script: `剧本文本：\n${script}\n上一版分镜：\n${previous}\n修改意见：${feedback}\n请按修改意见重写分镜，保持场次与镜号结构，保留景别/运镜/时长/画面/台词/音效转场。`, style: form.sbStyle, workId: form.workId || undefined, skillId, model, chapterTitle }
+        : { script, style: form.sbStyle, workId: form.workId || undefined, skillId, model, chapterTitle }
     }
     // 流式生成：delta 逐块追加，实现打字机式实时输出。
     if (api.value.generateStream) {
       const response = await api.value.generateStream(type, body, delta => { results[type] += delta })
+      // 分镜以 done 下发的归一化全文为准：服务端已按所选章节改写首行集号标题，
+      // 流式 delta 是模型原文（可能缺标题或写错集号），结束后用服务端全文覆盖展示。
+      if (type === 'storyboard' && response.content) results.storyboard = response.content
       if (type === 'outline') {
         outlineIncomplete.value = Boolean(response.truncated)
         if (response.truncated) error.value = '大纲达到生成长度上限，请减少集数后重新生成。'
