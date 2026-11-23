@@ -292,7 +292,7 @@ export const listRechargeOrders = (userId, limit = 20) => data(`/api/v1/welfare/
 // 创作者端=卖方门户：交易通知只取 SELLER/BOTH（及无受众的通用通知），买方视角通知（如询盘已被接受）不进此端。
 export const listMessages = async () => asList(await data('/api/v1/messages' + qs({ pageSize: 100, portalRole: 'SELLER' }))).map(item => ({ ...item, isRead: item.read, content: item.summary, createTime: item.createdAt }))
 export const getMessage = id => data(`/api/v1/messages/${encodeURIComponent(id)}`)
-export const unreadCount = async () => (await data('/api/v1/messages/unread-count')).total
+export const unreadCount = async () => (await data('/api/v1/messages/unread-count' + qs({ portalRole: 'SELLER' }))).total
 export const readMessage = id => data(`/api/v1/messages/${encodeURIComponent(id)}/read`, { method: 'PUT' })
 export const readAllMessages = () => data('/api/v1/messages/read-all', { method: 'PUT' })
 export const openChat = () => data('/api/v1/users/me/chat/sessions', { method: 'POST', body: { businessType: 'GENERAL', businessName: '平台沟通' } })
@@ -304,8 +304,8 @@ export const listChat = async id => asList(await data(`/api/v1/users/me/chat/ses
 export const sendChat = (id, content, quoteMessageId) => data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/messages`, { method: 'POST', body: { msgType: 'TEXT', content, ...(quoteMessageId ? { quoteMessageId } : {}) } })
 export const recallChat = (id, messageId) => data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/messages/${encodeURIComponent(messageId)}/recall`, { method: 'PUT' })
 export const readChatSession = id => data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/read`, { method: 'PUT' })
-// 聊天未读总数（顶栏「沟通」徽标）；后端不区分会话类型，含交易会话的未读。
-export const chatUnreadCount = async () => Number((await data('/api/v1/users/me/chat/unread-count'))?.chatUnread || 0)
+// 聊天未读总数（顶栏「平台客服」徽标）：与客服面板同口径，只统计 sessionType=ADMIN 的会话。
+export const chatUnreadCount = async () => Number((await data('/api/v1/users/me/chat/unread-count' + qs({ sessionType: 'ADMIN' })))?.chatUnread || 0)
 export const getProfile = () => data('/api/v1/users/me/profile')
 export const saveProfile = form => data('/api/v1/users/me/profile', { method: 'PUT', body: { nickname: form.nickname, avatar: form.avatar, bio: form.bio } })
 export const getRealName = () => data('/api/v1/users/me/real-name')
@@ -334,6 +334,8 @@ export const listOrders = params => data('/api/v1/trade/order/list?' + new URLSe
 export const payOrder = (id, refresh = false) => data(`/api/v1/trade/order/${encodeURIComponent(id)}/pay${refresh ? '?refresh=true' : ''}`, { method: 'POST' })
 // 沙箱支付：服务端向支付宝查单确认后才推进订单（与 App / 企业端同一接口）
 export const confirmSandboxPayment = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/pay/confirm`, { method: 'POST' })
+// 测试直付：跳过支付宝沙箱，订单直接按已付款进入交割（与版权零元直付同性质）。
+export const directPayOrder = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/pay/direct-pay`, { method: 'POST' })
 export const completeOrder = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/complete`, { method: 'POST' })
 // 取消订单（仅 confirmed 可取消）；reason 选填，走 query 参数
 export const cancelOrder = (id, reason) => data(`/api/v1/trade/order/${encodeURIComponent(id)}/cancel${reason ? '?' + new URLSearchParams({ reason }).toString() : ''}`, { method: 'POST' })
