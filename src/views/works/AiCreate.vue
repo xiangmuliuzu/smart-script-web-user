@@ -854,24 +854,33 @@ function toggleAll(value) { for (const chapter of chapters.value) chapter.select
 
 async function insertToWork() {
   if (running.value || saving.value || !generatedCount.value) return
-  // 从历史记录恢复的会话还没有作品：先建一部草稿再补存章节。
-  if (!workId.value && !(await ensureWork())) return
-  if (workId.value) committedWorkId.value = workId.value
-  if (running.value || saving.value || !workId.value || !generatedCount.value) return
   saving.value = true
+  error.value = ''
+  let stage = '创建作品草稿'
   try {
+    // 从历史记录恢复的会话还没有作品：先建一部草稿再补存章节。
+    if (!workId.value && !(await ensureWork())) return
+    committedWorkId.value = workId.value
     // 有正文但尚未落库的章节补存一次，保证编辑器能看到全部内容。
     for (const chapter of chapters.value) {
-      if (chapter.state === 'generated' && chapter.content && !chapter.remote) await saveChapterContent(chapter, chapter.content)
+      if (chapter.state !== 'generated' || !chapter.content || chapter.remote) continue
+      stage = '保存分集「' + chapter.title + '」'
+      await saveChapterContent(chapter, chapter.content)
     }
     const first = chapters.value.find(chapter => chapter.state === 'generated' && chapter.remote)
     // 三段式大纲交给编辑器分别落位：故事简介 / 主要人物 / 分集事件卡（走 sessionStorage，不塞进 URL）。
     try {
       sessionStorage.setItem(`PcUser-AiCreateSeed:${workId.value}`, JSON.stringify({ title: setup.title, text: outline.value }))
     } catch { ElMessage.warning('大纲暂存失败，请手动复制大纲到编辑器') }
+    stage = '打开作品编辑器'
     inserted.value = true
-    await router.push({ path: '/works/create', query: { workId: String(workId.value), aiCreate: '1', ...(first ? { chapterId: String(first.chapterId) } : {}) } })
-  } catch (failure) { await handleError(failure) }
+    const result = await router.push({ path: '/works/create', query: { workId: String(workId.value), aiCreate: '1', ...(first ? { chapterId: String(first.chapterId) } : {}) } })
+    if (result) throw new Error('未能进入编辑器，请重试')
+  } catch (failure) {
+    inserted.value = false
+    error.value = stage + '未完成：' + (failure.message || '请稍后重试')
+    await handleError(failure)
+  }
   finally { saving.value = false }
 }
 

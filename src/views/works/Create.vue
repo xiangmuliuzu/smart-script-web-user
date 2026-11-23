@@ -270,7 +270,7 @@ async function loadTimeline(id) {
 }
 
 // 保存台账：故事简介与人物取当前编辑区，关系/伏笔/时间线/物品/线索取台账区。
-async function saveLedger() {
+async function saveLedger({ throwOnFailure = false } = {}) {
   if (!createdId.value || !api.value?.saveWorkLedger) return true
   try {
     await api.value.saveWorkLedger(createdId.value, {
@@ -289,7 +289,11 @@ async function saveLedger() {
     ledger.storySummary = form.summary
     ledger.characters = characters.value
     return true
-  } catch (failure) { ElMessage.warning('台账保存失败：' + (failure.message || '请稍后重试')); return false }
+  } catch (failure) {
+    if (throwOnFailure) throw failure
+    ElMessage.warning('台账保存失败：' + (failure.message || '请稍后重试'))
+    return false
+  }
 }
 function addChapter() { if (busy.value || !editable.value || readOnly.value) return; chapters.value.push(newChapter(chapters.value.length + 1)); activeChapter.value = chapters.value.length - 1; selectSection('chapter') }
 async function removeChapter(index) {
@@ -537,8 +541,8 @@ async function applyOutline(content, options = {}) {
   section.value = 'outline'
   aiVisible.value = false
   cacheDraft()
-  await saveLedger()
   if (seed) return targets
+  await saveLedger()
   // 规则版生成后核查（模型档暂缓）：只提示，不阻断。
   const issues = checkGenerationRules({ outline: scriptOutline.value, chapters: [], ledger })
   if (issues.length) ElMessage.warning(`生成后核查：${issues.join('；')}`)
@@ -576,20 +580,29 @@ function episodesFromPlan(outlineText, plan) {
 }
 // AI 创作起稿页跳转过来时的一手内容：大纲是三段式，插入时按「简介 / 人物 / 事件卡」分别落位。
 const aiCreateSeedKey = id => `PcUser-AiCreateSeed:${id}`
-let aiCreateSeedPending = false
+let aiCreateSeedWorkId = null
 async function applyAiCreateSeed(id) {
   let seed = null
   try { seed = JSON.parse(sessionStorage.getItem(aiCreateSeedKey(id)) || 'null') } catch { seed = null }
-  sessionStorage.removeItem(aiCreateSeedKey(id))
   const text = String(seed?.text || '').trim()
   if (!text) { ElMessage.warning('起稿内容已失效，请回到 AI 创作重新插入一次'); return false }
   if (!form.title.trim() && seed.title) form.title = String(seed.title).slice(0, 100)
   const applied = await applyOutline(text, { seed: true, force: true })
-  const { aiCreate, ...rest } = route.query
-  if (aiCreate) await router.replace({ path: '/works/create', query: rest })
   if (!applied) return false
-  ElMessage.success(`已写入${applied.join('、')}`)
+  aiCreateSeedWorkId = id
   return true
+}
+async function finishAiCreateSeed(id) {
+  const { aiCreate, ...query } = route.query
+  if (aiCreate !== '1' || String(query.workId) !== String(id)) return
+  normalizingRoute = true
+  try {
+    const failure = await router.replace({ path: route.path, query, hash: route.hash })
+    if (!failure) {
+      aiCreateSeedWorkId = null
+      try { sessionStorage.removeItem(aiCreateSeedKey(id)) } catch { /* 已保存，回收临时数据失败不影响编辑。 */ }
+    }
+  } finally { normalizingRoute = false }
 }
 /** 局部重载章节：只从服务器拉章节，不重置 AI 面板与正在看的续写结果。 */
 async function reloadChapters() {
@@ -759,6 +772,8 @@ async function save(submit, options = {}) {
     return false
   }
   saving.value = true
+  const importingAiSeed = aiCreateSeedWorkId !== null && aiCreateSeedWorkId === createdId.value
+  let saveStep = createdId.value ? '读取作品' : '创建作品草稿'
   try {
     if (submit) { try { await ElMessageBox.confirm('保存全部分集并提交内容审核。审核期间作品将锁定编辑，通过后不会自动上架，需要你确认后手动上架。', '提交审核', { confirmButtonText: '保存并提交', cancelButtonText: '继续编辑' }) } catch { return } }
     if (!createdId.value) {
@@ -784,6 +799,7 @@ async function save(submit, options = {}) {
       }
       if (workFields() !== originalWorkFields) {
         if (workFields(detail.work) !== originalWorkFields && workFields(detail.work) !== workFields()) throw new Error('作品资料已在其他页面修改，请刷新确认后再保存')
+        saveStep = '保存作品资料'
         await api.value.updateWork(createdId.value, form)
         originalWorkFields = workFields()
       }
@@ -800,6 +816,7 @@ async function save(submit, options = {}) {
       if (!chapter.summary) chapter.summary = summaryOfEpisode(chapter.chapterTitle, chapters.value.indexOf(chapter) + 1)
       const original = originalChapters.get(Number(chapter.chapterId))
       if (sameChapter(original, chapter) && (original?.summary || '') === (chapter.summary || '')) continue
+      saveStep = '保存分集「' + chapter.chapterTitle + '」'
       const result = await api.value.saveChapter(createdId.value, chapter)
       if (!chapter.chapterId) {
         if (!result?.chapterId) throw new Error('分集保存响应缺少编号，请到作品详情确认保存状态')
@@ -808,9 +825,10 @@ async function save(submit, options = {}) {
       if (!sameChapter(original, chapter)) { chapter.status = '1'; chapter.isFree = '0' }
       originalChapters.set(Number(chapter.chapterId), { chapterTitle: chapter.chapterTitle, content: chapter.content, isFree: chapter.isFree, status: String(chapter.status ?? '1'), summary: chapter.summary || '' })
     }
-    if (submit) await api.value.submitWork(createdId.value)
-    // 台账六类全部保存（跨端共享）；失败只提示，不阻断已完成的章节保存。
-    await saveLedger()
+    if (submit) { saveStep = '提交审核'; await api.value.submitWork(createdId.value) }
+    saveStep = '保存创作台账'
+    // AI 起稿交接必须确认台账写入；失败时保留临时数据供保存重试。
+    await saveLedger({ throwOnFailure: importingAiSeed })
     if (characters.value) {
       try { storage.setItem(draftBase + ':notes:' + createdId.value, JSON.stringify({ title: form.title, characters: characters.value })) }
       catch { cacheDraft(); storageFailed.value = true; ElMessage.warning('作品已保存，人物便签未能在本机存档，请先导出便签'); return }
@@ -820,6 +838,10 @@ async function save(submit, options = {}) {
       else storage.removeItem(draftBase + ':outline:' + createdId.value)
     } catch { cacheDraft(); storageFailed.value = true; ElMessage.warning('作品已保存，剧本大纲未能在本机存档，请先复制大纲'); return }
     savedSnapshot = snapshot(); cacheDraft(); draftStatus.value = '作品已保存'
+    if (importingAiSeed) {
+      saveStep = '完成 AI 起稿交接'
+      await finishAiCreateSeed(createdId.value)
+    }
     ElMessage.success(submit ? '已提交内容审核' : '草稿已保存至作品')
     // 批量生成的章节落库后才拿得到 chapterId，验收与卷快照必须在这之后补跑。
     if (review && batchPendingReview.value) {
@@ -837,8 +859,9 @@ async function save(submit, options = {}) {
     }
     return true
   } catch (failure) {
-    error.value = '保存未完成，已保留内容，请重试。' + failure.message
+    error.value = saveStep + '未完成：' + (failure.message || '请稍后重试')
     cacheDraft()
+    if (storageFailed.value) error.value += '。请先复制未保存内容，避免刷新时丢失。'
     await handleError(failure)
     return false
   } finally {
@@ -880,6 +903,7 @@ function restoreDraft(draft) {
   draftStatus.value = '已恢复本机草稿'
 }
 async function loadWorkspace() {
+  aiCreateSeedWorkId = null
   ready = false; initializing.value = true; completed = false; error.value = ''; workLoadFailed.value = false; storageFailed.value = false
   loadedWork.value = null; createdId.value = null; originalChapters = new Map(); activeChapter.value = 0; section.value = 'chapter'; storyboardDraft.title = ''; storyboardDraft.content = ''; storyboards.value = []
   directoryVisible.value = false; aiVisible.value = false; settingsVisible.value = false
@@ -926,14 +950,17 @@ async function loadWorkspace() {
     }
     if (route.query.mode === 'storyboard') selectSection('storyboard')
     // AI 创作起稿页「插入到文章并进入编辑」：把三段式大纲按「简介 / 人物 / 事件卡」分别落位。
-    if (route.query.aiCreate === '1' && id) aiCreateSeedPending = await applyAiCreateSeed(id)
+    if (route.query.aiCreate === '1' && id) await applyAiCreateSeed(id)
   } catch (failure) { workLoadFailed.value = true; error.value = failure.message || '作品加载失败，请重新选择作品'; if (failure.code) await handleError(failure) }
   finally {
     if (!disposed) {
       ready = true; initializing.value = false
       if (createdId.value) refreshGenJob(createdId.value)
       // 起稿页带来的资料要落库：等初始化结束（busy 放开）再保存一次。
-      if (aiCreateSeedPending) { aiCreateSeedPending = false; await save(false, { navigate: false, review: false }) }
+      if (aiCreateSeedWorkId !== null) {
+        cacheDraft()
+        await save(false, { navigate: false, review: false })
+      }
     }
   }
 }

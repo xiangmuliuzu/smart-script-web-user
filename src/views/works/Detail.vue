@@ -3,7 +3,20 @@
   <LoadState :pending="pending" :error="error" :retry="load" />
   <div v-if="!pending && !error && work" class="work-detail-grid">
     <section class="work-detail-main">
-      <div class="workhead"><div class="wh-cover" :class="{ 'script-cover': !(avatarUrl(work.cover) && !coverFailed) }"><img v-if="avatarUrl(work.cover) && !coverFailed" :src="avatarUrl(work.cover)" alt="作品封面" @error="coverFailed = true" /><template v-else><span class="script-slip">{{ work.title }}</span><span class="bg-glyph" aria-hidden="true">{{ work.title?.slice(0, 1) }}</span></template></div><div class="wh-body"><div class="row"><h1 class="detail-title">{{ work.title }}</h1><span class="stamp sm" :data-s="workDisplayState.stamp">{{ workDisplayState.label }}</span></div><p class="work-info">短剧 · {{ work.genreName || '未分类' }} ｜ {{ work.episodeCount ?? chapters.length }} 章 ｜ {{ words(work.wordCount) }} ｜ 最近更新 {{ dateText(work.updateTime).slice(5) }}</p><p class="wh-intro">{{ work.summary || '暂无简介' }}</p></div></div>
+      <div class="workhead">
+        <div class="wh-cover" :class="{ 'script-cover': !(avatarUrl(work.cover) && !coverFailed) }">
+          <img v-if="avatarUrl(work.cover) && !coverFailed" :src="avatarUrl(work.cover)" alt="作品封面" @error="coverFailed = true" />
+          <template v-else><span class="script-slip">{{ work.title }}</span><span class="bg-glyph" aria-hidden="true">{{ work.title?.slice(0, 1) }}</span></template>
+        </div>
+        <div class="wh-body">
+          <div class="detail-heading">
+            <h1 class="detail-title">{{ work.title }}</h1>
+            <span class="tag detail-status" :class="workDisplayState.tone">{{ workDisplayState.label }}</span>
+          </div>
+          <p class="work-info">短剧 · {{ work.genreName || '未分类' }} ｜ {{ work.episodeCount ?? chapters.length }} 章 ｜ {{ words(work.wordCount) }} ｜ 最近更新 {{ dateText(work.updateTime).slice(5) }}</p>
+          <p class="wh-intro">{{ work.summary || '暂无简介' }}</p>
+        </div>
+      </div>
       <div class="row section-actions"><button class="btn" :disabled="!editable" @click="editChapter(null)">＋ 写新章节</button><button class="btn quiet" :disabled="!editable" @click="editStoryboard()">＋ 写新分镜</button><span class="cost">{{ work.status === 'reviewing' ? '审核中暂不可编辑，可查看审核进度' : reviewApproved ? (onShelf ? '作品已上架到书城；修改后需重新提交审核' : '审核已通过，请确认信息后手动上架到书城') : '章节随作品审核，通过后可开启试读；分镜提交后由平台单独审核' }}</span></div>
       <div class="creator-catalogs">
         <details class="creator-catalog" open>
@@ -27,6 +40,13 @@
     <aside class="work-detail-side">
       <div v-if="latestReview?.reviewOpinion && ['revision', 'rejected'].includes(work.status)" class="note bad">{{ latestReview.reviewOpinion }}</div>
       <div v-if="!canCreate" class="note info">创作者能力尚未开通，当前仅可查看作品。</div>
+      <div v-if="copyrightLabel" class="sub">
+        <div class="sub-head"><h3>版权信息</h3></div>
+        <div class="panel attached"><dl class="summary"><div>
+          <dt>版权登记状态</dt>
+          <dd :class="work.copyrightRegistrationStatus === 'registered' ? 'ok' : 'off'">{{ copyrightLabel }}</dd>
+        </div></dl></div>
+      </div>
       <div class="sub"><div class="sub-head"><h3>当前状态</h3></div><div class="panel attached"><dl class="summary"><div><dt>审核状态</dt><dd :class="workDisplayState.tone">{{ reviewApproved ? '已通过' : stateOf(work.status).label }}</dd></div><div><dt>书城状态</dt><dd :class="onShelf ? 'ok' : reviewApproved ? 'wait' : 'off'">{{ onShelf ? '已上架' : reviewApproved ? '待手动上架' : '未上架' }}</dd></div><div><dt>审核通过章节</dt><dd>{{ chapters.filter(trialAllowed).length }} <small>/ {{ work.episodeCount ?? chapters.length }}</small></dd></div><div><dt>章节总数</dt><dd>{{ chapters.length }}</dd></div></dl><div v-if="reviewApproved" class="shelf-action"><button class="btn shelf-primary" :disabled="shelfing" @click="toggleShelf">{{ shelfing ? '处理中…' : onShelf ? '下架作品' : '上架到书城' }}</button><p>{{ onShelf ? '作品当前已在书城展示。' : '审核已通过，点击后才会展示在书城。' }}</p></div><div class="row section-actions"><button class="btn" :disabled="!editable || !chapters.length || submitting" @click="submit">{{ submitting ? '提交中…' : '提交审核' }}</button><button class="btn quiet" @click="showVersions">查看版本历史</button></div><p class="cost">审核通过不会自动上架；已上架作品改动后需要重新提交审核。</p></div></div>
       <div class="sub"><div class="sub-head"><h3>审核记录</h3></div><div class="panel attached"><LoadState :error="reviewError" :retry="loadReviews" :empty="!reviewError && !reviews.length" empty-text="暂无审核记录" /><ul v-if="!reviewError" class="timeline"><li v-for="review in reviews" :key="review.reviewId" :data-tone="review.status === 'approved' ? 'passed' : ['revision', 'rejected'].includes(review.status) ? 'revise' : ''"><time>{{ dateText(review.reviewEndTime || review.createdAt || review.createTime) }}</time><b>内容审核 · {{ reviewLabels[review.status] || '状态待确认' }}</b><p v-if="review.reviewOpinion">{{ review.reviewOpinion }}<span v-if="review.reviewerName"> —— 审核员 {{ review.reviewerName }}</span></p></li></ul></div></div>
     </aside>
@@ -74,6 +94,10 @@ const versions = ref([])
 const shelfing = ref(false)
 const editable = computed(() => canEdit(user.value, work.value))
 const reviewApproved = computed(() => work.value?.status === 'published')
+const copyrightLabel = computed(() => ({
+  registered: '已登记',
+  unregistered: '未登记'
+})[work.value?.copyrightRegistrationStatus])
 const onShelf = computed(() => work.value?.shelfStatus === 'on_shelf')
 const workDisplayState = computed(() => reviewApproved.value
   ? (onShelf.value ? { label: '已上架', tone: 'ok', stamp: 'passed' } : { label: '审核通过，待上架', tone: 'wait', stamp: 'passed' })
@@ -177,3 +201,25 @@ async function showVersions() {
 }
 onMounted(load)
 </script>
+
+<style scoped>
+.detail-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.detail-heading > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.detail-status {
+  box-sizing: border-box;
+  width: fit-content;
+  padding: 3px 8px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+</style>
