@@ -142,15 +142,15 @@
       </form>
     </PortalLayer>
 
-    <!-- 确认付款（临时直付，对齐 App） -->
+    <!-- 确认付款（临时跳过沙箱：一点即履约） -->
     <PortalLayer v-model="payVisible" title="确认付款" modal size="min(480px, 94vw)" :before-close="closePay">
       <div class="pay-panel">
         <p class="cost">应付登记费</p>
         <p class="fee-amount pay-amount">{{ payFeeText }}</p>
-        <p class="cost pay-tip">当前为临时直付：确认后直接创建申请并提交第三方版权中心，暂不走支付宝沙箱。</p>
+        <p class="cost pay-tip">当前跳过沙箱支付，点击确认后直接提交版权申请。</p>
         <p v-if="payError" class="note bad" role="alert">{{ payError }}</p>
-        <button class="btn" type="button" :disabled="payBusy" @click="confirmPay">
-          {{ payBusy ? '提交中…' : (payFeeText === '确认后提交' ? '确认付款并提交' : `确认付款 ${payFeeText}`) }}
+        <button class="btn" type="button" :disabled="payBusy" @click="directPay()">
+          {{ payBusy ? '提交中…' : `确认付款 ${payFeeText}` }}
         </button>
       </div>
     </PortalLayer>
@@ -498,19 +498,26 @@ async function closePay(done) {
   done()
 }
 
-async function confirmPay() {
+async function finishPaid(result) {
+  ElMessage.success('支付成功，已提交至版权中心审核')
+  payVisible.value = false
+  resetPay()
+  detailVisible.value = false
+  await load()
+  if (result?.applyId) await openDetail(result.applyId)
+}
+
+async function directPay() {
   if (!payOrderId.value || payBusy.value) return
   payBusy.value = true
   payError.value = ''
   try {
     const result = await api.value.directPayCopyrightOrder(payOrderId.value)
-    if (!result?.paid) throw new Error('提交失败，请稍后重试')
-    ElMessage.success('已提交至版权中心审核')
-    payVisible.value = false
-    resetPay()
-    detailVisible.value = false
-    await load()
-    if (result.applyId) await openDetail(result.applyId)
+    if (result?.paid) {
+      await finishPaid(result)
+      return
+    }
+    payError.value = '付款未完成，请稍后重试'
   } catch (failure) {
     payError.value = failure.message || '付款提交失败，请稍后重试'
     await handleError(failure)
@@ -842,6 +849,12 @@ async function downloadMaterial(url, name) {
   }
 }
 
+/** 消息通知等外部入口：按申请 id 打开详情 */
+async function openById(applyId) {
+  await openDetail(applyId)
+}
+
+defineExpose({ openById, load })
 onMounted(load)
 </script>
 
@@ -890,6 +903,7 @@ onMounted(load)
 .pay-panel { display: grid; gap: 12px; justify-items: center; text-align: center; padding: 8px 4px 4px }
 .pay-amount { font-size: 32px }
 .pay-tip { max-width: 360px; line-height: 1.5 }
+.pay-qr { display: block; width: 220px; height: 220px; border-radius: 8px; background: #fff }
 .pay-panel .btn { width: 100%; max-width: 320px }
 
 .status-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 500 }

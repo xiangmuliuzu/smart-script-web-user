@@ -83,6 +83,21 @@ async function openDeliveryByOrder(orderId) {
   await nextTick()
   rightsPanelRef.value?.openDeliveryByOrder?.(orderId)
 }
+/** 版权/印章站内信落点：对齐 App notification_landing 与后端 businessType。 */
+async function openRightsLanding(kind, bizId) {
+  if (!bizId) return
+  const map = {
+    seal: { tab: 'seal', open: 'openSealById' },
+    apply: { tab: 'apply', open: 'openApplyById' },
+    cert: { tab: 'certs', open: 'openCert' },
+  }
+  const target = map[kind]
+  if (!target) return
+  openPanel('rights', target.tab)
+  await nextTick()
+  await nextTick()
+  await rightsPanelRef.value?.[target.open]?.(bizId)
+}
 function goWorks() { panelVisible.value = false; return router.push(basePath) }
 function goHome() { panelVisible.value = false; return router.push('/') }
 function goWork(id) { panelVisible.value = false; return router.push(`${basePath}/${id}`) }
@@ -115,7 +130,7 @@ async function accountCommand(command) {
   catch { ElMessage.warning('服务端退出未成功，已清理本地登录状态') }
   finally { user.value = null; panelVisible.value = false; await router.replace('/login'); leaving.value = false }
 }
-provide(portalKey, { api, user, canCreate, basePath, openPanel, openDeliveryByOrder, goWork, goWorks, goHome, goDemand, goDemandDetail, handleError, refreshUnread })
+provide(portalKey, { api, user, canCreate, basePath, openPanel, openDeliveryByOrder, openRightsLanding, goWork, goWorks, goHome, goDemand, goDemandDetail, handleError, refreshUnread })
 async function refreshRealName() { try { realNameStatus.value = (await api.value.getRealName())?.status || '' } catch (failure) { if (isAuthFailure(failure)) await handleError(failure) } }
 onMounted(load)
 

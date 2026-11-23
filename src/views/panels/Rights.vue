@@ -2,11 +2,11 @@
   <component :is="embedded ? 'div' : PortalLayer" v-model="visible" title="版权与收益" :wide="!embedded">
     <PortalTabs v-model="tab" :items="tabs" :drawer="!embedded" label="版权与收益分类" />
     <div class="panel-content">
-      <ApplyPanel v-if="tab === 'apply'" :works-for-covers="works" @open-cert="openCert" />
+      <ApplyPanel v-if="tab === 'apply'" ref="applyPanelRef" :works-for-covers="works" @open-cert="openCert" />
       <AssetsPanel v-else-if="tab === 'assets'" :works-for-covers="works" />
       <CertPanel v-else-if="tab === 'certs'" ref="certPanelRef" :works-for-covers="works" />
       <DeliveryPanel v-else-if="tab === 'delivery'" ref="deliveryPanelRef" :works-for-covers="works" />
-      <SealPanel v-else-if="tab === 'seal'" />
+      <SealPanel v-else-if="tab === 'seal'" ref="sealPanelRef" />
       <SettlePanel v-else-if="tab === 'settle'" />
       <WithdrawPanel v-else-if="tab === 'withdraw'" />
     </div>
@@ -28,8 +28,10 @@ const props = defineProps({ modelValue: Boolean, initialTab: String, embedded: B
 const emit = defineEmits(['update:modelValue'])
 const visible = computed({ get: () => props.modelValue, set: value => emit('update:modelValue', value) })
 const tab = ref(props.initialTab || 'apply')
+const applyPanelRef = ref(null)
 const certPanelRef = ref(null)
 const deliveryPanelRef = ref(null)
+const sealPanelRef = ref(null)
 const tabs = [
   { value: 'apply', label: '版权申请' },
   { value: 'assets', label: '版权资产' },
@@ -41,14 +43,47 @@ const tabs = [
 ]
 watch(() => props.initialTab, value => { if (value) tab.value = value })
 
+// 子面板 v-if 切换后可能尚未挂载：先记 pending，ref 就绪再消费。
+const pendingApplyId = ref(null)
+const pendingCertId = ref(null)
+const pendingSealId = ref(null)
+const pendingDeliveryOrderId = ref(null)
+
 async function openCert(certId) {
   if (!certId) return
+  pendingCertId.value = certId
   tab.value = 'certs'
   await nextTick()
-  certPanelRef.value?.openById?.(certId)
+  if (certPanelRef.value?.openById) {
+    const id = pendingCertId.value
+    pendingCertId.value = null
+    await certPanelRef.value.openById(id)
+  }
 }
 
-const pendingDeliveryOrderId = ref(null)
+async function openApplyById(applyId) {
+  if (!applyId) return
+  pendingApplyId.value = applyId
+  tab.value = 'apply'
+  await nextTick()
+  if (applyPanelRef.value?.openById) {
+    const id = pendingApplyId.value
+    pendingApplyId.value = null
+    await applyPanelRef.value.openById(id)
+  }
+}
+
+async function openSealById(sealId) {
+  if (!sealId) return
+  pendingSealId.value = sealId
+  tab.value = 'seal'
+  await nextTick()
+  if (sealPanelRef.value?.openById) {
+    const id = pendingSealId.value
+    pendingSealId.value = null
+    await sealPanelRef.value.openById(id)
+  }
+}
 
 async function openDeliveryByOrder(orderId) {
   if (!orderId) return
@@ -62,6 +97,24 @@ async function openDeliveryByOrder(orderId) {
   }
 }
 
+watch(applyPanelRef, async panel => {
+  if (!panel?.openById || !pendingApplyId.value) return
+  const id = pendingApplyId.value
+  pendingApplyId.value = null
+  await panel.openById(id)
+})
+watch(certPanelRef, async panel => {
+  if (!panel?.openById || !pendingCertId.value) return
+  const id = pendingCertId.value
+  pendingCertId.value = null
+  await panel.openById(id)
+})
+watch(sealPanelRef, async panel => {
+  if (!panel?.openById || !pendingSealId.value) return
+  const id = pendingSealId.value
+  pendingSealId.value = null
+  await panel.openById(id)
+})
 watch(deliveryPanelRef, async panel => {
   if (!panel?.openByOrder || !pendingDeliveryOrderId.value) return
   const id = pendingDeliveryOrderId.value
@@ -69,5 +122,5 @@ watch(deliveryPanelRef, async panel => {
   await panel.openByOrder(id)
 })
 
-defineExpose({ openDeliveryByOrder })
+defineExpose({ openDeliveryByOrder, openApplyById, openSealById, openCert })
 </script>

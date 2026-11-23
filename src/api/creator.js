@@ -96,6 +96,12 @@ export const directPayCopyrightOrder = payOrderId =>
     method: 'POST',
     body: {}
   })
+/** 支付宝沙箱：创建版权登记费收款码。 */
+export const payCopyrightOrder = payOrderId =>
+  data(`/api/v1/trade/copyright/${encodeURIComponent(payOrderId)}/pay`, { method: 'POST' })
+/** 支付宝沙箱：查询版权登记费支付结果。 */
+export const confirmCopyrightPayment = payOrderId =>
+  data(`/api/v1/trade/copyright/${encodeURIComponent(payOrderId)}/confirm`, { method: 'POST' })
 export const submitCopyrightSupplement = (applyId, form) =>
   data(copyrightBase + '/application/' + encodeURIComponent(applyId) + '/supplement', {
     method: 'POST',
@@ -134,6 +140,7 @@ export const getSeal = id => data(sealPath(id))
 export const createSeal = form => data('/api/v1/content/copyright-seals', { method: 'POST', body: { sealName: form.sealName, sealImageUrl: form.sealImageUrl, materialUrls: form.materialUrls || '' } })
 export const updateSeal = (id, form) => data(sealPath(id), { method: 'PUT', body: form })
 export const disableSeal = id => data(sealPath(id) + '/disable', { method: 'PUT' })
+export const enableSeal = id => data(sealPath(id) + '/enable', { method: 'PUT' })
 export const deleteSeal = id => data(sealPath(id), { method: 'DELETE' })
 // AI 生成耗时可能超过默认 30s（大纲尤甚，需等待模型完整输出），单独放长到 120s。
 export const generate = (type, form) => data('/api/v1/content/ai/' + type, { method: 'POST', body: form, timeout: 120000 })
@@ -430,4 +437,3 @@ export const demandExtendHistory = demandId => data(demandPath(demandId) + '/ext
 export const claimDemand = demandId => data(demandPath(demandId) + '/claim', { method: 'POST' })
 // 任务会话（创作者发起不带 targetUserId），返回会话 VO；后续收发与聊天列表沿用合作抽屉的会话能力
 export const demandChatSession = demandId => data(demandPath(demandId) + '/chat/session', { method: 'POST' })
-

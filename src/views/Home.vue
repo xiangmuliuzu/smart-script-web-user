@@ -208,6 +208,21 @@ async function openDeliveryByOrder(orderId) {
   await nextTick()
   rightsPanelRef.value?.openDeliveryByOrder?.(orderId)
 }
+/** 版权/印章站内信落点：对齐 App notification_landing 与后端 businessType。 */
+async function openRightsLanding(kind, bizId) {
+  if (!bizId) return
+  const map = {
+    seal: { tab: 'seal', open: 'openSealById' },
+    apply: { tab: 'apply', open: 'openApplyById' },
+    cert: { tab: 'certs', open: 'openCert' },
+  }
+  const target = map[kind]
+  if (!target) return
+  openPanel('rights', target.tab)
+  await nextTick()
+  await nextTick()
+  await rightsPanelRef.value?.[target.open]?.(bizId)
+}
 function goWorks() { panelVisible.value = false; return router.push('/works') }
 function goHome() { panelVisible.value = false; return router.push('/') }
 function goWork(id) { panelVisible.value = false; return router.push(`/works/${id}`) }
@@ -265,7 +280,7 @@ async function accountCommand(command) {
     leaving.value = false
   }
 }
-provide(portalKey, { api, user, canCreate, basePath, openPanel, openDeliveryByOrder, goWork, goWorks, goHome, goDemand, goDemandDetail, handleError, refreshUnread })
+provide(portalKey, { api, user, canCreate, basePath, openPanel, openDeliveryByOrder, openRightsLanding, goWork, goWorks, goHome, goDemand, goDemandDetail, handleError, refreshUnread })
 function scrollTo(id) { document.getElementById(id)?.scrollIntoView({ behavior:'smooth', block:'start' }) }
 function observeSections(entries) { for (const entry of entries) if (entry.isIntersecting) currentSection.value = sections.findIndex(section => section.id === entry.target.id) }
 onMounted(() => {
