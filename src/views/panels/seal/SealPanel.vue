@@ -1,7 +1,6 @@
 <template>
   <div class="seal-panel">
     <div class="sub-head">
-      <h3>我的印章</h3>
       <span class="count">{{ seals.length }} 枚</span>
       <button class="btn sm" :disabled="busy" @click="openCreate">上传印章</button>
     </div>
@@ -494,7 +493,7 @@ onUnmounted(clearLocalPreview)
 
 <style scoped>
 .seal-panel .sub-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px }
-.seal-panel .sub-head h3 { margin: 0; flex: 1 }
+.seal-panel .sub-head .count { flex: 1 }
 .seal-panel .sub-head.sub { margin-top: 18px }
 .seal-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px }
 .seal-card { display: grid; grid-template-columns: 72px 1fr auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--line, #e8e8e8); border-radius: 10px; background: #fff; cursor: pointer }

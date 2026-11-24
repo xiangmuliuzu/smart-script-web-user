@@ -86,7 +86,8 @@ async function jumpAction(message) {
     await markReadQuiet(message)
     visible.value = false
     if (typeof openRightsLanding === 'function') await openRightsLanding(rights.kind, message.businessId)
-    else openPanel('rights', rights.kind === 'cert' ? 'certs' : rights.kind === 'seal' ? 'seal' : 'apply')
+    else if (rights.kind === 'seal') openPanel('seal')
+    else openPanel('rights', rights.kind === 'cert' ? 'certs' : 'apply')
     return
   }
   const jump = tradeJumpOf(message)

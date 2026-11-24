@@ -17,7 +17,7 @@
         </div>
         <el-dropdown v-if="loggedIn" trigger="click" @command="accountCommand">
           <button class="avatar-btn" aria-label="账号菜单"><el-avatar class="avatar" :size="28" :src="avatarUrl(user?.avatar)" :alt="displayName + '的头像'">{{ displayName.slice(0, 1) }}</el-avatar><em>{{ displayName }}</em><el-icon><ArrowDown /></el-icon></button>
-          <template #dropdown><el-dropdown-menu class="portal-menu"><div class="who"><b>{{ displayName }}</b><span>{{ user?.userName || '平台用户' }}</span></div><el-dropdown-item command="profile">个人资料</el-dropdown-item><el-dropdown-item command="feedback">意见反馈</el-dropdown-item><el-dropdown-item command="logout" divided :disabled="leaving">退出登录</el-dropdown-item></el-dropdown-menu></template>
+          <template #dropdown><el-dropdown-menu class="portal-menu"><div class="who"><b>{{ displayName }}</b><span>{{ user?.userName || '平台用户' }}</span></div><el-dropdown-item command="profile">个人资料</el-dropdown-item><el-dropdown-item command="feedback">意见反馈</el-dropdown-item><el-dropdown-item command="seal">我的印章</el-dropdown-item><el-dropdown-item command="logout" divided :disabled="leaving">退出登录</el-dropdown-item></el-dropdown-menu></template>
         </el-dropdown>
         <button v-else class="topbar-login" @click="goLogin">请登录</button>
       </div>
@@ -62,6 +62,7 @@
     <PlatformChatPanel v-if="loggedIn && panel === 'chat'" v-model="panelVisible" />
     <CooperationPanel v-if="loggedIn && panel === 'cooperation'" v-model="panelVisible" :initial-tab="panelTab" :order-search="panelOrderSearch" :initial-keyword="panelKeyword" />
     <RightsPanel v-if="loggedIn && panel === 'rights'" ref="rightsPanelRef" v-model="panelVisible" :initial-tab="panelTab" />
+    <SealsPanel v-if="loggedIn && panel === 'seal'" ref="sealsPanelRef" v-model="panelVisible" />
     <AccountPanel v-if="loggedIn && panel === 'account'" v-model="panelVisible" :initial-tab="panelTab" />
     <RechargePanel v-if="loggedIn && panel === 'recharge'" v-model="panelVisible" />
     <nav class="section-dots" aria-label="首页分区"><button v-for="(item,index) in sections" :key="item.id" :class="{ active: currentSection===index }" :aria-label="item.label" @click="scrollTo(item.id)"><i></i></button></nav>
@@ -94,6 +95,7 @@ import MessagesPanel from './panels/Messages.vue'
 import PlatformChatPanel from './panels/PlatformChat.vue'
 import CooperationPanel from './panels/Cooperation.vue'
 import RightsPanel from './panels/Rights.vue'
+import SealsPanel from './panels/Seals.vue'
 import AccountPanel from './panels/Account.vue'
 import RechargePanel from './panels/Recharge.vue'
 
@@ -123,6 +125,7 @@ const panelOrderSearch = ref('')
 const panelKeyword = ref('')
 const panelVisible = ref(false)
 const rightsPanelRef = ref(null)
+const sealsPanelRef = ref(null)
 const leaving = ref(false)
 const loggedIn = computed(() => Boolean(localStorage.getItem('PcUser-Token')))
 const displayName = computed(() => user.value?.nickname || user.value?.userName || '用户')
@@ -208,11 +211,17 @@ async function openDeliveryByOrder(orderId) {
   await nextTick()
   rightsPanelRef.value?.openDeliveryByOrder?.(orderId)
 }
-/** 版权/印章站内信落点：对齐 App notification_landing 与后端 businessType。 */
+/** 版权/印章站内信落点：对齐 App notification_landing 与后端 businessType。印章已独立抽屉。 */
 async function openRightsLanding(kind, bizId) {
   if (!bizId) return
+  if (kind === 'seal') {
+    openPanel('seal')
+    await nextTick()
+    await nextTick()
+    await sealsPanelRef.value?.openById?.(bizId)
+    return
+  }
   const map = {
-    seal: { tab: 'seal', open: 'openSealById' },
     apply: { tab: 'apply', open: 'openApplyById' },
     cert: { tab: 'certs', open: 'openCert' },
   }
@@ -268,6 +277,7 @@ async function loadAccountInfo() {
   }
 }
 async function accountCommand(command) {
+  if (command === 'seal') { openPanel('seal'); return }
   if (command !== 'logout') { openPanel('account', command); return }
   if (leaving.value) return
   leaving.value = true

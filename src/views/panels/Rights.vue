@@ -6,7 +6,6 @@
       <AssetsPanel v-else-if="tab === 'assets'" :works-for-covers="works" />
       <CertPanel v-else-if="tab === 'certs'" ref="certPanelRef" :works-for-covers="works" />
       <DeliveryPanel v-else-if="tab === 'delivery'" ref="deliveryPanelRef" :works-for-covers="works" />
-      <SealPanel v-else-if="tab === 'seal'" ref="sealPanelRef" />
       <SettlePanel v-else-if="tab === 'settle'" />
       <WithdrawPanel v-else-if="tab === 'withdraw'" />
     </div>
@@ -16,7 +15,6 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import PortalLayer from '../../components/PortalLayer.vue'
 import PortalTabs from '../../components/PortalTabs.vue'
-import SealPanel from './seal/SealPanel.vue'
 import ApplyPanel from './copyright/ApplyPanel.vue'
 import AssetsPanel from './copyright/AssetsPanel.vue'
 import CertPanel from './copyright/CertPanel.vue'
@@ -31,13 +29,11 @@ const tab = ref(props.initialTab || 'apply')
 const applyPanelRef = ref(null)
 const certPanelRef = ref(null)
 const deliveryPanelRef = ref(null)
-const sealPanelRef = ref(null)
 const tabs = [
   { value: 'apply', label: '版权申请' },
   { value: 'assets', label: '版权资产' },
   { value: 'certs', label: '电子证书' },
   { value: 'delivery', label: '版权交割' },
-  { value: 'seal', label: '印章' },
   { value: 'settle', label: '结算' },
   { value: 'withdraw', label: '提现' }
 ]
@@ -46,7 +42,6 @@ watch(() => props.initialTab, value => { if (value) tab.value = value })
 // 子面板 v-if 切换后可能尚未挂载：先记 pending，ref 就绪再消费。
 const pendingApplyId = ref(null)
 const pendingCertId = ref(null)
-const pendingSealId = ref(null)
 const pendingDeliveryOrderId = ref(null)
 
 async function openCert(certId) {
@@ -70,18 +65,6 @@ async function openApplyById(applyId) {
     const id = pendingApplyId.value
     pendingApplyId.value = null
     await applyPanelRef.value.openById(id)
-  }
-}
-
-async function openSealById(sealId) {
-  if (!sealId) return
-  pendingSealId.value = sealId
-  tab.value = 'seal'
-  await nextTick()
-  if (sealPanelRef.value?.openById) {
-    const id = pendingSealId.value
-    pendingSealId.value = null
-    await sealPanelRef.value.openById(id)
   }
 }
 
@@ -109,12 +92,6 @@ watch(certPanelRef, async panel => {
   pendingCertId.value = null
   await panel.openById(id)
 })
-watch(sealPanelRef, async panel => {
-  if (!panel?.openById || !pendingSealId.value) return
-  const id = pendingSealId.value
-  pendingSealId.value = null
-  await panel.openById(id)
-})
 watch(deliveryPanelRef, async panel => {
   if (!panel?.openByOrder || !pendingDeliveryOrderId.value) return
   const id = pendingDeliveryOrderId.value
@@ -122,5 +99,5 @@ watch(deliveryPanelRef, async panel => {
   await panel.openByOrder(id)
 })
 
-defineExpose({ openDeliveryByOrder, openApplyById, openSealById, openCert })
+defineExpose({ openDeliveryByOrder, openApplyById, openCert })
 </script>
