@@ -6,7 +6,8 @@ import { fenText } from './finance.js'
 // completed 全部轮次验收通过、closed 平台关闭、failed 活动轮超时终止
 const DEMAND_STATUS_LABELS = { open: '征集中', in_progress: '进行中', selected: '已选定', completed: '已完成', closed: '已关闭', failed: '已失败' }
 export const demandStatusLabel = s => DEMAND_STATUS_LABELS[s] || s || '-'
-export const demandStatusOptions = Object.entries(DEMAND_STATUS_LABELS).map(([value, label]) => ({ value, label }))
+// 我的任务筛选不含 open：征集中的单在任务大厅看，接了单才会进入「我的任务」
+export const demandStatusOptions = Object.entries(DEMAND_STATUS_LABELS).filter(([value]) => value !== 'open').map(([value, label]) => ({ value, label }))
 
 /* 验收轮次：后端激活某轮只写 started_at/due_at，status 仍是 pending，
    所以「进行中」必须由 startedAt 判定，不能只看 status。 */

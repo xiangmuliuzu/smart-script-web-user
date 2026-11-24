@@ -337,6 +337,8 @@ export const modifyQuote = (id, form) => data(`/api/v1/trade/quote/${encodeURICo
 export const acceptQuote = id => data(`/api/v1/trade/quote/${encodeURIComponent(id)}/accept`, { method: 'PUT' })
 // 订单
 export const listOrders = params => data('/api/v1/trade/order/list?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))).toString())
+// 按询盘回查关联订单（会话页「查看订单」跳转用），无订单时返回 null
+export const getOrderByInquiry = inquiryId => data(`/api/v1/trade/order/by-inquiry/${encodeURIComponent(inquiryId)}`)
 // refresh=true 让服务端换新商户单号重出收款码（旧码失效后用）
 export const payOrder = (id, refresh = false) => data(`/api/v1/trade/order/${encodeURIComponent(id)}/pay${refresh ? '?refresh=true' : ''}`, { method: 'POST' })
 // 沙箱支付：服务端向支付宝查单确认后才推进订单（与 App / 企业端同一接口）
