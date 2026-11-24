@@ -83,7 +83,8 @@ async function openDeliveryByOrder(orderId) {
   await nextTick()
   rightsPanelRef.value?.openDeliveryByOrder?.(orderId)
 }
-function goWorks() { panelVisible.value = false; return router.push(basePath) }
+// 离开编辑器或 AI 起稿流程时替换当前历史记录，避免浏览器返回再次进入已经完成的 AI 步骤。
+function goWorks() { panelVisible.value = false; return router.replace(basePath) }
 function goHome() { panelVisible.value = false; return router.push('/') }
 function goWork(id) { panelVisible.value = false; return router.push(`${basePath}/${id}`) }
 function goDemand() { panelVisible.value = false; return router.push('/demand') }

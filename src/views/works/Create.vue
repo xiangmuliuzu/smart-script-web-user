@@ -2,7 +2,7 @@
   <section class="creation-workspace" aria-label="创作上传">
     <h1 class="sr-only">创作上传</h1>
     <header class="creation-header">
-      <button class="creation-back" aria-label="返回我的作品" @click="goWorks">← <span>返回</span></button>
+      <button class="creation-back" aria-label="返回工作台" @click="goWorks">← <span>返回工作台</span></button>
       <input v-model="form.title" class="creation-title" aria-label="作品名称" maxlength="100" placeholder="未命名剧本（点击输入）" :disabled="busy || !editable" :readonly="readOnly" />
       <div class="creation-selectors">
         <select class="creation-work-select" aria-label="选择作品" :value="route.query.workId || createdId || ''" :disabled="busy || !!worksError" @change="switchWork"><option value="">新建作品</option><option v-if="createdId && !works.some(work => work.workId === createdId)" :value="createdId">{{ form.title || '未命名作品' }}</option><option v-for="work in works" :key="work.workId" :value="work.workId">{{ work.workId === createdId ? form.title || work.title : work.title }}</option></select>

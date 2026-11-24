@@ -114,6 +114,18 @@ try {
     assert.match(saves[0].body.content, /雨夜的咖啡馆|深夜频率/)
   })
 
+  await check('finishing AI creation replaces the flow history and returns to the workbench', async () => {
+    await page.getByRole('button', { name: '插入到文章并进入编辑', exact: true }).click()
+    await page.waitForURL(url => url.pathname.endsWith('/works/create'))
+    await page.getByRole('button', { name: '返回工作台', exact: true }).waitFor()
+    await page.getByRole('button', { name: '返回工作台', exact: true }).click()
+    await page.waitForURL(base + '/works')
+    await page.getByRole('heading', { name: '我的作品', exact: true }).waitFor()
+    assert.equal(await page.getByRole('heading', { name: 'AI 创作', exact: true }).count(), 0)
+    await page.goto(base + '/works/create/ai')
+    await page.getByLabel('书名', { exact: true }).waitFor()
+  })
+
   await check('unselected episodes are skipped and chapter preview is available', async () => {
     await page.getByRole('checkbox', { name: /第三集 / }).uncheck()
     const first = page.locator('.chapter-list > li.chapter').first()

@@ -1,7 +1,7 @@
 <template>
   <section class="ai-studio" aria-label="AI 创作">
     <header class="studio-head">
-      <button class="studio-back" type="button" @click="leavePage">← <span>返回我的作品</span></button>
+      <button class="studio-back" type="button" @click="leavePage">← <span>返回工作台</span></button>
       <div class="studio-heading">
         <h1>AI 创作</h1>
         <p :class="{ bad: Boolean(error) }" role="status">{{ error || statusText }}</p>
@@ -874,7 +874,9 @@ async function insertToWork() {
     } catch { ElMessage.warning('大纲暂存失败，请手动复制大纲到编辑器') }
     stage = '打开作品编辑器'
     inserted.value = true
-    const result = await router.push({ path: '/works/create', query: { workId: String(workId.value), aiCreate: '1', ...(first ? { chapterId: String(first.chapterId) } : {}) } })
+    // 进入正式编辑器后，AI 起稿的三步流程已经完成；替换当前历史记录，
+    // 这样编辑器的返回和浏览器后退都会回到工作台，不会重新打开旧流程。
+    const result = await router.replace({ path: '/works/create', query: { workId: String(workId.value), aiCreate: '1', ...(first ? { chapterId: String(first.chapterId) } : {}) } })
     if (result) throw new Error('未能进入编辑器，请重试')
   } catch (failure) {
     inserted.value = false
@@ -894,7 +896,7 @@ async function allowNavigation() {
 }
 onBeforeRouteLeave(to => allowNavigation())
 function protectUnload(event) { if (running.value || creating.value) { event.preventDefault(); event.returnValue = '' } }
-async function leavePage() { if (await allowNavigation()) router.push('/works') }
+async function leavePage() { if (await allowNavigation()) router.replace('/works') }
 onMounted(() => {
   refreshQuota()
   loadHistory({ silent: true })
