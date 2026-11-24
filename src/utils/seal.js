@@ -15,6 +15,8 @@ export const reviewTone = status => ({ pending: 'wait', approved: 'ok', rejected
 export const sealTone = status => ({ enabled: 'ok', disabled: 'off', abnormal: 'bad' }[status] || 'off')
 
 export const canDisable = seal => seal?.sealStatus === 'enabled'
+/** 审核通过且停用中，可由用户自行启用。 */
+export const canEnable = seal => seal?.reviewStatus === 'approved' && seal?.sealStatus === 'disabled'
 export const needsDisableBeforeEdit = seal => seal?.sealStatus === 'enabled'
 
 /** 从资源地址里取出文件名（后端只存 URL，不存原始名时的兜底展示）。 */

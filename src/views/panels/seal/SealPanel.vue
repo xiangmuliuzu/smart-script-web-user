@@ -1,7 +1,6 @@
 <template>
   <div class="seal-panel">
     <div class="sub-head">
-      <h3>我的印章</h3>
       <span class="count">{{ seals.length }} 枚</span>
       <button class="btn sm" :disabled="busy" @click="openCreate">上传印章</button>
     </div>
@@ -101,8 +100,9 @@
         </ul>
         <p v-else class="cost">暂无操作记录</p>
         <div class="action-bar">
-          <button class="btn sm" :disabled="busy" @click="startEdit">编辑印章</button>
+          <button v-if="canEnable(detail)" class="btn sm" :disabled="busy" @click="doEnable">启用</button>
           <button v-if="canDisable(detail)" class="btn sm ghost" :disabled="busy" @click="doDisable">停用</button>
+          <button class="btn sm" :disabled="busy" @click="startEdit">编辑印章</button>
           <button class="btn sm ghost" :disabled="busy" @click="doDelete">删除</button>
         </div>
       </template>
@@ -140,7 +140,7 @@ import { dateText, validateFile } from '../../../utils/creator.js'
 import { mediaUrl, decodeTextBuffer } from '../../../utils/avatarUrl.js'
 import {
   reviewStatusLabel, sealStatusLabel, operationTypeLabel, reviewTone, sealTone,
-  canDisable, needsDisableBeforeEdit, materialItems, joinMaterialUrls, materialKind, fileNameFromUrl
+  canDisable, canEnable, needsDisableBeforeEdit, materialItems, joinMaterialUrls, materialKind, fileNameFromUrl
 } from '../../../utils/seal.js'
 
 const { api, handleError } = usePortal()
@@ -429,12 +429,37 @@ async function runDisable() {
   }
 }
 
+async function runEnable() {
+  if (!detail.value) return false
+  busy.value = true
+  try {
+    await api.value.enableSeal(detail.value.sealId)
+    ElMessage.success('印章已启用')
+    await load()
+    detail.value = await api.value.getSeal(detail.value.sealId)
+    return true
+  } catch (failure) {
+    await handleError(failure)
+    return false
+  } finally {
+    busy.value = false
+  }
+}
+
 async function doDisable() {
   if (!detail.value || busy.value) return
   try {
     await ElMessageBox.confirm('停用后该印章将无法用于签署，确定停用？', '停用印章', { confirmButtonText: '停用', cancelButtonText: '取消', type: 'warning' })
   } catch { return }
   await runDisable()
+}
+
+async function doEnable() {
+  if (!detail.value || busy.value) return
+  try {
+    await ElMessageBox.confirm('启用后该印章可用于签署合同，确定启用？', '启用印章', { confirmButtonText: '启用', cancelButtonText: '取消', type: 'warning' })
+  } catch { return }
+  await runEnable()
 }
 
 async function doDelete() {
@@ -456,13 +481,19 @@ async function doDelete() {
   }
 }
 
+/** 消息通知等外部入口：按印章 id 打开详情 */
+async function openById(sealId) {
+  await openDetail(sealId)
+}
+
+defineExpose({ openById, load })
 onMounted(load)
 onUnmounted(clearLocalPreview)
 </script>
 
 <style scoped>
 .seal-panel .sub-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px }
-.seal-panel .sub-head h3 { margin: 0; flex: 1 }
+.seal-panel .sub-head .count { flex: 1 }
 .seal-panel .sub-head.sub { margin-top: 18px }
 .seal-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px }
 .seal-card { display: grid; grid-template-columns: 72px 1fr auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--line, #e8e8e8); border-radius: 10px; background: #fff; cursor: pointer }

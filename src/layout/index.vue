@@ -19,7 +19,7 @@
           </div>
           <el-dropdown trigger="click" @command="accountCommand">
             <button class="avatar-btn" aria-label="账号菜单"><el-avatar class="avatar" :size="28" :src="avatarUrl(user.avatar)" :alt="displayName + '的头像'">{{ displayName.slice(0, 1) }}</el-avatar><em>{{ displayName }}</em><el-icon><ArrowDown /></el-icon></button>
-            <template #dropdown><el-dropdown-menu class="portal-menu"><div class="who"><b>{{ displayName }}</b><span>{{ user.userName || '平台用户' }}</span></div><el-dropdown-item command="profile">个人资料</el-dropdown-item><el-dropdown-item command="feedback">意见反馈</el-dropdown-item><el-dropdown-item command="logout" divided :disabled="leaving">退出登录</el-dropdown-item></el-dropdown-menu></template>
+            <template #dropdown><el-dropdown-menu class="portal-menu"><div class="who"><b>{{ displayName }}</b><span>{{ user.userName || '平台用户' }}</span></div><el-dropdown-item command="profile">个人资料</el-dropdown-item><el-dropdown-item command="feedback">意见反馈</el-dropdown-item><el-dropdown-item command="seal">我的印章</el-dropdown-item><el-dropdown-item command="logout" divided :disabled="leaving">退出登录</el-dropdown-item></el-dropdown-menu></template>
           </el-dropdown>
         </div>
       </header>
@@ -28,6 +28,7 @@
       <PlatformChatPanel v-if="panel === 'chat'" v-model="panelVisible" />
       <CooperationPanel v-if="panel === 'cooperation'" v-model="panelVisible" :initial-tab="panelTab" :order-search="panelOrderSearch" :initial-keyword="panelKeyword" />
       <RightsPanel v-if="panel === 'rights'" ref="rightsPanelRef" v-model="panelVisible" :initial-tab="panelTab" />
+      <SealsPanel v-if="panel === 'seal'" ref="sealsPanelRef" v-model="panelVisible" />
       <AccountPanel v-if="panel === 'account'" v-model="panelVisible" :initial-tab="panelTab" />
       <RechargePanel v-if="panel === 'recharge'" v-model="panelVisible" />
     </template>
@@ -48,6 +49,7 @@ import MessagesPanel from '../views/panels/Messages.vue'
 import PlatformChatPanel from '../views/panels/PlatformChat.vue'
 import CooperationPanel from '../views/panels/Cooperation.vue'
 import RightsPanel from '../views/panels/Rights.vue'
+import SealsPanel from '../views/panels/Seals.vue'
 import AccountPanel from '../views/panels/Account.vue'
 import RechargePanel from '../views/panels/Recharge.vue'
 const router = useRouter()
@@ -67,6 +69,7 @@ const panelKeyword = ref('')
 const panelVisible = ref(false)
 const workspace = ref(null)
 const rightsPanelRef = ref(null)
+const sealsPanelRef = ref(null)
 const displayName = computed(() => user.value?.nickname || user.value?.userName || '用户')
 const canCreate = computed(() => user.value?.authorCapability === true)
 const basePath = '/works'
@@ -82,6 +85,27 @@ async function openDeliveryByOrder(orderId) {
   await nextTick()
   await nextTick()
   rightsPanelRef.value?.openDeliveryByOrder?.(orderId)
+}
+/** 版权/印章站内信落点：对齐 App notification_landing 与后端 businessType。印章已独立抽屉。 */
+async function openRightsLanding(kind, bizId) {
+  if (!bizId) return
+  if (kind === 'seal') {
+    openPanel('seal')
+    await nextTick()
+    await nextTick()
+    await sealsPanelRef.value?.openById?.(bizId)
+    return
+  }
+  const map = {
+    apply: { tab: 'apply', open: 'openApplyById' },
+    cert: { tab: 'certs', open: 'openCert' },
+  }
+  const target = map[kind]
+  if (!target) return
+  openPanel('rights', target.tab)
+  await nextTick()
+  await nextTick()
+  await rightsPanelRef.value?.[target.open]?.(bizId)
 }
 // 离开编辑器或 AI 起稿流程时替换当前历史记录，避免浏览器返回再次进入已经完成的 AI 步骤。
 function goWorks() { panelVisible.value = false; return router.replace(basePath) }
@@ -109,6 +133,7 @@ async function load() {
   finally { pending.value = false }
 }
 async function accountCommand(command) {
+  if (command === 'seal') { openPanel('seal'); return }
   if (command !== 'logout') { openPanel('account', command); return }
   if (leaving.value) return
   leaving.value = true
@@ -116,7 +141,7 @@ async function accountCommand(command) {
   catch { ElMessage.warning('服务端退出未成功，已清理本地登录状态') }
   finally { user.value = null; panelVisible.value = false; await router.replace('/login'); leaving.value = false }
 }
-provide(portalKey, { api, user, canCreate, basePath, openPanel, openDeliveryByOrder, goWork, goWorks, goHome, goDemand, goDemandDetail, handleError, refreshUnread })
+provide(portalKey, { api, user, canCreate, basePath, openPanel, openDeliveryByOrder, openRightsLanding, goWork, goWorks, goHome, goDemand, goDemandDetail, handleError, refreshUnread })
 async function refreshRealName() { try { realNameStatus.value = (await api.value.getRealName())?.status || '' } catch (failure) { if (isAuthFailure(failure)) await handleError(failure) } }
 onMounted(load)
 
