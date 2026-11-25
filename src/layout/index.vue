@@ -12,6 +12,7 @@
             <button class="nav-icon" aria-label="会话" @click="openPanel('cooperation', 'session')"><span class="ico"><el-icon><ChatRound /></el-icon></span><span class="lbl">会话</span></button>
             <button class="nav-icon" aria-label="订单" @click="openPanel('cooperation', 'order')"><span class="ico"><el-icon><Tickets /></el-icon></span><span class="lbl">订单</span></button>
             <button class="nav-icon" aria-label="合同" @click="openPanel('cooperation', 'contract')"><span class="ico"><el-icon><Document /></el-icon></span><span class="lbl">合同</span></button>
+            <button class="nav-icon" aria-label="印章" @click="openPanel('seal')"><span class="ico"><el-icon><Stamp /></el-icon></span><span class="lbl">印章</span></button>
           </div>
           <div class="nav-group" role="group" aria-label="沟通通知">
             <button class="nav-icon" aria-label="消息" @click="openPanel('messages')"><span class="ico"><el-icon><Bell /></el-icon><span v-if="unread" class="badge">{{ unread > 99 ? '99+' : unread }}</span></span><span class="lbl">消息</span></button>
@@ -19,7 +20,7 @@
           </div>
           <el-dropdown trigger="click" @command="accountCommand">
             <button class="avatar-btn" aria-label="账号菜单"><el-avatar class="avatar" :size="28" :src="avatarUrl(user.avatar)" :alt="displayName + '的头像'">{{ displayName.slice(0, 1) }}</el-avatar><em>{{ displayName }}</em><el-icon><ArrowDown /></el-icon></button>
-            <template #dropdown><el-dropdown-menu class="portal-menu"><div class="who"><b>{{ displayName }}</b><span>{{ user.userName || '平台用户' }}</span></div><el-dropdown-item command="profile">个人资料</el-dropdown-item><el-dropdown-item command="feedback">意见反馈</el-dropdown-item><el-dropdown-item command="seal">我的印章</el-dropdown-item><el-dropdown-item command="logout" divided :disabled="leaving">退出登录</el-dropdown-item></el-dropdown-menu></template>
+            <template #dropdown><el-dropdown-menu class="portal-menu"><div class="who"><b>{{ displayName }}</b><span>{{ user.userName || '平台用户' }}</span></div><el-dropdown-item command="profile">个人资料</el-dropdown-item><el-dropdown-item command="feedback">意见反馈</el-dropdown-item><el-dropdown-item command="logout" divided :disabled="leaving">退出登录</el-dropdown-item></el-dropdown-menu></template>
           </el-dropdown>
         </div>
       </header>
@@ -38,7 +39,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Bell, ChatDotRound, ChatLineSquare, ChatRound, Document, Tickets, ArrowDown } from '@element-plus/icons-vue'
+import { Bell, ChatDotRound, ChatLineSquare, ChatRound, Document, Stamp, Tickets, ArrowDown } from '@element-plus/icons-vue'
 import { getInfo, isAuthFailure, logout } from '../auth.js'
 import { portalKey } from '../utils/portal.js'
 import { avatarUrl } from '../utils/avatarUrl.js'
@@ -133,7 +134,6 @@ async function load() {
   finally { pending.value = false }
 }
 async function accountCommand(command) {
-  if (command === 'seal') { openPanel('seal'); return }
   if (command !== 'logout') { openPanel('account', command); return }
   if (leaving.value) return
   leaving.value = true

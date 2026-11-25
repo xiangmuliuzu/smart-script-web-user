@@ -11,13 +11,14 @@
         <button v-if="loggedIn && realNameStatus && realNameStatus !== 'APPROVED'" class="chip verify-chip" @click="openPanel('account', 'profile')">⚠ 实名认证{{ realNameStatus === 'PENDING' ? '审核中' : '未完成' }}</button>
         <div v-if="loggedIn" class="nav-group" role="group" aria-label="交易链路">
           <button v-for="item in tradeLinks" :key="item.label" class="nav-icon" :aria-label="item.label" :title="item.label" @click="openPanel('cooperation', item.tab)"><span class="ico"><el-icon><component :is="item.icon" /></el-icon></span><span class="lbl">{{ item.label }}</span></button>
+          <button class="nav-icon" aria-label="印章" title="印章" @click="openPanel('seal')"><span class="ico"><el-icon><Stamp /></el-icon></span><span class="lbl">印章</span></button>
         </div>
         <div v-if="loggedIn" class="nav-group" role="group" aria-label="沟通通知">
           <button v-for="item in messageLinks" :key="item.label" class="nav-icon" :aria-label="item.label" :title="item.label" @click="openPanel(item.panel)"><span class="ico"><el-icon><component :is="item.icon" /></el-icon><span v-if="item.panel === 'messages' && unread" class="badge">{{ unread > 99 ? '99+' : unread }}</span><span v-if="item.panel === 'chat' && chatUnread" class="badge">{{ chatUnread > 99 ? '99+' : chatUnread }}</span></span><span class="lbl">{{ item.label }}</span></button>
         </div>
         <el-dropdown v-if="loggedIn" trigger="click" @command="accountCommand">
           <button class="avatar-btn" aria-label="账号菜单"><el-avatar class="avatar" :size="28" :src="avatarUrl(user?.avatar)" :alt="displayName + '的头像'">{{ displayName.slice(0, 1) }}</el-avatar><em>{{ displayName }}</em><el-icon><ArrowDown /></el-icon></button>
-          <template #dropdown><el-dropdown-menu class="portal-menu"><div class="who"><b>{{ displayName }}</b><span>{{ user?.userName || '平台用户' }}</span></div><el-dropdown-item command="profile">个人资料</el-dropdown-item><el-dropdown-item command="feedback">意见反馈</el-dropdown-item><el-dropdown-item command="seal">我的印章</el-dropdown-item><el-dropdown-item command="logout" divided :disabled="leaving">退出登录</el-dropdown-item></el-dropdown-menu></template>
+          <template #dropdown><el-dropdown-menu class="portal-menu"><div class="who"><b>{{ displayName }}</b><span>{{ user?.userName || '平台用户' }}</span></div><el-dropdown-item command="profile">个人资料</el-dropdown-item><el-dropdown-item command="feedback">意见反馈</el-dropdown-item><el-dropdown-item command="logout" divided :disabled="leaving">退出登录</el-dropdown-item></el-dropdown-menu></template>
         </el-dropdown>
         <button v-else class="topbar-login" @click="goLogin">请登录</button>
       </div>
@@ -84,7 +85,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { ArrowDown, Bell, ChatDotRound, ChatLineSquare, ChatRound, Document, Tickets } from '@element-plus/icons-vue'
+import { ArrowDown, Bell, ChatDotRound, ChatLineSquare, ChatRound, Document, Stamp, Tickets } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getInfo, isAuthFailure, logout, request } from '../auth.js'
 import { asList } from '../utils/creator.js'
@@ -277,7 +278,6 @@ async function loadAccountInfo() {
   }
 }
 async function accountCommand(command) {
-  if (command === 'seal') { openPanel('seal'); return }
   if (command !== 'logout') { openPanel('account', command); return }
   if (leaving.value) return
   leaving.value = true
