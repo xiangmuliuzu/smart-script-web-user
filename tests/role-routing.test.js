@@ -25,9 +25,11 @@ test('创作者端签署按钮只看卖方签章节点', async () => {
 test('创作者端询盘与订单只请求卖方视角', async () => {
   const page = await source('../src/views/panels/Cooperation.vue')
   assert.match(page, /const params = \{ role: 'seller', pageNum: inquiryPageNum\.value/)
-  assert.match(page, /const params = \{ role: 'seller', pageNum: orderPageNum\.value/)
+  // 订单列表默认卖方视角，仅在「按会话进入订单」时切到对应身份，保证目标订单可见。
+  assert.match(page, /const params = \{ role: orderRole\.value, pageNum: orderPageNum\.value/)
+  assert.match(page, /const orderRole = ref\('seller'\)/)
   assert.match(page, /我收到的询盘/)
   assert.match(page, /我卖出的订单/)
   assert.ok(!page.includes('inquiryRole'), '询盘角色下拉应已移除')
-  assert.ok(!page.includes('orderRole'), '订单角色下拉应已移除')
+  assert.ok(!page.includes('v-model="orderRole"'), '订单角色不应再是自由下拉，只能由会话身份切换')
 })

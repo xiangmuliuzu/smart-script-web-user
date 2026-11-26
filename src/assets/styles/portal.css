@@ -216,6 +216,13 @@ button.workitem { text-align: left; padding: 0; width: 100%; font: inherit; colo
 .workspace-layout :is(.todo-item b, .aside-log li) { font-size: 14.5px; }
 .workspace-layout :is(.aside-note, .todo-item span) { font-size: 13.5px; }
 .workspace-layout .aside-log time { font-size: 13px; }
+@media (max-width: 1180px) {
+  .creator-portal .topbar { gap: 10px; padding: 0 14px; }
+  .creator-portal .topbar .brand span { display: none; }
+  .creator-portal .topbar .nav button { padding: 7px 9px; font-size: 14px; }
+  .creator-portal .topbar .verify-chip { font-size: 12px; padding: 3px 8px; }
+  .creator-portal .topbar .avatar-btn em { max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+}
 @media (max-width: 520px) {
   .creator-portal .topbar .brand b { font-size: 18px; }
   .creator-portal .topbar .nav button { font-size: 14px; }

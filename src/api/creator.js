@@ -37,6 +37,9 @@ export const submitWork = id => data(workPath(id) + '/submit', { method: 'POST' 
 export const changeShelfStatus = (id, status) => data(workPath(id) + '/shelf?status=' + encodeURIComponent(status), { method: 'PUT' })
 export const saveChapter = (id, chapter) => {
   const body = { chapterTitle: chapter.chapterTitle.trim(), content: chapter.content }
+  // 新建章节后端要求显式 chapterNo（缺失即 400「章节序号不正确」），
+  // 旧调用方不传时保持原行为，v3 工作台建章一律显式传。
+  if (!chapter.chapterId && chapter.chapterNo != null) body.chapterNo = Number(chapter.chapterNo)
   // 摘要：只有调用方显式给出字符串才下发（空串=清空）。不传表示“本次不改”，
   // 否则编辑正文时会把它清空——后端 null 不改、空串清空。
   if (typeof chapter.summary === 'string') body.summary = chapter.summary
@@ -273,7 +276,7 @@ export const listAiRecords = async () => {
   const writes = await listWriteRecords()
   const items = writes.map(w => ({
     recordId: w.recordId,
-    type: w.writeType === 'outline' ? 'outline' : w.writeType === 'storyboard' ? 'storyboard' : w.writeType === 'polish' ? 'polish' : 'write',
+    type: w.writeType === 'outline' ? 'outline' : w.writeType === 'storyboard' ? 'storyboard' : w.writeType === 'polish' ? 'polish' : w.writeType === 'blueprint' ? 'blueprint' : 'write',
     title: w.title || '独立创作',
     input: w.inputPrompt || '',
     output: w.outputContent || '',

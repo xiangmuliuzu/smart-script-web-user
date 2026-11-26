@@ -13,8 +13,9 @@ export function safeRedirect(raw) {
     const url = new URL(raw, 'https://portal.invalid')
     if (!raw.startsWith('/') || raw.startsWith('//') || url.origin !== 'https://portal.invalid') return '/session'
     // 新增顶级页签必须同步登记，否则登录后的回跳会被安全回落吞掉（任务广场 /demand 系列）。
-    const implemented = ['/session', '/session-check', '/works', '/works/create', '/works/create/ai', '/demand', '/demand/mine'].includes(url.pathname)
-      || /^\/works\/[1-9]\d*$/.test(url.pathname) || /^\/demand\/[1-9]\d*$/.test(url.pathname)
+    // v3 资料确认页与工作台同样要放行，否则刷新页面或过期重登会被回落到 /session。
+    const implemented = ['/session', '/session-check', '/works', '/works/create', '/works/create/ai', '/works/create/ai/blueprint', '/demand', '/demand/mine'].includes(url.pathname)
+      || /^\/works\/[1-9]\d*$/.test(url.pathname) || /^\/works\/[1-9]\d*\/studio$/.test(url.pathname) || /^\/demand\/[1-9]\d*$/.test(url.pathname)
     return implemented ? url.pathname + url.search + url.hash : '/session'
   } catch { return '/session' }
 }

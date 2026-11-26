@@ -21,7 +21,8 @@ test('settle actions and split rate follow App rules', () => {
   assert.equal(canConfirmSettle('pending'), true)
   assert.equal(canConfirmSettle('disputed'), true)
   assert.equal(canConfirmSettle('confirmed'), false)
-  assert.equal(canDisputeSettle('pending'), true)
+  // 异议入口已下线（与 App 一致），任何状态都不再提供提出异议。
+  assert.equal(canDisputeSettle('pending'), false)
   assert.equal(canDisputeSettle('disputed'), false)
   assert.equal(settleStatusLabel('pending'), '待确认')
   assert.equal(splitRateLabel(0.05), '5%')

@@ -27,7 +27,10 @@ test('outlines recognize common chapter numbers and matching avoids ambiguity', 
   assert.deepEqual(outlineChapters('第1集：相遇\n剧情\n第一章：告别\n剧情'), [])
   assert.equal(outlineChapters('一、相遇\n剧情\n二、告别\n剧情').length, 2)
   assert.equal(matchOutlineChapter('第两百零一集：相遇', [{ chapterTitle: '第２０１章相遇' }]).chapter.chapterTitle, '第２０１章相遇')
-  assert.deepEqual(outlineChapters('第一集：相遇\n剧情\n2. 主角到站\n相遇'), [])
+  // 已存在显式「第N集」标题时，设定段里的「2. 主角到站」是被吞进上一集的正文，不是分集标题。
+  const mixedList = outlineChapters('第一集：相遇\n剧情\n2. 主角到站\n相遇')
+  assert.deepEqual(mixedList.map(x => x.title), ['第一集：相遇'])
+  assert.match(mixedList[0].summary, /2\. 主角到站/)
 })
 test('outline plan checks actual sequence, names, and safe append order', () => {
   const entries = outlineChapters('第一集：相遇\n剧情\n第二集：告别\n剧情\n第三集：重逢\n剧情\n第四集：终章\n剧情')
@@ -46,7 +49,9 @@ test('repeated episode names still parse, duplicate numbers and mixed formats ar
   const repeated = outlineChapters('第2集：记者进寨\n她进寨采访。\n第11集：记者进寨\n她再次追问。')
   assert.deepEqual(repeated.map(x => x.title), ['第2集：记者进寨', '第11集：记者进寨'])
   assert.deepEqual(outlineChapters('第2集：记者进寨\n甲\n第2集：记者进寨\n乙'), [])
-  assert.deepEqual(outlineChapters('第2集：记者进寨\n甲\n2. 主角到站\n乙'), [])
+  const listRow = outlineChapters('第2集：记者进寨\n甲\n2. 主角到站\n乙')
+  assert.deepEqual(listRow.map(x => x.title), ['第2集：记者进寨'])
+  assert.match(listRow[0].summary, /2\. 主角到站/)
 })
 test('episode headings glued to the end of a paragraph are split out', () => {
   assert.deepEqual(outlineChapters('第1集：相遇\n剧情一。第2集：告别\n剧情二'), [
@@ -467,7 +472,7 @@ test('the state guard block keeps people, props and writing style continuous', (
   assert.ok(block.includes('十二面｜顾守山'), '道具档案要整段注入，件数不能被截掉')
   assert.ok(block.includes('不得改数'))
   // 正面要求：开场要接着上一集最后一个动作写，并给出三种允许换场的例外
-  assert.ok(block.includes('本集开场必须接着上一集结尾最后一个动作或悬念往下写'))
+  assert.ok(block.includes('本集开场必须回应上一集结尾最后一个动作或悬念'))
   assert.ok(block.includes('上一集事件已经收束'))
   assert.ok(block.includes('本集切到另一视角继续同一事件'))
   // 已交付的道具不得再演一次交付
