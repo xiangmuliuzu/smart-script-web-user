@@ -172,7 +172,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { usePortal } from '../../../utils/portal.js'
-import { canEdit as canEditWork, dateText, quotaTip } from '../../../utils/creator.js'
+import { canEdit as canEditWork, dateText, quotaTip, sortWorksDesc } from '../../../utils/creator.js'
 import { documentText } from '../../../utils/document.js'
 import {
   appendStoryboard,
@@ -327,7 +327,8 @@ const prevChapter = computed(() => {
 /* ───────── 数据装载 ───────── */
 
 function normalizeWorks(list) {
-  return (Array.isArray(list) ? list : []).filter(item => item && item.workId)
+  // 切换列表与「我的作品」同口径：更新时间倒序、同时间按 workId 倒序。
+  return sortWorksDesc((Array.isArray(list) ? list : []).filter(item => item && item.workId))
 }
 
 async function load() {

@@ -156,6 +156,46 @@
 .v3-scope .people { display: flex; gap: 10px; margin-top: 13px; flex-wrap: wrap; }
 .v3-scope .people figure { margin: 0; text-align: center; color: var(--ink-3); font-size: 10px; }
 .v3-scope .people .character-avatar { width: 48px; height: 48px; margin-bottom: 4px; border: 3px solid var(--indigo-wash); }
+/* 头像悬浮卡：鼠标悬浮或键盘聚焦到某位人物时，只展示该人物的资料。
+   .people 在蓝卡内、卡片 overflow 可见，浮层不会被裁切；蓝卡 hover 自建层叠上下文，
+   浮层只出现在本卡内，再加 z-index 保证盖住相邻卡片。 */
+.v3-scope .blue-card.half[data-section="characters"] .people { position: relative; z-index: 6; }
+/* 悬浮时抬起整张蓝卡，避免浮层被同排/下一张卡片盖住。 */
+.v3-scope .blue-card.half[data-section="characters"]:hover,
+.v3-scope .blue-card.half[data-section="characters"]:focus-within { z-index: 3; }
+.v3-scope .people .person { position: relative; border-radius: 2px; outline: 0; }
+.v3-scope .people .person:focus-visible { box-shadow: 0 0 0 2px var(--indigo); }
+.v3-scope .person-pop {
+  position: absolute; left: 50%; bottom: 100%; z-index: 20;
+  width: max-content; min-width: 240px; max-width: min(340px, calc(100vw - 48px));
+  padding: 14px 16px 13px; text-align: left; white-space: normal;
+  background: #fcfbf8; border: 1px solid var(--rule-2); box-shadow: 0 16px 38px #1b1a1826;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transform: translate(-50%, 6px); transition: opacity .16s ease, transform .16s ease, visibility .16s;
+}
+/* 头像位于卡片左侧时浮层会越出资料卡：改挂右侧，箭头仍指回头像。
+   下方弹窗内的资料确认页左侧留白大于常规页，46% 足够区分「第 1 个头像」与其余头像。 */
+.v3-scope .people .person:first-child .person-pop { left: 0; transform: translate(0, 6px); }
+.v3-scope .people .person:first-child .person-pop::after { left: 24px; }
+/* 小箭头：指向头像，补齐「浮层属于这张脸」的对应关系；与头像无缝隙，移动鼠标不会丢失悬浮。 */
+.v3-scope .person-pop::after {
+  content: ''; position: absolute; left: 50%; top: 100%; width: 9px; height: 9px;
+  margin-left: -5px; background: #fcfbf8; border-right: 1px solid var(--rule-2); border-bottom: 1px solid var(--rule-2);
+  transform: translateY(-5px) rotate(45deg);
+}
+.v3-scope .people .person:hover .person-pop,
+.v3-scope .people .person:focus-within .person-pop,
+.v3-scope .people .person:focus .person-pop { opacity: 1; visibility: visible; pointer-events: auto; transform: translate(-50%, 0); }
+.v3-scope .people .person:first-child:hover .person-pop,
+.v3-scope .people .person:first-child:focus-within .person-pop,
+.v3-scope .people .person:first-child:focus .person-pop { transform: translate(0, 0); }
+.v3-scope .person-pop .pp-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding-bottom: 9px; margin-bottom: 9px; border-bottom: 1px solid var(--rule); }
+.v3-scope .person-pop .pp-head b { font-family: var(--serif); font-size: 15px; color: var(--ink); }
+.v3-scope .person-pop .pp-head span { color: var(--indigo); font-size: 11px; }
+.v3-scope .person-pop dl { display: grid; grid-template-columns: 66px minmax(0, 1fr); gap: 6px 10px; margin: 0; font-size: 11.5px; line-height: 1.65; }
+.v3-scope .person-pop dt { color: var(--ink-3); }
+.v3-scope .person-pop dd { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+.v3-scope .person-pop .pp-empty { margin: 0; color: var(--ink-3); font-size: 11.5px; line-height: 1.7; }
 .v3-scope .blue-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; padding-top: 17px; border-top: 1px solid var(--rule); flex-wrap: wrap; }
 .v3-scope .blue-empty { margin: 10px 0 0; color: var(--ink-3); font-size: 12px; }
 
@@ -448,6 +488,12 @@
   .v3-scope .item-row { grid-template-columns: 76px minmax(0, 1fr); gap: 12px; }
   .v3-scope .blueprint-grid { display: block; }
   .v3-scope .blue-card { margin-bottom: 12px; }
+  /* 窄屏下浮层改为左对齐挂在头像上方，避免首个头像的浮层越出屏幕左缘。 */
+  .v3-scope .person-pop { left: 0; transform: translate(0, 6px); }
+  .v3-scope .person-pop::after { left: 24px; }
+  .v3-scope .people .person:hover .person-pop,
+  .v3-scope .people .person:focus-within .person-pop,
+  .v3-scope .people .person:focus .person-pop { transform: translate(0, 0); }
   .v3-scope .workbench,
   .v3-scope .workbench.has-subdir { display: flex; flex-direction: column; height: auto; min-height: calc(100dvh - 56px); overflow: visible; }
   .v3-scope .sidebar,

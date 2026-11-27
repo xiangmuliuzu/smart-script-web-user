@@ -13,6 +13,16 @@ export const canEdit = (user, work) => user?.authorCapability === true && Object
 // 积分不足时面向 PC 用户的提示文案（AI 创作按实际 token 消耗直接扣积分）。
 export const quotaTip = available => available > 0 ? '' : '积分不足，无法使用 AI 创作。可点击右上角「充值」按钮充值积分，或在手机 App 的「福利中心」完成任务、观看广告获取积分后，再回来继续创作。'
 export const asList = data => Array.isArray(data) ? data : data?.list || data?.rows || []
+
+/**
+ * 「我的作品」排序兜底：更新时间（缺失回退创建时间）倒序，时间相同或都缺失时按 workId 倒序。
+ * 后端 selectWorkListByAuthor 已按同样口径排序；前端再兜一层，保证新建作品紧跟「创作与上传」。
+ */
+export function sortWorksDesc(works) {
+  const time = work => String(work?.updateTime || work?.createTime || '')
+  const id = work => Number(work?.workId) || 0
+  return [...(Array.isArray(works) ? works : [])].sort((a, b) => time(b).localeCompare(time(a)) || id(b) - id(a))
+}
 const OUTLINE_LABELS = { title: '书名', logline: '一句话简介', summary: '简介', characters: '角色', roles: '角色', acts: '剧情', plot: '剧情', chapters: '章节', setting: '背景设定', worldview: '世界观', ending: '结局', theme: '主题', role: '身份', beats: '关键情节', intro: '简介', content: '内容', genre: '题材', style: '风格' }
 const STORY_SEQUENCES = new Set(['acts', 'plot', 'chapters', 'scenes', 'steps', 'outline', 'development'])
 function outlineLabel(key, parentKey) {

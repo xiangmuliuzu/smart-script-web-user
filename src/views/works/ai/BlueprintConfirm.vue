@@ -17,7 +17,7 @@
             <h1>《{{ title }}》的作品资料</h1>
             <p>故事核心、世界规则、人物与物品逐项确认；作品大纲进入工作台后查看。</p>
           </div>
-          <button class="btn" type="button" :disabled="busy || regenerating || !hasDraft" @click="confirm(true)">{{ busy ? '正在创建作品…' : '确认资料，进入工作台 →' }}</button>
+          <button class="btn" type="button" :disabled="busy || regenerating || !hasDraft" @click="confirm(true)">{{ busy ? busyStep : '确认资料，进入工作台 →' }}</button>
         </div>
 
         <p v-if="error" class="note bad" role="alert">{{ error }}</p>
@@ -79,9 +79,21 @@
             <h3>主要人物</h3>
             <p>{{ characterSummary }}</p>
             <div v-if="blueprint.characters.length" class="people">
-              <figure v-for="character in blueprint.characters.slice(0, 4)" :key="character.key">
+              <figure v-for="character in blueprint.characters.slice(0, 4)" :key="character.key" class="person" tabindex="0" :aria-label="`${character.name}的人物资料`">
                 <CharacterAvatar :name="character.name" :color="character.color" :src="character.portraitUrl" />
                 <figcaption>{{ character.name }}</figcaption>
+                <div class="person-pop" role="tooltip">
+                  <div class="pp-head">
+                    <b>{{ character.name }}</b>
+                    <span>{{ character.role || '身份待补充' }}</span>
+                  </div>
+                  <dl v-if="personRows(character).length">
+                    <template v-for="row in personRows(character)" :key="row.label">
+                      <dt>{{ row.label }}</dt><dd>{{ row.value }}</dd>
+                    </template>
+                  </dl>
+                  <p v-else class="pp-empty">人物资料待补充，可让 AI 重新整理主要人物。</p>
+                </div>
               </figure>
             </div>
             <span class="more">{{ blueprint.characters.length }} 位人物 · 查看详情 ↗</span>
@@ -107,7 +119,7 @@
 
         <div v-if="hasDraft" class="blue-actions">
           <button class="btn quiet" type="button" :disabled="busy || regenerating" @click="regenerateAll">{{ regenerating === 'all' ? '正在重新整理全部资料…' : '重新生成全部资料' }}</button>
-          <button class="btn" type="button" :disabled="busy || regenerating || !hasDraft" @click="confirm(true)">{{ busy ? '正在创建作品…' : '确认资料，进入工作台 →' }}</button>
+          <button class="btn" type="button" :disabled="busy || regenerating || !hasDraft" @click="confirm(true)">{{ busy ? busyStep : '确认资料，进入工作台 →' }}</button>
         </div>
       </div>
     </div>
@@ -132,7 +144,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { usePortal } from '../../../utils/portal.js'
 import { quotaTip } from '../../../utils/creator.js'
 import { normalizeBlueprint } from '../../../utils/blueprint.js'
-import { clearDraft, stashDraft, takeDraft } from '../../../composables/useBlueprint.js'
+import { clearDraft, readBlueprint, stashDraft, takeDraft } from '../../../composables/useBlueprint.js'
 import BlueprintDetailModal from '../../../components/blueprint/BlueprintDetailModal.vue'
 import CharacterAvatar from '../../../components/blueprint/CharacterAvatar.vue'
 import '../../../assets/styles/studio.css'
@@ -148,6 +160,7 @@ const hasDraft = computed(() => Boolean(blueprint.value))
 const title = ref('未命名作品')
 const error = ref('')
 const busy = ref(false)
+const busyStep = ref('')
 const regenerating = ref('')
 const busySection = ref('')
 const modalOpen = ref(false)
@@ -174,6 +187,19 @@ const itemSummary = computed(() => {
   const tracks = list.reduce((total, item) => total + item.track.length, 0)
   return `${list.map(item => item.name).slice(0, 3).join('、')} 已进入创作台账${tracks ? `，共记录 ${tracks} 条追踪轨迹` : ''}，后续章节会持续维护它们的状态。`
 })
+
+/** 头像悬浮卡：只列出有内容的人物字段，避免整片「待补充」占位。 */
+function personRows(character) {
+  const rows = [
+    { label: '年龄 / 性别', value: [character.age, character.gender].filter(Boolean).join(' / ') },
+    { label: '外貌与气质', value: character.appearance },
+    { label: '性格特点', value: character.trait },
+    { label: '人物目标', value: character.goal },
+    { label: '人物秘密', value: character.secret },
+    { label: '成长线', value: character.growth }
+  ]
+  return rows.filter(row => row.value)
+}
 
 function backToSetup() {
   // 刷新后内存表单已丢失：sessionStorage 里还能找到同会话且带表单的快照时，不覆盖它。
@@ -241,19 +267,16 @@ const sectionLabel = section => ({ storyCore: '故事核心', world: '世界与�
 async function confirm(withShell) {
   if (!hasDraft.value || busy.value) return
   busy.value = true
+  busyStep.value = '正在创建作品…'
   error.value = ''
   try {
-    const workId = createdWorkId.value || (await api.value.confirmBlueprint(sessionId.value))?.workId
+    const confirmed = createdWorkId.value ? null : await api.value.confirmBlueprint(sessionId.value)
+    const workId = createdWorkId.value || confirmed?.workId
     if (!workId) throw new Error('作品创建失败，响应缺少作品编号')
     createdWorkId.value = workId
     blueprint.value = { ...blueprint.value, status: 'confirmed' }
-    if (withShell && !await firstChapterExists(workId)) {
-      try {
-        await api.value.saveChapter(workId, { chapterNo: 1, chapterTitle: '第 1 章', content: '', summary: '' })
-      } catch (failure) {
-        if (!await firstChapterExists(workId)) throw failure
-      }
-    }
+    // 已在建壳失败后重试时，createdWorkId 会复用：跳过重复创建，只补第 1 章。
+    if (withShell) await ensureFirstChapter(workId)
     clearDraft()
     ElMessage.success(withShell ? '作品已创建，进入工作台创作第 1 章' : '作品已创建，可在大纲页新建章节')
     await router.replace({
@@ -266,13 +289,64 @@ async function confirm(withShell) {
       : (failure.message || '创建作品失败，请稍后重试')
     if (failure?.status) await handleError(failure)
   } finally {
+    busyStep.value = ''
     busy.value = false
   }
 }
 
-async function firstChapterExists(workId) {
+/**
+ * 确认资料后保证第 1 章有可用的标题与概要：
+ * 1. 第 1 章已有非空 summary → 直接复用，不再调用 AI（避免重复扣费）；
+ * 2. 否则让 AI 依据作品资料生成章节草稿，写入概要并落本章人物/物品/关系；
+ * 3. AI 失败不阻断进入工作台：提示后兜底建一个空壳第 1 章。
+ */
+async function ensureFirstChapter(workId) {
+  const existing = await firstChapter(workId)
+  if (existing?.summary?.trim()) return existing
+  busyStep.value = '正在生成第 1 章概要…'
+  let draft = null
+  try {
+    const result = await api.value.generateStream('chapter-draft', { workId, chapterNo: 1 })
+    if (!result?.draft) throw new Error('生成响应缺少章节草稿')
+    draft = result.draft
+  } catch (failure) {
+    if (failure?.status || failure?.code) await handleError(failure)
+    ElMessage.warning(`第 1 章概要生成失败，已先建好空白章节。${failure?.message || '可在工作台重新整理'}`)
+  }
+  busyStep.value = draft ? '正在保存第 1 章概要…' : '正在创建第 1 章…'
+  const title = String(draft?.title || '').trim().slice(0, 100) || existing?.chapterTitle || '第 1 章'
+  const summary = String(draft?.summary || '').slice(0, 500)
+  try {
+    const saved = await api.value.saveChapter(workId, {
+      chapterId: existing?.chapterId || undefined,
+      chapterNo: existing?.chapterId ? undefined : 1,
+      chapterTitle: title,
+      // 已存在空章走更新分支：带上原正文，避免把已有内容清空。
+      content: existing?.content || '',
+      summary
+    })
+    // 后端更新章节返回 AppApiResponse<Void>（data 为 null），只有新建才一定有 chapterId。
+    const chapterId = existing?.chapterId || saved?.chapterId
+    if (!chapterId) throw new Error('章节保存响应缺少编号')
+    if (draft) {
+      try {
+        await api.value.saveChapterMeta(workId, 1, { cast: draft.cast, items: draft.items, edges: draft.edges, aiSummary: summary, source: 'ai' })
+      } catch (failure) {
+        ElMessage.warning(`第 1 章已创建，本章资料保存失败，可在工作台重新整理。${failure?.message || ''}`)
+      }
+    }
+    return { chapterId }
+  } catch (failure) {
+    // 并发或重试场景下第 1 章可能已被别处建好，别让用户卡在资料确认页。
+    const current = await firstChapter(workId)
+    if (current) return current
+    throw failure
+  }
+}
+
+async function firstChapter(workId) {
   const detail = await api.value.getWork(workId)
-  return detail?.chapters?.some(chapter => Number(chapter.chapterNo) === 1) ?? false
+  return detail?.chapters?.find(chapter => Number(chapter.chapterNo) === 1) || null
 }
 
 async function load() {
@@ -282,15 +356,26 @@ async function load() {
   error.value = ''
   loading.value = Boolean(id)
   if (!id) return
+  const stored = takeDraft()
+  const storedSetup = stored?.setup && String(stored.sessionId ?? '') === id ? stored.setup : null
+  const fallbackTitle = storedSetup?.title || '未命名作品'
   try {
     const result = await api.value.getBlueprint(id)
     if (id !== sessionId.value) return
     if (!result?.blueprint) throw new Error('该会话没有可确认的作品资料')
-    title.value = result.title || '未命名作品'
+    title.value = result.title || fallbackTitle
     blueprint.value = normalizeBlueprint({ ...result.blueprint, status: result.status })
     createdWorkId.value = result.workId || null
   } catch (failure) {
     if (id !== sessionId.value) return
+    // 读取接口暂不可用（样例环境/网络抖动）时，用起稿页交接过来的本机快照兜底，保证确认按钮可用。
+    const local = readBlueprint(id)
+    if (local) {
+      title.value = fallbackTitle
+      blueprint.value = local
+      error.value = `读取作品资料失败，已先显示本机保存的资料，进入工作台时会重新校验。${failure?.message || ''}`
+      return
+    }
     error.value = failure?.message || '读取作品资料失败'
     if (failure?.status || failure?.code) await handleError(failure)
   } finally {

@@ -38,7 +38,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePortal } from '../../utils/portal.js'
 import { avatarUrl } from '../../utils/avatarUrl.js'
-import { stateOf, words, dateText, money } from '../../utils/creator.js'
+import { stateOf, words, dateText, money, sortWorksDesc } from '../../utils/creator.js'
 import { loadTodoOrders, orderStatusLabel, orderSteps, orderStepIndex } from '../../utils/orderTodo.js'
 import LoadState from '../../components/LoadState.vue'
 import RightsPanel from '../panels/Rights.vue'
@@ -62,11 +62,12 @@ const workType = value => ({ short_drama: '短剧', novel: '小说', script: '�
 const hasCover = work => Boolean(avatarUrl(work.cover) && failedCovers.value[work.workId] !== work.cover)
 const orderTone = status => status === 'delivering' ? 'ochre' : status === 'completed' ? 'indigo' : 'cinnabar'
 const stepClass = (order, index) => { const current = orderStepIndex(order.status); return index < current ? 'done' : index === current ? 'current' : '' }
-const filtered = computed(() => works.value.filter(w => (!keyword.value.trim() || (w.title + ' ' + (w.summary || '')).includes(keyword.value.trim())) && (!status.value || w.status === status.value || (status.value === 'revision' && w.status === 'rejected'))))
+// 先按更新时间倒序兜底，再做筛选：新建作品（update_time 可能为 NULL）也会排在最前。
+const filtered = computed(() => sortWorksDesc(works.value).filter(w => (!keyword.value.trim() || (w.title + ' ' + (w.summary || '')).includes(keyword.value.trim())) && (!status.value || w.status === status.value || (status.value === 'revision' && w.status === 'rejected'))))
 const todos = ref([])
 const orderPending = ref(true)
 const orderError = ref('')
-const recent = computed(() => [...works.value].sort((a, b) => String(b.updateTime || b.createTime || '').localeCompare(String(a.updateTime || a.createTime || ''))).slice(0, 4))
+const recent = computed(() => sortWorksDesc(works.value).slice(0, 4))
 const summary = computed(() => `${works.value.length} 部 · 草稿 ${works.value.filter(w => w.status === 'draft').length} · 审核中 ${works.value.filter(w => w.status === 'reviewing').length} · 待修改 ${works.value.filter(w => ['revision', 'rejected'].includes(w.status)).length} · 审核通过 ${works.value.filter(w => w.status === 'published').length}`)
 async function load() {
   pending.value = true; error.value = ''

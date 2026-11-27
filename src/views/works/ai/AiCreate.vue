@@ -40,21 +40,6 @@
                 </select>
               </label>
               <label class="reg-row">
-                <span class="reg-key">计划集数</span>
-                <span class="reg-inline">
-                  <input v-model.number="setup.episodes" class="reg-count" type="number" min="1" max="60" step="1" aria-label="计划集数" :disabled="generating" />
-                  <span class="reg-hint">集，1–60</span>
-                </span>
-              </label>
-              <label class="reg-row">
-                <span class="reg-key">单集时长</span>
-                <select v-model.number="setup.minutes" aria-label="单集时长" :disabled="generating">
-                  <option :value="1">1 分钟</option>
-                  <option :value="1.5">1.5 分钟</option>
-                  <option :value="2">2 分钟</option>
-                </select>
-              </label>
-              <label class="reg-row">
                 <span class="reg-key">你的要求</span>
                 <textarea v-model="setup.prompt" rows="3" maxlength="1000" placeholder="第一集就出现异常线索。人物对白自然，结尾保留一个能推动下一集的悬念。" aria-label="你的要求" :disabled="generating" />
               </label>
@@ -123,7 +108,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { usePortal } from '../../../utils/portal.js'
 import { quotaTip, dateText } from '../../../utils/creator.js'
-import { stashDraft, takeDraft } from '../../../composables/useBlueprint.js'
+import { stashDraft, takeDraft, writeBlueprint } from '../../../composables/useBlueprint.js'
 import PortalLayer from '../../../components/PortalLayer.vue'
 import LoadState from '../../../components/LoadState.vue'
 import '../../../assets/styles/studio.css'
@@ -133,7 +118,8 @@ const router = useRouter()
 const route = useRoute()
 
 const genres = ['都市悬疑', '都市情感', '玄幻冒险', '古装权谋', '科幻未来', '青春校园']
-const setup = reactive({ title: '', idea: '', genre: '都市悬疑', episodes: 12, minutes: 2, prompt: '', skillId: '', model: '' })
+// 计划集数与单集时长不再由作者填写：后端 BlueprintService.setup() 在缺省时按 12 集 / 2 分钟兜底。
+const setup = reactive({ title: '', idea: '', genre: '都市悬疑', prompt: '', skillId: '', model: '' })
 const advanced = ref(false)
 const generating = ref(false)
 const currentSessionId = ref('')
@@ -208,8 +194,6 @@ function validate() {
   const idea = setup.idea.trim()
   if (idea.length < 10) return '故事灵感请至少写 10 个字'
   if (idea.length > 2000) return '故事灵感最多 2000 字'
-  const episodes = Number(setup.episodes)
-  if (!Number.isInteger(episodes) || episodes < 1 || episodes > 60) return '计划集数需为 1–60 的整数'
   return ''
 }
 
@@ -227,8 +211,6 @@ async function generate() {
       title: setup.title.trim(),
       inspiration: setup.idea.trim(),
       genre: setup.genre,
-      episodes: Number(setup.episodes),
-      minutes: Number(setup.minutes),
       prompt: setup.prompt.trim(),
       skillId: setup.skillId || undefined,
       model: setup.model || undefined
@@ -238,6 +220,7 @@ async function generate() {
     currentSessionId.value = sessionId
     confirmedWorkId.value = null
     stashDraft({ sessionId, setup: { ...setup } })
+    writeBlueprint(sessionId, result.blueprint)
     ElMessage.success('作品资料已生成，请逐项确认')
     await router.push({ path: '/works/create/ai/blueprint', query: { sessionId } })
   } catch (failure) {

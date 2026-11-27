@@ -4,7 +4,7 @@ import { safeRedirect, request, getToken } from '../src/auth.js'
 import { portal } from '../src/portal.js'
 import * as api from '../src/api/creator.js'
 import { chapterReviewState, canSetChapterTrial } from '../src/utils/chapterReview.js'
-import { canEdit, validateWork, validateChapter, validateFile, wordCount, dateText, quotaTip, outlineToText, outlineChapters, matchOutlineChapter, planOutlineChapters } from '../src/utils/creator.js'
+import { canEdit, validateWork, validateChapter, validateFile, wordCount, dateText, quotaTip, sortWorksDesc, outlineToText, outlineChapters, matchOutlineChapter, planOutlineChapters } from '../src/utils/creator.js'
 import { stripRepeatedTail, stripRepeatedHead, clampEpisodeText, castFromCharacters, chapterTail, splitOutlineSections, rosterFromCharacters, unknownNames, stateGuardBlock, auditEpisodeState } from '../src/utils/creatorAi.js'
 const storage = new Map([[portal.tokenKey, 'test-user-token']])
 test('chapter outlines are split by explicit episode headings without inventing chapters', () => {
@@ -508,4 +508,19 @@ test('episode state audit catches missing cast, and flags strangers only when re
   assert.ok(issues[1].includes('顾长庚'))
   assert.equal(usage.get('顾长庚'), 3)
   assert.deepEqual(auditEpisodeState({ text: '顾守山对雷老幺说完，林小禾点头。', cast: ['顾守山', '雷老幺'], roster }), [])
+})
+
+test('work list falls back to create time and workId when update time is missing or tied', () => {
+  // 新建作品的 update_time 可能为 NULL：不能因此掉到列表最后。
+  const sorted = sortWorksDesc([
+    { workId: 4, title: '旧作品', updateTime: '2026-10-01 09:00:00', createTime: '2026-09-01 09:00:00' },
+    { workId: 9, title: '刚创建', updateTime: null, createTime: '2026-11-27 10:00:00' },
+    { workId: 7, title: '没有时间', updateTime: null, createTime: null },
+    { workId: 3, title: '同时间', updateTime: '2026-11-27 10:00:00', createTime: '2026-11-27 10:00:00' }
+  ])
+  assert.deepEqual(sorted.map(work => work.workId), [9, 3, 4, 7])
+  assert.deepEqual(sortWorksDesc([]), [])
+  const input = [{ workId: 1 }, { workId: 2 }]
+  sortWorksDesc(input)
+  assert.deepEqual(input.map(work => work.workId), [1, 2])
 })
