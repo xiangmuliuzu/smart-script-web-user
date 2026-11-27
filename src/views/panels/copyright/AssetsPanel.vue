@@ -26,7 +26,7 @@
       :error="loadError"
       :retry="load"
       :empty="!pending && !loadError && !list.length"
-      empty-text="暂无版权资产。审核通过并已发布的作品会出现在这里。"
+      empty-text="暂无版权资产。审核通过并已进入书城的作品会出现在这里。"
     />
 
     <div v-if="!pending && !loadError && list.length" class="worklist">

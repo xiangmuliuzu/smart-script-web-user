@@ -8,24 +8,45 @@ const workPath = id => '/api/v1/users/me/works/' + encodeURIComponent(id)
 export const listWorks = async () => asList(await data('/api/v1/users/me/works'))
 export const getWork = async id => {
   const detail = await data(workPath(id))
+  // 作品审核状态由 work.status 派生；上架状态由详情顶层 shelfStatus 返回。
+  // 合并到 work 上，避免页面把“审核通过”误当成“已上架”。
+  if (detail?.work) detail.work.shelfStatus = detail.shelfStatus || detail.work.shelfStatus || 'off_shelf'
   if (detail?.chapters) detail.chapters = detail.chapters.map(chapter => ({ ...chapter, isFree: String(chapter.isFree ?? '0'), content: chapter.formattedContent || chapter.content || '' }))
   return detail
 }
+// 作品分镜目录：与章节目录同级；后端尚未接入时由详情页降级为空目录。
+export const listWorkStoryboards = async workId =>
+  data(`/api/v1/content/works/${encodeURIComponent(workId)}/storyboards?pageNum=1&pageSize=100`)
+export const createWorkStoryboard = (workId, form) =>
+  data(`/api/v1/content/works/${encodeURIComponent(workId)}/storyboards`, {
+    method: 'POST',
+    body: { chapterId: form.chapterId, chapterNo: form.chapterNo, title: form.title, content: form.content, source: form.source || 'manual' }
+  })
+export const deleteWorkStoryboard = (workId, storyboardId) =>
+  data(`/api/v1/content/works/${encodeURIComponent(workId)}/storyboards/${encodeURIComponent(storyboardId)}`, {
+    method: 'DELETE'
+  })
 export const listReviews = async id => asList(await data(workPath(id) + '/review-records'))
 export const listVersions = async id => asList(await data(`/api/v1/content/works/${encodeURIComponent(id)}/versions`))
-export const createWork = form => data('/api/v1/content/works', { method: 'POST', body: { title: form.title.trim(), description: form.summary, scriptUrl: form.scriptUrl, scriptName: form.scriptName, scriptSize: form.scriptSize } })
-export const updateWork = (id, form) => data(workPath(id), { method: 'PUT', body: { title: form.title.trim(), summary: form.summary, cover: form.cover, price: form.price, tradeType: form.tradeType } })
+export const createWork = form => data('/api/v1/content/works', { method: 'POST', body: { title: form.title.trim(), description: form.summary, scriptUrl: form.scriptUrl, scriptName: form.scriptName, scriptSize: form.scriptSize, duration: form.duration } })
+export const updateWork = (id, form) => data(workPath(id), { method: 'PUT', body: { title: form.title?.trim(), summary: form.summary, cover: form.cover, price: form.price, tradeType: form.tradeType, duration: form.duration } })
 export const sendWorkDeletionCode = id => data(`/api/v1/content/works/${encodeURIComponent(id)}/delete-code`, { method: 'POST' })
 export const deleteWork = (id, code) => data(`/api/v1/content/works/${encodeURIComponent(id)}`, { method: 'DELETE', body: { code } })
 export const submitWork = id => data(workPath(id) + '/submit', { method: 'POST' })
+// 审核通过后由作者主动控制上架/下架；审核通过本身不会自动上架。
+export const changeShelfStatus = (id, status) => data(workPath(id) + '/shelf?status=' + encodeURIComponent(status), { method: 'PUT' })
 export const saveChapter = (id, chapter) => {
-  const body = { chapterTitle: chapter.chapterTitle.trim(), content: chapter.content, isFree: chapter.isFree }
+  const body = { chapterTitle: chapter.chapterTitle.trim(), content: chapter.content }
+  // 新建章节后端要求显式 chapterNo（缺失即 400「章节序号不正确」），
+  // 旧调用方不传时保持原行为，v3 工作台建章一律显式传。
+  if (!chapter.chapterId && chapter.chapterNo != null) body.chapterNo = Number(chapter.chapterNo)
   // 摘要：只有调用方显式给出字符串才下发（空串=清空）。不传表示“本次不改”，
   // 否则编辑正文时会把它清空——后端 null 不改、空串清空。
   if (typeof chapter.summary === 'string') body.summary = chapter.summary
   return data(workPath(id) + '/chapters' + (chapter.chapterId ? '/' + encodeURIComponent(chapter.chapterId) : ''), { method: chapter.chapterId ? 'PUT' : 'POST', body })
 }
-export const publishChapter = chapterId => data('/api/v1/content/chapters/' + encodeURIComponent(chapterId), { method: 'PUT', body: { status: '0' } })
+export const setChapterTrial = (workId, chapterId, enabled) =>
+  data(workPath(workId) + '/chapters/' + encodeURIComponent(chapterId), { method: 'PUT', body: { isFree: enabled ? '1' : '0' } })
 // 方案 2：正文定稿后单独调一次 AI，产出「本章摘要 + 台账更新」，后端写 summary 并合并台账（正文不变）。
 export const summarizeChapter = (workId, chapterId, content, model) => data('/api/v1/content/ai/chapter-summary', { method: 'POST', body: { workId, chapterId, content, model } })
 // 每集验收（5 项判定，≥4 项通过；只提示不改正文），结果后端落 sys_chapter_review。
@@ -78,6 +99,12 @@ export const directPayCopyrightOrder = payOrderId =>
     method: 'POST',
     body: {}
   })
+/** 支付宝沙箱：创建版权登记费收款码。 */
+export const payCopyrightOrder = payOrderId =>
+  data(`/api/v1/trade/copyright/${encodeURIComponent(payOrderId)}/pay`, { method: 'POST' })
+/** 支付宝沙箱：查询版权登记费支付结果。 */
+export const confirmCopyrightPayment = payOrderId =>
+  data(`/api/v1/trade/copyright/${encodeURIComponent(payOrderId)}/confirm`, { method: 'POST' })
 export const submitCopyrightSupplement = (applyId, form) =>
   data(copyrightBase + '/application/' + encodeURIComponent(applyId) + '/supplement', {
     method: 'POST',
@@ -116,6 +143,7 @@ export const getSeal = id => data(sealPath(id))
 export const createSeal = form => data('/api/v1/content/copyright-seals', { method: 'POST', body: { sealName: form.sealName, sealImageUrl: form.sealImageUrl, materialUrls: form.materialUrls || '' } })
 export const updateSeal = (id, form) => data(sealPath(id), { method: 'PUT', body: form })
 export const disableSeal = id => data(sealPath(id) + '/disable', { method: 'PUT' })
+export const enableSeal = id => data(sealPath(id) + '/enable', { method: 'PUT' })
 export const deleteSeal = id => data(sealPath(id), { method: 'DELETE' })
 // AI 生成耗时可能超过默认 30s（大纲尤甚，需等待模型完整输出），单独放长到 120s。
 export const generate = (type, form) => data('/api/v1/content/ai/' + type, { method: 'POST', body: form, timeout: 120000 })
@@ -136,6 +164,26 @@ const ledgerPath = id => '/api/v1/content/works/' + encodeURIComponent(id) + '/l
 export const getWorkLedger = id => data(ledgerPath(id))
 export const saveWorkLedger = (id, ledger) => data(ledgerPath(id), { method: 'PUT', body: ledger })
 
+const contentWorkPath = id => '/api/v1/content/works/' + encodeURIComponent(id)
+const blueprintPath = id => '/api/v1/content/ai/blueprint/' + encodeURIComponent(id)
+export const getBlueprint = id => data(blueprintPath(id))
+export const getWorkBlueprint = id => data(contentWorkPath(id) + '/blueprint')
+export const confirmBlueprint = id => data(blueprintPath(id) + '/confirm', { method: 'POST' })
+const chapterMetaPath = id => contentWorkPath(id) + '/chapter-meta'
+export const getChapterMeta = id => data(chapterMetaPath(id))
+export const saveChapterMeta = (id, no, body) => data(chapterMetaPath(id) + '/' + encodeURIComponent(no), { method: 'PUT', body })
+export const generateChapterMeta = body => data('/api/v1/content/ai/chapter-meta', { method: 'POST', body, timeout: 600000 })
+
+// ──── 时间线（只追加：约定/伏笔/道具转移等事件，按集号检索） ────
+const timelinePath = id => '/api/v1/content/works/' + encodeURIComponent(id) + '/timeline'
+export const listWorkTimeline = (id, params = {}) => {
+  const query = Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => key + '=' + encodeURIComponent(value))
+    .join('&')
+  return asList(data(timelinePath(id) + (query ? '?' + query : '')))
+}
+
 // 导演(skill) 列表（E 模块，供「导演(skill)选择」下拉）
 export const listAiSkills = async () => asList(await data('/api/v1/content/ai/skills'))
 
@@ -147,7 +195,7 @@ export const listAiModels = async () => asList(await data('/api/v1/content/ai/mo
 // data:{"done":true,...} 结束；event:error + data:{"code","message"} 失败。
 // 流成功结束才由服务端落记录、按实际 token 扣积分；失败不落库不扣积分。
 const STREAM_BASE = import.meta.env?.VITE_APP_BASE_API || '/dev-api'
-export async function generateStream(type, form, onDelta) {
+export async function generateStream(type, form, onDelta, onStage) {
   const token = getToken()
   const headers = { Accept: 'text/event-stream' }
   if (form !== undefined) headers['Content-Type'] = 'application/json'
@@ -155,7 +203,8 @@ export async function generateStream(type, form, onDelta) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 600000)
   try {
-    const response = await fetch(STREAM_BASE + '/api/v1/content/ai/' + type + '/stream', {
+    const path = type === 'blueprint/regenerate' ? type : `${type}/stream`
+    const response = await fetch(STREAM_BASE + '/api/v1/content/ai/' + path, {
       method: 'POST',
       headers,
       body: JSON.stringify(form),
@@ -173,7 +222,8 @@ export async function generateStream(type, form, onDelta) {
     let buffer = '', delta = '', done = null
     const consume = block => {
       const event = parseSseBlock(block)
-      if (event.delta) { delta += event.delta; onDelta(event.delta) }
+      if (event.stage) onStage?.(event.stage)
+      if (event.delta) { delta += event.delta; onDelta?.(event.delta) }
       if (event.done) done = event.done
     }
     try {
@@ -199,7 +249,7 @@ export async function generateStream(type, form, onDelta) {
       reader.releaseLock()
     }
     if (!done) throw new Error('生成中断，已保留收到的内容，请重试')
-    if (!delta.trim()) throw new Error('本次未返回生成内容，请重试')
+    if (!delta.trim() && !done.content && !done.blueprint && !done.draft) throw new Error('本次未返回生成内容，请重试')
     // 大纲分段/分批生成时，以 done 下发的规整全文为准（逐块 delta 可能在集号处缺少换行）；
     // 其余类型仍用 delta 拼接。
     if (type === 'outline') return { outline: (done.content || delta), ...done }
@@ -212,18 +262,22 @@ export async function generateStream(type, form, onDelta) {
 /** 解析单个 SSE 事件块，返回 {delta|done|error}；空块返回 {}。 */
 function parseSseBlock(block) {
   const dataLines = []
+  let type = ''
   for (const line of block.split(/\r?\n/)) {
+    if (line.startsWith('event:')) type = line.slice(6).trim()
     if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
   }
   if (!dataLines.length) return {}
   let payload
   try { payload = JSON.parse(dataLines.join('\n')) } catch { return {} }
-  if (payload.error || (typeof payload.code === 'number' && payload.message)) {
+  if (!payload || typeof payload !== 'object') return {}
+  if (type === 'error' || payload.error || (typeof payload.code === 'number' && payload.message)) {
     const error = new Error(friendlyErrorMessage({ message: payload.message || (typeof payload.error === 'string' ? payload.error : null), fallback: 'AI 生成失败，请稍后重试' }))
-    error.code = payload.code
+    error.code = payload.code ?? 503
     throw error
   }
   return {
+    stage: type === 'stage' && typeof payload.stage === 'string' ? payload.stage : undefined,
     delta: typeof payload.delta === 'string' ? payload.delta : undefined,
     done: payload.done === true ? payload : undefined,
   }
@@ -238,7 +292,7 @@ export const listAiRecords = async () => {
   const writes = await listWriteRecords()
   const items = writes.map(w => ({
     recordId: w.recordId,
-    type: w.writeType === 'outline' ? 'outline' : w.writeType === 'storyboard' ? 'storyboard' : w.writeType === 'polish' ? 'polish' : 'write',
+    type: w.writeType === 'outline' ? 'outline' : w.writeType === 'storyboard' ? 'storyboard' : w.writeType === 'polish' ? 'polish' : w.writeType === 'blueprint' ? 'blueprint' : 'write',
     title: w.title || '独立创作',
     input: w.inputPrompt || '',
     output: w.outputContent || '',
@@ -264,7 +318,7 @@ export const listRechargeOrders = (userId, limit = 20) => data(`/api/v1/welfare/
 // 创作者端=卖方门户：交易通知只取 SELLER/BOTH（及无受众的通用通知），买方视角通知（如询盘已被接受）不进此端。
 export const listMessages = async () => asList(await data('/api/v1/messages' + qs({ pageSize: 100, portalRole: 'SELLER' }))).map(item => ({ ...item, isRead: item.read, content: item.summary, createTime: item.createdAt }))
 export const getMessage = id => data(`/api/v1/messages/${encodeURIComponent(id)}`)
-export const unreadCount = async () => (await data('/api/v1/messages/unread-count')).total
+export const unreadCount = async () => (await data('/api/v1/messages/unread-count' + qs({ portalRole: 'SELLER' }))).total
 export const readMessage = id => data(`/api/v1/messages/${encodeURIComponent(id)}/read`, { method: 'PUT' })
 export const readAllMessages = () => data('/api/v1/messages/read-all', { method: 'PUT' })
 export const openChat = () => data('/api/v1/users/me/chat/sessions', { method: 'POST', body: { businessType: 'GENERAL', businessName: '平台沟通' } })
@@ -273,10 +327,11 @@ export const getSessionDetail = id => data(`/api/v1/users/me/chat/sessions/${enc
 export const listSessions = async () => asList(await data('/api/v1/users/me/chat/sessions' + qs({ sessionType: 'ADMIN' })))
 export const listTradeSessions = () => data('/api/v1/users/me/chat/sessions?sessionType=TRADE')
 export const listChat = async id => asList(await data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/messages`))
-export const sendChat = (id, content) => data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/messages`, { method: 'POST', body: { msgType: 'TEXT', content } })
+export const sendChat = (id, content, quoteMessageId) => data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/messages`, { method: 'POST', body: { msgType: 'TEXT', content, ...(quoteMessageId ? { quoteMessageId } : {}) } })
+export const recallChat = (id, messageId) => data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/messages/${encodeURIComponent(messageId)}/recall`, { method: 'PUT' })
 export const readChatSession = id => data(`/api/v1/users/me/chat/sessions/${encodeURIComponent(id)}/read`, { method: 'PUT' })
-// 聊天未读总数（顶栏「沟通」徽标）；后端不区分会话类型，含交易会话的未读。
-export const chatUnreadCount = async () => Number((await data('/api/v1/users/me/chat/unread-count'))?.chatUnread || 0)
+// 聊天未读总数（顶栏「平台客服」徽标）：与客服面板同口径，只统计 sessionType=ADMIN 的会话。
+export const chatUnreadCount = async () => Number((await data('/api/v1/users/me/chat/unread-count' + qs({ sessionType: 'ADMIN' })))?.chatUnread || 0)
 export const getProfile = () => data('/api/v1/users/me/profile')
 export const saveProfile = form => data('/api/v1/users/me/profile', { method: 'PUT', body: { nickname: form.nickname, avatar: form.avatar, bio: form.bio } })
 export const getRealName = () => data('/api/v1/users/me/real-name')
@@ -301,10 +356,14 @@ export const modifyQuote = (id, form) => data(`/api/v1/trade/quote/${encodeURICo
 export const acceptQuote = id => data(`/api/v1/trade/quote/${encodeURIComponent(id)}/accept`, { method: 'PUT' })
 // 订单
 export const listOrders = params => data('/api/v1/trade/order/list?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))).toString())
+// 按询盘回查关联订单（会话页「查看订单」跳转用），无订单时返回 null
+export const getOrderByInquiry = inquiryId => data(`/api/v1/trade/order/by-inquiry/${encodeURIComponent(inquiryId)}`)
 // refresh=true 让服务端换新商户单号重出收款码（旧码失效后用）
 export const payOrder = (id, refresh = false) => data(`/api/v1/trade/order/${encodeURIComponent(id)}/pay${refresh ? '?refresh=true' : ''}`, { method: 'POST' })
 // 沙箱支付：服务端向支付宝查单确认后才推进订单（与 App / 企业端同一接口）
 export const confirmSandboxPayment = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/pay/confirm`, { method: 'POST' })
+// 测试直付：跳过支付宝沙箱，订单直接按已付款进入交割（与版权零元直付同性质）。
+export const directPayOrder = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/pay/direct-pay`, { method: 'POST' })
 export const completeOrder = id => data(`/api/v1/trade/order/${encodeURIComponent(id)}/complete`, { method: 'POST' })
 // 取消订单（仅 confirmed 可取消）；reason 选填，走 query 参数
 export const cancelOrder = (id, reason) => data(`/api/v1/trade/order/${encodeURIComponent(id)}/cancel${reason ? '?' + new URLSearchParams({ reason }).toString() : ''}`, { method: 'POST' })
@@ -399,4 +458,3 @@ export const demandExtendHistory = demandId => data(demandPath(demandId) + '/ext
 export const claimDemand = demandId => data(demandPath(demandId) + '/claim', { method: 'POST' })
 // 任务会话（创作者发起不带 targetUserId），返回会话 VO；后续收发与聊天列表沿用合作抽屉的会话能力
 export const demandChatSession = demandId => data(demandPath(demandId) + '/chat/session', { method: 'POST' })
-

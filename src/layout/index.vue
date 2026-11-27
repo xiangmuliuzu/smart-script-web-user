@@ -12,6 +12,7 @@
             <button class="nav-icon" aria-label="会话" @click="openPanel('cooperation', 'session')"><span class="ico"><el-icon><ChatRound /></el-icon></span><span class="lbl">会话</span></button>
             <button class="nav-icon" aria-label="订单" @click="openPanel('cooperation', 'order')"><span class="ico"><el-icon><Tickets /></el-icon></span><span class="lbl">订单</span></button>
             <button class="nav-icon" aria-label="合同" @click="openPanel('cooperation', 'contract')"><span class="ico"><el-icon><Document /></el-icon></span><span class="lbl">合同</span></button>
+            <button class="nav-icon" aria-label="印章" @click="openPanel('seal')"><span class="ico"><el-icon><Stamp /></el-icon></span><span class="lbl">印章</span></button>
           </div>
           <div class="nav-group" role="group" aria-label="沟通通知">
             <button class="nav-icon" aria-label="消息" @click="openPanel('messages')"><span class="ico"><el-icon><Bell /></el-icon><span v-if="unread" class="badge">{{ unread > 99 ? '99+' : unread }}</span></span><span class="lbl">消息</span></button>
@@ -28,6 +29,7 @@
       <PlatformChatPanel v-if="panel === 'chat'" v-model="panelVisible" />
       <CooperationPanel v-if="panel === 'cooperation'" v-model="panelVisible" :initial-tab="panelTab" :order-search="panelOrderSearch" :initial-keyword="panelKeyword" />
       <RightsPanel v-if="panel === 'rights'" ref="rightsPanelRef" v-model="panelVisible" :initial-tab="panelTab" />
+      <SealsPanel v-if="panel === 'seal'" ref="sealsPanelRef" v-model="panelVisible" />
       <AccountPanel v-if="panel === 'account'" v-model="panelVisible" :initial-tab="panelTab" />
       <RechargePanel v-if="panel === 'recharge'" v-model="panelVisible" />
     </template>
@@ -37,7 +39,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Bell, ChatDotRound, ChatLineSquare, ChatRound, Document, Tickets, ArrowDown } from '@element-plus/icons-vue'
+import { Bell, ChatDotRound, ChatLineSquare, ChatRound, Document, Stamp, Tickets, ArrowDown } from '@element-plus/icons-vue'
 import { getInfo, isAuthFailure, logout } from '../auth.js'
 import { portalKey } from '../utils/portal.js'
 import { avatarUrl } from '../utils/avatarUrl.js'
@@ -48,6 +50,7 @@ import MessagesPanel from '../views/panels/Messages.vue'
 import PlatformChatPanel from '../views/panels/PlatformChat.vue'
 import CooperationPanel from '../views/panels/Cooperation.vue'
 import RightsPanel from '../views/panels/Rights.vue'
+import SealsPanel from '../views/panels/Seals.vue'
 import AccountPanel from '../views/panels/Account.vue'
 import RechargePanel from '../views/panels/Recharge.vue'
 const router = useRouter()
@@ -67,10 +70,12 @@ const panelKeyword = ref('')
 const panelVisible = ref(false)
 const workspace = ref(null)
 const rightsPanelRef = ref(null)
+const sealsPanelRef = ref(null)
 const displayName = computed(() => user.value?.nickname || user.value?.userName || '用户')
 const canCreate = computed(() => user.value?.authorCapability === true)
 const basePath = '/works'
 // 任务广场已提升为与工作台平级的顶级页签（/demand），不再走合作抽屉的 demand tab。
+// 创作页与工作台路由都归属「工作台」高亮。
 const onWorks = computed(() => route.path === '/works' || route.path.startsWith('/works/'))
 const onDemand = computed(() => route.path === '/demand' || route.path.startsWith('/demand/'))
 const onHome = computed(() => route.path === '/')
@@ -83,7 +88,29 @@ async function openDeliveryByOrder(orderId) {
   await nextTick()
   rightsPanelRef.value?.openDeliveryByOrder?.(orderId)
 }
-function goWorks() { panelVisible.value = false; return router.push(basePath) }
+/** 版权/印章站内信落点：对齐 App notification_landing 与后端 businessType。印章已独立抽屉。 */
+async function openRightsLanding(kind, bizId) {
+  if (!bizId) return
+  if (kind === 'seal') {
+    openPanel('seal')
+    await nextTick()
+    await nextTick()
+    await sealsPanelRef.value?.openById?.(bizId)
+    return
+  }
+  const map = {
+    apply: { tab: 'apply', open: 'openApplyById' },
+    cert: { tab: 'certs', open: 'openCert' },
+  }
+  const target = map[kind]
+  if (!target) return
+  openPanel('rights', target.tab)
+  await nextTick()
+  await nextTick()
+  await rightsPanelRef.value?.[target.open]?.(bizId)
+}
+// 离开编辑器或 AI 起稿流程时替换当前历史记录，避免浏览器返回再次进入已经完成的 AI 步骤。
+function goWorks() { panelVisible.value = false; return router.replace(basePath) }
 function goHome() { panelVisible.value = false; return router.push('/') }
 function goWork(id) { panelVisible.value = false; return router.push(`${basePath}/${id}`) }
 function goDemand() { panelVisible.value = false; return router.push('/demand') }
@@ -115,19 +142,20 @@ async function accountCommand(command) {
   catch { ElMessage.warning('服务端退出未成功，已清理本地登录状态') }
   finally { user.value = null; panelVisible.value = false; await router.replace('/login'); leaving.value = false }
 }
-provide(portalKey, { api, user, canCreate, basePath, openPanel, openDeliveryByOrder, goWork, goWorks, goHome, goDemand, goDemandDetail, handleError, refreshUnread })
+provide(portalKey, { api, user, canCreate, basePath, openPanel, openDeliveryByOrder, openRightsLanding, goWork, goWorks, goHome, goDemand, goDemandDetail, handleError, refreshUnread })
 async function refreshRealName() { try { realNameStatus.value = (await api.value.getRealName())?.status || '' } catch (failure) { if (isAuthFailure(failure)) await handleError(failure) } }
 onMounted(load)
 
 // 长连接在线时角标无需定时轮询：帧到达即补拉一次；断开则退回 60s 兜底轮询。
 let realtimeOff = []
 let unreadTimer = null
+let unreadInterval = 0
 function applyUnreadCadence() {
   const wanted = isRealtimeConnected() ? 60000 : 5000
-  if (unreadTimer && unreadTimer.__interval === wanted) return
+  if (unreadTimer && unreadInterval === wanted) return
   clearInterval(unreadTimer)
   unreadTimer = setInterval(refreshUnread, wanted)
-  unreadTimer.__interval = wanted
+  unreadInterval = wanted
 }
 onMounted(() => {
   connectRealtime()

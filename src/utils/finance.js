@@ -47,7 +47,8 @@ export const withdrawStatusTone = status => ({
 }[status] || 'off')
 
 export const canConfirmSettle = status => status === 'pending' || status === 'disputed'
-export const canDisputeSettle = status => status === 'pending'
+/** 异议入口已下线，始终不可提出。 */
+export const canDisputeSettle = () => false
 
 export function toYuanNumber(value) {
   if (value == null || value === '') return 0

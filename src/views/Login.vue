@@ -15,27 +15,49 @@
       <div class="fine">剧云策 · 智能剧本创作平台</div>
     </aside>
     <main class="login-main">
-      <div class="login-form">
-        <h1>{{ heading }}</h1><p>{{ subheading }}</p>
-        <template v-if="mode === 'login'">
-          <div v-if="route.query.reason === 'creator-required'" class="note bad error-message" role="alert">账号未开通创作者能力，暂时无法登录创作者端。</div>
-          <el-form ref="formRef" :model="form" :rules="rules" class="auth-form" label-position="top" @submit.prevent="submit">
-            <el-form-item label="用户名 / 手机号 / 邮箱" prop="username"><el-input v-model="form.username" placeholder="请输入用户名、手机号或邮箱" autocomplete="username" :prefix-icon="User" /></el-form-item>
-            <el-form-item label="密码" prop="password"><el-input v-model="form.password" type="password" placeholder="请输入密码" show-password autocomplete="current-password" :prefix-icon="Lock" /></el-form-item>
-            <el-form-item v-if="captchaEnabled" label="验证码"><div class="captcha-row"><el-input v-model="form.code" placeholder="请输入验证码" maxlength="8" autocomplete="off" /><button type="button" class="captcha-img" :disabled="captchaLoading" aria-label="刷新验证码" @click="refreshCaptcha"><img v-if="captchaImage" :src="captchaImage" alt="验证码" /><span v-else>点击重试</span></button></div></el-form-item>
-            <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon class="error-message" />
-            <div class="form-options"><el-checkbox v-model="remember">记住密码</el-checkbox><button type="button" class="forgot-link" @click="mode = 'reset'">忘记密码？</button></div>
-            <el-button class="login-button" type="primary" native-type="submit" :loading="loading" :disabled="!captchaReady || captchaLoading">登录</el-button>
-          </el-form>
-          <p class="signup-row">还没有账号？<button type="button" class="forgot-link" @click="mode = 'register'">注册个人账号</button></p>
-        </template>
-        <AccountPanel
-          v-else
-          :mode="mode"
-          register-desc="账号已创建。创作者中心仅向已开通创作者能力的账号开放，请打开剧云策 App 用该账号登录并提交创作者认证，审核通过后即可登录。"
-          @back="mode = 'login'"
-          @switch="mode = $event"
-        />
+      <div class="login-stack">
+        <!-- 扫码切换：右上角斜角三角，密码形态显示二维码图标，扫码形态显示电脑图标。
+             两个形态共用同一块登录框，切换时只换内容，不再跳页。 -->
+        <button
+          type="button"
+          class="corner-switch"
+          :aria-label="mode === 'qr' ? '返回账号密码登录' : '切换到扫码登录'"
+          @click="mode = mode === 'qr' ? 'login' : 'qr'"
+        >
+          <svg v-if="mode !== 'qr'" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 4h5v5H4zM15 4h5v5h-5zM4 15h5v5H4z" fill="none" stroke="currentColor" stroke-width="1.6" />
+            <path d="M15 15h2v2h-2zM19 15h1v1h-1zM15 19h1v1h-1zM18 18h2v2h-2z" fill="currentColor" />
+          </svg>
+          <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3.5 5.5h17v10h-17z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+            <path d="M8.5 19h7M12 15.5V19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+        </button>
+        <div class="login-form">
+          <QrLoginPanel v-if="mode === 'qr'" />
+          <template v-else>
+            <h1>{{ heading }}</h1><p>{{ subheading }}</p>
+            <template v-if="mode === 'login'">
+              <div v-if="route.query.reason === 'creator-required'" class="note bad error-message" role="alert">账号未开通创作者能力，暂时无法登录创作者端。</div>
+              <el-form ref="formRef" :model="form" :rules="rules" class="auth-form" label-position="top" @submit.prevent="submit">
+                <el-form-item label="用户名 / 手机号 / 邮箱" prop="username"><el-input v-model="form.username" placeholder="请输入用户名、手机号或邮箱" autocomplete="username" :prefix-icon="User" /></el-form-item>
+                <el-form-item label="密码" prop="password"><el-input v-model="form.password" type="password" placeholder="请输入密码" show-password autocomplete="current-password" :prefix-icon="Lock" /></el-form-item>
+                <el-form-item v-if="captchaEnabled" label="验证码"><div class="captcha-row"><el-input v-model="form.code" placeholder="请输入验证码" maxlength="8" autocomplete="off" /><button type="button" class="captcha-img" :disabled="captchaLoading" aria-label="刷新验证码" @click="refreshCaptcha"><img v-if="captchaImage" :src="captchaImage" alt="验证码" /><span v-else>点击重试</span></button></div></el-form-item>
+                <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon class="error-message" />
+                <div class="form-options"><el-checkbox v-model="remember">记住密码</el-checkbox><button type="button" class="forgot-link" @click="mode = 'reset'">忘记密码？</button></div>
+                <el-button class="login-button" type="primary" native-type="submit" :loading="loading" :disabled="!captchaReady || captchaLoading">登录</el-button>
+              </el-form>
+              <p class="signup-row">还没有账号？<button type="button" class="forgot-link" @click="mode = 'register'">注册个人账号</button></p>
+            </template>
+            <AccountPanel
+              v-else
+              :mode="mode"
+              register-desc="账号已创建。创作者中心仅向已开通创作者能力的账号开放，请打开剧云策 App 用该账号登录并提交创作者认证，审核通过后即可登录。"
+              @back="mode = 'login'"
+              @switch="mode = $event"
+            />
+          </template>
+        </div>
       </div>
     </main>
   </div>
@@ -48,6 +70,7 @@ import { User, Lock, Right } from '@element-plus/icons-vue'
 import { getCaptcha, login, safeRedirect } from '../auth.js'
 import { portal, portalSwitch, portalSwitchHref } from '../portal.js'
 import AccountPanel from '../components/AccountPanel.vue'
+import QrLoginPanel from '../components/QrLoginPanel.vue'
 const route = useRoute()
 const router = useRouter()
 
@@ -138,6 +161,33 @@ onMounted(refreshCaptcha)
   --el-button-disabled-border-color: #9b968e;
 }
 .login-main { background: #f1ece3; }
+/* 登录框与右上角扫码切换的定位容器：三角按钮固定在框的右上角，随内容高度自然移动。
+   宽度与原来的 .login-form 一致，避免在 grid 居中下退化成 fit-content。 */
+.login-stack { position: relative; width: 100%; max-width: 344px; }
+.corner-switch {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 5;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 0;
+  border-radius: 0 3px 0 0;
+  background: linear-gradient(225deg, var(--indigo) 0 50%, transparent 50%);
+  color: #fff;
+  cursor: pointer;
+  transition: filter 160ms ease;
+}
+.corner-switch:hover { filter: brightness(1.12); }
+.corner-switch:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
+.corner-switch svg {
+  position: absolute;
+  top: 11px;
+  right: 11px;
+  width: 19px;
+  height: 19px;
+}
 .login-aside {
   position: relative;
   isolation: isolate;

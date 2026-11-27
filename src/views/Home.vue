@@ -11,6 +11,7 @@
         <button v-if="loggedIn && realNameStatus && realNameStatus !== 'APPROVED'" class="chip verify-chip" @click="openPanel('account', 'profile')">⚠ 实名认证{{ realNameStatus === 'PENDING' ? '审核中' : '未完成' }}</button>
         <div v-if="loggedIn" class="nav-group" role="group" aria-label="交易链路">
           <button v-for="item in tradeLinks" :key="item.label" class="nav-icon" :aria-label="item.label" :title="item.label" @click="openPanel('cooperation', item.tab)"><span class="ico"><el-icon><component :is="item.icon" /></el-icon></span><span class="lbl">{{ item.label }}</span></button>
+          <button class="nav-icon" aria-label="印章" title="印章" @click="openPanel('seal')"><span class="ico"><el-icon><Stamp /></el-icon></span><span class="lbl">印章</span></button>
         </div>
         <div v-if="loggedIn" class="nav-group" role="group" aria-label="沟通通知">
           <button v-for="item in messageLinks" :key="item.label" class="nav-icon" :aria-label="item.label" :title="item.label" @click="openPanel(item.panel)"><span class="ico"><el-icon><component :is="item.icon" /></el-icon><span v-if="item.panel === 'messages' && unread" class="badge">{{ unread > 99 ? '99+' : unread }}</span><span v-if="item.panel === 'chat' && chatUnread" class="badge">{{ chatUnread > 99 ? '99+' : chatUnread }}</span></span><span class="lbl">{{ item.label }}</span></button>
@@ -62,6 +63,7 @@
     <PlatformChatPanel v-if="loggedIn && panel === 'chat'" v-model="panelVisible" />
     <CooperationPanel v-if="loggedIn && panel === 'cooperation'" v-model="panelVisible" :initial-tab="panelTab" :order-search="panelOrderSearch" :initial-keyword="panelKeyword" />
     <RightsPanel v-if="loggedIn && panel === 'rights'" ref="rightsPanelRef" v-model="panelVisible" :initial-tab="panelTab" />
+    <SealsPanel v-if="loggedIn && panel === 'seal'" ref="sealsPanelRef" v-model="panelVisible" />
     <AccountPanel v-if="loggedIn && panel === 'account'" v-model="panelVisible" :initial-tab="panelTab" />
     <RechargePanel v-if="loggedIn && panel === 'recharge'" v-model="panelVisible" />
     <nav class="section-dots" aria-label="首页分区"><button v-for="(item,index) in sections" :key="item.id" :class="{ active: currentSection===index }" :aria-label="item.label" @click="scrollTo(item.id)"><i></i></button></nav>
@@ -83,7 +85,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { ArrowDown, Bell, ChatDotRound, ChatLineSquare, ChatRound, Document, Tickets } from '@element-plus/icons-vue'
+import { ArrowDown, Bell, ChatDotRound, ChatLineSquare, ChatRound, Document, Stamp, Tickets } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getInfo, isAuthFailure, logout, request } from '../auth.js'
 import { asList } from '../utils/creator.js'
@@ -94,6 +96,7 @@ import MessagesPanel from './panels/Messages.vue'
 import PlatformChatPanel from './panels/PlatformChat.vue'
 import CooperationPanel from './panels/Cooperation.vue'
 import RightsPanel from './panels/Rights.vue'
+import SealsPanel from './panels/Seals.vue'
 import AccountPanel from './panels/Account.vue'
 import RechargePanel from './panels/Recharge.vue'
 
@@ -123,6 +126,7 @@ const panelOrderSearch = ref('')
 const panelKeyword = ref('')
 const panelVisible = ref(false)
 const rightsPanelRef = ref(null)
+const sealsPanelRef = ref(null)
 const leaving = ref(false)
 const loggedIn = computed(() => Boolean(localStorage.getItem('PcUser-Token')))
 const displayName = computed(() => user.value?.nickname || user.value?.userName || '用户')
@@ -208,6 +212,27 @@ async function openDeliveryByOrder(orderId) {
   await nextTick()
   rightsPanelRef.value?.openDeliveryByOrder?.(orderId)
 }
+/** 版权/印章站内信落点：对齐 App notification_landing 与后端 businessType。印章已独立抽屉。 */
+async function openRightsLanding(kind, bizId) {
+  if (!bizId) return
+  if (kind === 'seal') {
+    openPanel('seal')
+    await nextTick()
+    await nextTick()
+    await sealsPanelRef.value?.openById?.(bizId)
+    return
+  }
+  const map = {
+    apply: { tab: 'apply', open: 'openApplyById' },
+    cert: { tab: 'certs', open: 'openCert' },
+  }
+  const target = map[kind]
+  if (!target) return
+  openPanel('rights', target.tab)
+  await nextTick()
+  await nextTick()
+  await rightsPanelRef.value?.[target.open]?.(bizId)
+}
 function goWorks() { panelVisible.value = false; return router.push('/works') }
 function goHome() { panelVisible.value = false; return router.push('/') }
 function goWork(id) { panelVisible.value = false; return router.push(`/works/${id}`) }
@@ -265,7 +290,7 @@ async function accountCommand(command) {
     leaving.value = false
   }
 }
-provide(portalKey, { api, user, canCreate, basePath, openPanel, openDeliveryByOrder, goWork, goWorks, goHome, goDemand, goDemandDetail, handleError, refreshUnread })
+provide(portalKey, { api, user, canCreate, basePath, openPanel, openDeliveryByOrder, openRightsLanding, goWork, goWorks, goHome, goDemand, goDemandDetail, handleError, refreshUnread })
 function scrollTo(id) { document.getElementById(id)?.scrollIntoView({ behavior:'smooth', block:'start' }) }
 function observeSections(entries) { for (const entry of entries) if (entry.isIntersecting) currentSection.value = sections.findIndex(section => section.id === entry.target.id) }
 onMounted(() => {

@@ -9,7 +9,7 @@ import { mockCreatorApi } from './fixtures/creator-api.mjs'
 const apps = [
   { prefix: '/user/', root: fileURLToPath(new URL('../dist/', import.meta.url)) },
   { prefix: '/enterprise/', root: fileURLToPath(new URL('../../smart-script-web-enterprise/dist/', import.meta.url)) },
-  { prefix: '/', root: fileURLToPath(new URL('../../smart-script-web-admin/dist/', import.meta.url)) }
+  { prefix: '/', root: fileURLToPath(new URL('../../smart-script-web/dist/', import.meta.url)) }
 ]
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' }
 // 同一个站点挂载三份真实生产包，并模拟各应用自己的 SPA 回退。

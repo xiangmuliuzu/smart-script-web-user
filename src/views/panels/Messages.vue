@@ -2,7 +2,7 @@
   <PortalLayer v-model="visible" title="消息">
     <div class="drawer-tools"><button class="btn quiet sm" :disabled="reading || !messages.some(m => !m.isRead)" @click="readAll">{{ reading ? '处理中…' : '全部已读' }}</button></div>
     <LoadState :pending="pending" :error="error" :retry="load" :empty="!pending && !error && !messages.length" empty-text="还没有新的通知" />
-    <div v-for="message in messages" :key="message.messageId" class="msg" role="button" tabindex="0" :data-unread="!message.isRead" @click="openMessage(message)" @keydown.enter.prevent="openMessage(message)"><span class="top"><b>{{ message.title }}</b><time>{{ dateText(message.createTime).slice(5) }}</time></span><p>{{ message.content }}</p><button v-if="tradeJumpOf(message)" class="msg-link" type="button" @click.stop="jumpTrade(message)">{{ tradeJumpOf(message).label }}</button></div>
+    <div v-for="message in messages" :key="message.messageId" class="msg" role="button" tabindex="0" :data-unread="!message.isRead" @click="openMessage(message)" @keydown.enter.prevent="openMessage(message)"><span class="top"><b>{{ message.title }}</b><time>{{ dateText(message.createTime).slice(5) }}</time></span><p>{{ message.content }}</p><button v-if="actionJumpOf(message)" class="msg-link" type="button" @click.stop="jumpAction(message)">{{ actionJumpOf(message).label }}</button></div>
     <PortalLayer v-model="detailVisible" :title="selected?.title || '通知详情'" modal><p class="cost">{{ dateText(selected?.createTime) }}</p><p class="notification-content">{{ selected?.content }}</p></PortalLayer>
   </PortalLayer>
 </template>
@@ -16,7 +16,7 @@ import LoadState from '../../components/LoadState.vue'
 // 消息面板只承载系统通知；与平台的聊天会话已分离到「沟通」面板（PlatformChat.vue）。
 const props = defineProps({ modelValue: Boolean })
 const emit = defineEmits(['update:modelValue'])
-const { api, handleError, refreshUnread, goWork, openPanel } = usePortal()
+const { api, handleError, refreshUnread, goWork, openPanel, openRightsLanding } = usePortal()
 const router = useRouter()
 const visible = computed({ get: () => props.modelValue, set: value => emit('update:modelValue', value) })
 const messages = ref([])
@@ -37,7 +37,8 @@ async function openMessage(message) {
   try {
     const detail = await api.value.getMessage(message.messageId)
     await api.value.readMessage(message.messageId); message.isRead = true; await refreshUnread()
-    if (message.workId) { visible.value = false; await goWork(message.workId) }
+    if (message.businessType === 'WORK' && message.businessId) { visible.value = false; await goWork(message.businessId) }
+    else if (message.workId) { visible.value = false; await goWork(message.workId) }
     else if (message.panel) { visible.value = false; openPanel(message.panel, message.tab) }
     else { selected.value = { ...message, content: detail?.content || message.content }; detailVisible.value = true }
   } catch (failure) { await handleError(failure) }
@@ -51,17 +52,47 @@ const TRADE_JUMP = {
   // 任务域通知跳顶级页签 /demand，不再进合作抽屉
   DEMAND: { demand: true, label: '查看任务 →' },
 }
+// 版权 / 印章：对齐 App notification_landing 与后端 RightsStatusNotifyService
+// type=SEAL|COPYRIGHT，businessType=SEAL|COPYRIGHT_APPLY|COPYRIGHT_CERT，businessId 即落地主键。
+const RIGHTS_JUMP = {
+  SEAL: { kind: 'seal', label: '查看印章 →' },
+  COPYRIGHT_APPLY: { kind: 'apply', label: '查看申请 →' },
+  COPYRIGHT_CERT: { kind: 'cert', label: '查看证书 →' },
+}
 function tradeJumpOf(message) {
   return message && message.type === 'TRANSACTION' && message.businessId ? TRADE_JUMP[message.businessType] : null
+}
+function rightsJumpOf(message) {
+  if (!message?.businessId) return null
+  if (message.type === 'SEAL' || message.businessType === 'SEAL') return RIGHTS_JUMP.SEAL
+  if (message.type === 'COPYRIGHT' || message.businessType === 'COPYRIGHT_APPLY' || message.businessType === 'COPYRIGHT_CERT') {
+    return RIGHTS_JUMP[message.businessType] || RIGHTS_JUMP.COPYRIGHT_APPLY
+  }
+  return null
+}
+function actionJumpOf(message) {
+  return tradeJumpOf(message) || rightsJumpOf(message)
 }
 function bizNoOf(message) {
   const m = `${message.title || ''} ${message.content || ''}`.match(/\b(?:INQ|ORD|CTC)[A-Za-z0-9-]+\b/)
   return m ? m[0] : ''
 }
-async function jumpTrade(message) {
+async function markReadQuiet(message) {
+  try { await api.value.readMessage(message.messageId); message.isRead = true; await refreshUnread() } catch { /* 标记失败不打断跳转 */ }
+}
+async function jumpAction(message) {
+  const rights = rightsJumpOf(message)
+  if (rights) {
+    await markReadQuiet(message)
+    visible.value = false
+    if (typeof openRightsLanding === 'function') await openRightsLanding(rights.kind, message.businessId)
+    else if (rights.kind === 'seal') openPanel('seal')
+    else openPanel('rights', rights.kind === 'cert' ? 'certs' : 'apply')
+    return
+  }
   const jump = tradeJumpOf(message)
   if (!jump) return
-  try { await api.value.readMessage(message.messageId); message.isRead = true; await refreshUnread() } catch { /* 标记失败不打断跳转 */ }
+  await markReadQuiet(message)
   visible.value = false
   if (jump.demand) {
     return router.push(`/demand/${encodeURIComponent(message.businessId)}`)

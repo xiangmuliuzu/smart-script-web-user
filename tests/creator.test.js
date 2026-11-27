@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import { safeRedirect, request, getToken } from '../src/auth.js'
 import { portal } from '../src/portal.js'
 import * as api from '../src/api/creator.js'
-import { canEdit, validateWork, validateChapter, validateFile, wordCount, dateText, quotaTip, outlineToText, outlineChapters, matchOutlineChapter, planOutlineChapters } from '../src/utils/creator.js'
+import { chapterReviewState, canSetChapterTrial } from '../src/utils/chapterReview.js'
+import { canEdit, validateWork, validateChapter, validateFile, wordCount, dateText, quotaTip, sortWorksDesc, outlineToText, outlineChapters, matchOutlineChapter, planOutlineChapters } from '../src/utils/creator.js'
 import { stripRepeatedTail, stripRepeatedHead, clampEpisodeText, castFromCharacters, chapterTail, splitOutlineSections, rosterFromCharacters, unknownNames, stateGuardBlock, auditEpisodeState } from '../src/utils/creatorAi.js'
 const storage = new Map([[portal.tokenKey, 'test-user-token']])
 test('chapter outlines are split by explicit episode headings without inventing chapters', () => {
@@ -26,7 +27,10 @@ test('outlines recognize common chapter numbers and matching avoids ambiguity', 
   assert.deepEqual(outlineChapters('第1集：相遇\n剧情\n第一章：告别\n剧情'), [])
   assert.equal(outlineChapters('一、相遇\n剧情\n二、告别\n剧情').length, 2)
   assert.equal(matchOutlineChapter('第两百零一集：相遇', [{ chapterTitle: '第２０１章相遇' }]).chapter.chapterTitle, '第２０１章相遇')
-  assert.deepEqual(outlineChapters('第一集：相遇\n剧情\n2. 主角到站\n相遇'), [])
+  // 已存在显式「第N集」标题时，设定段里的「2. 主角到站」是被吞进上一集的正文，不是分集标题。
+  const mixedList = outlineChapters('第一集：相遇\n剧情\n2. 主角到站\n相遇')
+  assert.deepEqual(mixedList.map(x => x.title), ['第一集：相遇'])
+  assert.match(mixedList[0].summary, /2\. 主角到站/)
 })
 test('outline plan checks actual sequence, names, and safe append order', () => {
   const entries = outlineChapters('第一集：相遇\n剧情\n第二集：告别\n剧情\n第三集：重逢\n剧情\n第四集：终章\n剧情')
@@ -45,7 +49,9 @@ test('repeated episode names still parse, duplicate numbers and mixed formats ar
   const repeated = outlineChapters('第2集：记者进寨\n她进寨采访。\n第11集：记者进寨\n她再次追问。')
   assert.deepEqual(repeated.map(x => x.title), ['第2集：记者进寨', '第11集：记者进寨'])
   assert.deepEqual(outlineChapters('第2集：记者进寨\n甲\n第2集：记者进寨\n乙'), [])
-  assert.deepEqual(outlineChapters('第2集：记者进寨\n甲\n2. 主角到站\n乙'), [])
+  const listRow = outlineChapters('第2集：记者进寨\n甲\n2. 主角到站\n乙')
+  assert.deepEqual(listRow.map(x => x.title), ['第2集：记者进寨'])
+  assert.match(listRow[0].summary, /2\. 主角到站/)
 })
 test('episode headings glued to the end of a paragraph are split out', () => {
   assert.deepEqual(outlineChapters('第1集：相遇\n剧情一。第2集：告别\n剧情二'), [
@@ -82,7 +88,7 @@ test('creator capability and review lock apply independently of user type', () =
   assert.equal(canEdit({ authorCapability: true }, { status: 'unknown' }), false)
 })
 
-test('chapter trial flags round-trip through authenticated saves without changing chapter status', async t => {
+test('chapter trial changes send only isFree; saving text cannot enable trial', async t => {
   const calls = []
   t.mock.method(globalThis, 'fetch', async (url, options) => {
     calls.push({ url, options })
@@ -93,10 +99,22 @@ test('chapter trial flags round-trip through authenticated saves without changin
   assert.equal(detail.chapters[1].isFree, '0')
   await api.saveChapter(17, { chapterTitle: ' 新试读章 ', content: '正文', isFree: '1' })
   await api.saveChapter(17, { chapterId: 8, chapterTitle: '取消试读', content: '原文', isFree: '0', summary: '第8集摘要' })
-  assert.deepEqual(JSON.parse(calls[1].options.body), { chapterTitle: '新试读章', content: '正文', isFree: '1' })
-  assert.deepEqual(JSON.parse(calls[2].options.body), { chapterTitle: '取消试读', content: '原文', isFree: '0', summary: '第8集摘要' })
-  assert.equal(calls[2].options.method, 'PUT')
-  assert.equal(calls[2].options.headers.Authorization, 'Bearer test-user-token')
+  assert.deepEqual(JSON.parse(calls[1].options.body), { chapterTitle: '新试读章', content: '正文' })
+  assert.deepEqual(JSON.parse(calls[2].options.body), { chapterTitle: '取消试读', content: '原文', summary: '第8集摘要' })
+  await api.setChapterTrial(17, 8, false)
+  await api.setChapterTrial(17, 8, true)
+  assert.equal(calls[3].options.method, 'PUT')
+  assert.equal(calls[3].options.headers.Authorization, 'Bearer test-user-token')
+  assert.ok(calls[3].url.endsWith('/works/17/chapters/8'))
+  assert.deepEqual(calls.slice(3).map(call => JSON.parse(call.options.body)), [{ isFree: '0' }, { isFree: '1' }])
+})
+test('chapter status and trial availability distinguish approval, rejection and drafts', () => {
+  assert.equal(chapterReviewState({ chapterId: 1, status: '0' }, 'published').label, '审核通过')
+  assert.equal(chapterReviewState({ chapterId: 2, status: '2' }, 'revision').label, '未通过审核')
+  assert.equal(chapterReviewState({ chapterId: 3, status: '1' }, 'revision').label, '草稿')
+  assert.equal(canSetChapterTrial({ chapterId: 1, status: '0' }, 'published'), true)
+  assert.equal(canSetChapterTrial({ chapterId: 1, status: '1' }, 'published'), false)
+  assert.equal(canSetChapterTrial({ chapterId: 1, status: '0' }, 'reviewing'), false)
 })
 test('work ledger reads and writes the shared content ledger endpoint', async t => {
   const calls = []
@@ -111,18 +129,6 @@ test('work ledger reads and writes the shared content ledger endpoint', async t 
   assert.equal(calls[1].options.method, 'PUT')
   assert.ok(calls[1].url.endsWith('/api/v1/content/works/17/ledger'))
   assert.deepEqual(JSON.parse(calls[1].options.body), { storySummary: '简介', characters: '顾守山', relations: '父子', foreshadow: '铜铃', timeline: '雨夜', items: '房梁', threads: '照片' })
-})
-test('publishing a chapter updates only its visibility status', async t => {
-  let call
-  t.mock.method(globalThis, 'fetch', async (url, options) => {
-    call = { url, options }
-    return { ok: true, json: async () => ({ code: 200, data: {} }) }
-  })
-  await api.publishChapter(8)
-  assert.ok(call.url.endsWith('/api/v1/content/chapters/8'))
-  assert.equal(call.options.method, 'PUT')
-  assert.deepEqual(JSON.parse(call.options.body), { status: '0' })
-  assert.equal(call.options.headers.Authorization, 'Bearer test-user-token')
 })
 test('redirect permits implemented work routes and rejects path tricks', () => {
   for (const path of ['/works', '/works/create', '/works/12?tab=chapter#review']) assert.equal(safeRedirect(path), path)
@@ -466,7 +472,7 @@ test('the state guard block keeps people, props and writing style continuous', (
   assert.ok(block.includes('十二面｜顾守山'), '道具档案要整段注入，件数不能被截掉')
   assert.ok(block.includes('不得改数'))
   // 正面要求：开场要接着上一集最后一个动作写，并给出三种允许换场的例外
-  assert.ok(block.includes('本集开场必须接着上一集结尾最后一个动作或悬念往下写'))
+  assert.ok(block.includes('本集开场必须回应上一集结尾最后一个动作或悬念'))
   assert.ok(block.includes('上一集事件已经收束'))
   assert.ok(block.includes('本集切到另一视角继续同一事件'))
   // 已交付的道具不得再演一次交付
@@ -502,4 +508,19 @@ test('episode state audit catches missing cast, and flags strangers only when re
   assert.ok(issues[1].includes('顾长庚'))
   assert.equal(usage.get('顾长庚'), 3)
   assert.deepEqual(auditEpisodeState({ text: '顾守山对雷老幺说完，林小禾点头。', cast: ['顾守山', '雷老幺'], roster }), [])
+})
+
+test('work list falls back to create time and workId when update time is missing or tied', () => {
+  // 新建作品的 update_time 可能为 NULL：不能因此掉到列表最后。
+  const sorted = sortWorksDesc([
+    { workId: 4, title: '旧作品', updateTime: '2026-10-01 09:00:00', createTime: '2026-09-01 09:00:00' },
+    { workId: 9, title: '刚创建', updateTime: null, createTime: '2026-11-27 10:00:00' },
+    { workId: 7, title: '没有时间', updateTime: null, createTime: null },
+    { workId: 3, title: '同时间', updateTime: '2026-11-27 10:00:00', createTime: '2026-11-27 10:00:00' }
+  ])
+  assert.deepEqual(sorted.map(work => work.workId), [9, 3, 4, 7])
+  assert.deepEqual(sortWorksDesc([]), [])
+  const input = [{ workId: 1 }, { workId: 2 }]
+  sortWorksDesc(input)
+  assert.deepEqual(input.map(work => work.workId), [1, 2])
 })

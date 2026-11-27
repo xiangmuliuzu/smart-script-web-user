@@ -5,13 +5,24 @@ export const workStates = {
   reviewing: { label: '审核中', tone: 'wait', stamp: 'review', action: '查看进度' },
   revision: { label: '待修改', tone: 'bad', stamp: 'revise', action: '修改并重新提交' },
   rejected: { label: '待修改', tone: 'bad', stamp: 'revise', action: '修改并重新提交' },
-  published: { label: '已发布', tone: 'ok', stamp: 'passed', action: '审核记录' }
+  // 后端 published 表示最新审核已通过；是否已进入书城由 shelfStatus 单独决定。
+  published: { label: '审核通过', tone: 'ok', stamp: 'passed', action: '上架到书城' }
 }
 export const stateOf = status => workStates[status] || { label: '状态待确认', tone: 'off', stamp: 'draft', action: '查看详情' }
 export const canEdit = (user, work) => user?.authorCapability === true && Object.hasOwn(workStates, work?.status) && work.status !== 'reviewing'
 // 积分不足时面向 PC 用户的提示文案（AI 创作按实际 token 消耗直接扣积分）。
 export const quotaTip = available => available > 0 ? '' : '积分不足，无法使用 AI 创作。可点击右上角「充值」按钮充值积分，或在手机 App 的「福利中心」完成任务、观看广告获取积分后，再回来继续创作。'
 export const asList = data => Array.isArray(data) ? data : data?.list || data?.rows || []
+
+/**
+ * 「我的作品」排序兜底：更新时间（缺失回退创建时间）倒序，时间相同或都缺失时按 workId 倒序。
+ * 后端 selectWorkListByAuthor 已按同样口径排序；前端再兜一层，保证新建作品紧跟「创作与上传」。
+ */
+export function sortWorksDesc(works) {
+  const time = work => String(work?.updateTime || work?.createTime || '')
+  const id = work => Number(work?.workId) || 0
+  return [...(Array.isArray(works) ? works : [])].sort((a, b) => time(b).localeCompare(time(a)) || id(b) - id(a))
+}
 const OUTLINE_LABELS = { title: '书名', logline: '一句话简介', summary: '简介', characters: '角色', roles: '角色', acts: '剧情', plot: '剧情', chapters: '章节', setting: '背景设定', worldview: '世界观', ending: '结局', theme: '主题', role: '身份', beats: '关键情节', intro: '简介', content: '内容', genre: '题材', style: '风格' }
 const STORY_SEQUENCES = new Set(['acts', 'plot', 'chapters', 'scenes', 'steps', 'outline', 'development'])
 function outlineLabel(key, parentKey) {
@@ -67,10 +78,15 @@ export function outlineChapters(text) {
   const kinds = new Set()
   // 长文生成常把「第N集：」粘在上一段句末，先按句末标点切开，避免整集被吞进上一集。
   const normalized = String(text || '').replace(new RegExp(`([。！？…”』」）])\\s*(第\\s*[${NUMBER}]+\\s*[章节節集回]\\s*[:：])`, 'g'), '$1\n$2')
-  for (const line of normalized.split(/\r?\n/)) {
-    const heading = line.trim().replace(/^#{1,6}\s*/, '').replace(/^\*\*(.*?)\*\*$/, '$1')
-    if (chapterIdentity(heading).numbered) {
-      kinds.add(chapterIdentity(heading).explicit ? 'explicit' : 'list')
+  const lines = normalized.split(/\r?\n/)
+  const headingOf = line => line.trim().replace(/^#{1,6}\s*/, '').replace(/^\*\*(.*?)\*\*$/, '$1')
+  // 设定段里的「12. 对白节奏…」这类编号细则不是分集标题：只要存在显式的「第N集/章」标题，就不按列表式章节处理。
+  const hasExplicit = lines.some(line => chapterIdentity(headingOf(line)).explicit)
+  for (const line of lines) {
+    const heading = headingOf(line)
+    const identity = chapterIdentity(heading)
+    if (identity.numbered && (identity.explicit || !hasExplicit)) {
+      kinds.add(identity.explicit ? 'explicit' : 'list')
       chapters.push({ title: heading, summary: '' })
     } else if (chapters.length) {
       chapters[chapters.length - 1].summary += line + '\n'

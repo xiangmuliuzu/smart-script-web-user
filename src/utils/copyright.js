@@ -1,5 +1,8 @@
 /** 版权申请 / 电子证书文案与材料辅助（对齐 App copyright_models）。 */
 
+import { mediaUrl } from './avatarUrl.js'
+import { networkErrorMessage } from './friendly-error.js'
+
 export const APPLY_STATUS = {
   unpaid: '待付款',
   pending: '审核中',
@@ -341,6 +344,34 @@ function escapePdfText(value) {
     .replace(/\)/g, '\\)')
     // Helvetica 无法可靠渲染中文，非 ASCII 用 ? 占位，避免破坏 PDF 语法
     .replace(/[^\x20-\x7E]/g, '?')
+}
+
+/**
+ * 合同材料（签署 PDF 等）走鉴权下载：先 fetch 成 Blob 再交给浏览器保存。
+ *
+ * 不能把带签名地址直接挂在 <a href> 上当新页面打开：SPA 的 history 路由会把
+ * `/profile/...` 这类多段路径吃成前端路由，页面渲染出 404；而且标签页/历史记录
+ * 会留下一个带签名、有效期内可读的私有合同地址。下载只取字节流，地址不出现在界面上。
+ */
+export async function downloadProfileFile(rawUrl, fileName, apiBase) {
+  const url = mediaUrl(rawUrl, apiBase)
+  if (!url) throw new Error('文件地址无效')
+  let response
+  try {
+    response = await fetch(url)
+  } catch (failure) {
+    throw new Error(networkErrorMessage(failure))
+  }
+  if (!response.ok) {
+    throw new Error(response.status === 403 ? '文件链接已过期，请刷新页面后重试' : `文件下载失败（HTTP ${response.status}）`)
+  }
+  const blob = await response.blob()
+  const contentType = (response.headers.get('content-type') || blob.type || '').toLowerCase()
+  // 前端路由兜底页会以 200 + text/html 返回，不能当成文件存下去
+  if (contentType.includes('text/html') || contentType.includes('application/json')) {
+    throw new Error('文件不可用，请刷新页面后重试')
+  }
+  saveBlobFile(blob, fileName)
 }
 
 /** 触发浏览器下载 Blob（对齐 Admin CopyrightCertManage.downloadCert）。 */

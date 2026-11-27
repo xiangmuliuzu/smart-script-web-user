@@ -5,7 +5,7 @@
     <template v-else>
       <p v-if="activeRound" class="round-banner" :data-urgent="countdown(activeRound.dueAt).urgent">第 {{ activeRound.stageOrder }} 轮 · {{ countdown(activeRound.dueAt).text }}</p>
       <p v-else-if="reviewable" class="round-banner wait">第 {{ reviewable.stageOrder }} 轮交付已提交，等待平台验收</p>
-      <p v-else-if="stages.length && stages.every(s => s.status === 'approved')" class="round-banner done">全部 {{ stages.length }} 轮已验收通过，款项已逐轮放出</p>
+      <p v-else-if="stages.length && stages.every(s => s.status === 'approved')" class="round-banner done">全部 {{ stages.length }} 轮任务交付已验收通过，款项已逐轮放出；关联作品仍保持原上架状态</p>
 
       <article v-for="stage in stages" :key="stage.stageId" class="stage-card" :data-tone="stageTone(stage)">
         <div class="sc-head">
@@ -29,6 +29,7 @@
         <p v-if="stage.status === 'rejected' && stage.rejectReason" class="cost sc-danger">驳回原因：{{ stage.rejectReason }}</p>
         <p v-if="Number(stage.releaseFlag) === 1" class="cost sc-ok">已放款 {{ money(stage.amount) }}（已入创作者待结算）</p>
         <p v-if="stage.reviewedAt" class="cost">验收时间：{{ timeText(stage.reviewedAt) }}</p>
+        <p v-if="stage.status === 'approved' && stage.workId" class="cost sc-ok">本轮任务交付已验收通过；作品不会因此自动上架，如需进入书城请到作品详情手动操作</p>
 
         <div v-if="isOwner && isActive(stage)" class="sc-actions">
           <button class="btn sm" :disabled="busy" @click="openDeliver(stage)">提交交付物</button>
@@ -70,7 +71,7 @@
         </label>
         <label class="field">交付说明<textarea v-model="deliverForm.deliverableDesc" rows="4" :placeholder="isStoryboard ? '本轮分镜覆盖的集数、场次拆分口径与待确认事项…' : '本轮完成的集数、主要内容与待确认事项…'"></textarea></label>
         <label class="field">交付物链接（{{ isStoryboard ? '与说明至少填一项' : '可选' }}）<input v-model="deliverForm.deliverableUrl" placeholder="网盘/文档链接"></label>
-        <p class="cost">{{ isStoryboard ? '分镜类任务不做 AI 剧本审核，提交后直接进入平台人工验收，本轮计时暂停至验收出结果。' : '提交后本轮计时暂停，先走 AI 审核再进入平台验收。' }}</p>
+        <p class="cost">{{ isStoryboard ? '分镜类任务不做 AI 剧本审核，提交后直接进入平台人工验收，本轮计时暂停至验收出结果。' : '提交后本轮计时暂停，先走 AI 审核再进入平台验收。任务验收通过只代表本轮交付完成，不会自动上架关联作品。' }}</p>
         <div class="dialog-foot"><button class="btn" :disabled="busy" @click="doDeliver">{{ busy ? '提交中…' : '确认提交' }}</button></div>
       </div>
     </PortalLayer>

@@ -2,10 +2,34 @@
 import { documentText, isFormattedDocument } from '../../src/utils/document.js'
 import { wordCount } from '../../src/utils/creator.js'
 
-// AI 剧本流返回可解析的分集大纲（PC 端「按大纲生成各章」和 AI 创作页都据此拆章）。
-// 与 AiCreate.vue 的 AI_CREATE_MARK 一致：章节正文记录前缀，删除大纲时级联删除。
+// 旧版生成记录用此标记关联章节正文与分集大纲。
 const AI_CREATE_MARK = '[AI创作]'
 const OUTLINE_STREAM = '书名：深夜频率\n一句话简介：一位深夜电台主播在听众留言里听到了十年前的自己。\n第一集 · 深夜频率\n雨夜的咖啡馆，一次迟来的重逢。\n第二集 · 迟到的信\n一封没有寄出的信揭开旧事。'
+const BLUEPRINT_STREAM = [
+  '『故事简介』',
+  '深夜电台主播沈岚收到来自未来的留言，留言准确描述第二天即将发生的事故。她试图改变结果，却发现留言越来越接近自己的过去。',
+  '『主要人物』',
+  '沈岚（32/女）：深夜电台主播｜克制敏锐｜习惯用专业判断掩饰恐惧｜阻止未来留言中的事故｜十年前旧电台事故与她父亲有关｜从试图控制每一个结果到接受承担选择',
+  '周启（38/男）：录音设备维修师｜沉默细致｜对旧设备有执念｜修复旧收音机并弄清信号来源｜隐瞒了关键录音｜从旁观者到主动承担',
+  '小满（22/女）：深夜听众｜直率执着｜相信声音能带路｜寻找失踪的哥哥｜第一条留言的接收者却假装不知情｜从盲目相信到学会质疑',
+  '『人物关系』',
+  '沈岚 ↔ 周启：旧识 · 互相隐瞒',
+  '沈岚 ↔ 小满：主播与听众 · 信任',
+  '周启 ↔ 小满：修理旧收音机结识',
+  '『重要道具档案』',
+  '旧磁带｜1盒｜沈岚｜在手｜沈岚父亲留下的录音带，里面有一段与未来留言相同的声音',
+  '红色收音机｜1台｜周启｜修复中｜只有在凌晨 00:13 才能接收到特定频段',
+  '留言纸｜1叠｜沈岚｜空白｜每次留言出现后都会留在录音室，背面逐渐出现新的时间线记录',
+  '『写法基线』',
+  '都市悬疑，现实质感，少旁白，多对白与声音线索',
+  '保留悬疑感，弱化直接血腥描述，结尾保留可继续推进的悬念',
+  '世界观：旧电台信号只在凌晨 00:13 出现，持续 13 秒，每条留言都会带来新的时间线分支。',
+  '故事主线：12 集围绕未来留言、旧电台事故与时间线分支推进。',
+  '第一幕（1–4 集）：发现留言与异常信号，建立规则。',
+  '第二幕（5–8 集）：调查十年前的旧电台事故，人物关系反转。',
+  '第三幕（9–12 集）：面对由自己造成的未来，做出取舍。',
+  '结尾悬念：最后一条留言来自未来的沈岚自己，并预告了下一次事故。'
+].join('\n')
 
 export async function mockCreatorApi(context, apiPrefix = '/dev-api') {
   const user = { userId: 7, userType: '01', nickname: '接口测试用户', authorCapability: true }
@@ -18,6 +42,9 @@ export async function mockCreatorApi(context, apiPrefix = '/dev-api') {
   ]
   works.forEach(work => { work.price = 0 })
   const chapters = Object.fromEntries(works.map(work => [work.workId, ['雨夜的乘客', '无人认领的行李', '十二号车厢'].map((chapterTitle, index) => ({ chapterId: work.workId * 10 + index, chapterNo: index + 1, chapterTitle, content: '雨夜，列车驶入站台。', status: index === 2 ? 'revision' : '0', wordCount: 10 }))]))
+  // v3 工作台读台账与分镜目录：按作品存真实形状，PUT/POST 可回写，便于浏览器验证。
+  const ledger = {}
+  const storyboards = Object.fromEntries(works.map(work => [work.workId, []]))
   const messages = [{ messageId: 1, title: '审核通知', read: false, summary: '请查看作品审核结果', createdAt: '2026-10-14 09:00' }]
   const profile = { nickname: user.nickname, avatar: '', bio: '', phoneMasked: '152****5578' }
   const feedback = [], records = [], chat = []
@@ -49,19 +76,36 @@ export async function mockCreatorApi(context, apiPrefix = '/dev-api') {
       else if (action === '/review-records') result.data = []
       else if (action === '/submit') work.status = 'reviewing'
       else if (action === '/chapters' && method === 'POST') {
-        const chapter = { ...body, chapterId: Math.max(...list.map(item => item.chapterId), workId * 100) + 1, chapterNo: list.length + 1, wordCount: wordCount(body.content), status: '0' }
-        list.push(chapter); result.data = chapterResponse(chapter)
+        const chapterNo = Number(body.chapterNo) || list.length + 1
+        const chapter = { ...body, chapterId: Math.max(...list.map(item => item.chapterId), workId * 100) + 1, chapterNo, wordCount: wordCount(body.content), status: '0' }
+        list.push(chapter); list.sort((a, b) => a.chapterNo - b.chapterNo); result.data = chapterResponse(chapter)
       } else if (action.startsWith('/chapters/')) {
         const index = list.findIndex(item => item.chapterId === Number(action.split('/').at(-1)))
         if (method === 'DELETE') list.splice(index, 1)
-        else Object.assign(list[index], body, { wordCount: wordCount(body.content) })
+        else Object.assign(list[index], body, typeof body.content === 'string' ? { wordCount: wordCount(body.content) } : {})
       } else result = { code: 404, message: '未配置测试接口：' + path }
       if (work) { work.episodeCount = list.length; work.wordCount = list.reduce((sum, chapter) => sum + chapter.wordCount, 0) }
-    } else if (path.endsWith('/versions')) result.data = []
+    } else if (/\/content\/works\/\d+\/storyboards$/.test(path)) {
+      const workId = Number(path.match(/works\/(\d+)/)[1])
+      if (method === 'POST') {
+        const board = { storyboardId: (storyboards[workId].length + 1) + workId * 100, workId, chapterId: 0, chapterNo: 0, chapterTitle: body.title, title: body.title, content: body.content, source: body.source, status: 'ai_reviewing', readable: true, updateTime: '2026-10-14 09:00' }
+        const index = storyboards[workId].findIndex(item => item.chapterTitle === body.title)
+        if (index >= 0) storyboards[workId].splice(index, 1, { ...storyboards[workId][index], content: body.content })
+        else storyboards[workId].push(board)
+        result.data = index >= 0 ? storyboards[workId][index] : board
+      } else result.data = storyboards[workId]
+    } else if (/\/content\/works\/\d+\/(volumes|timeline)$/.test(path)) result.data = []
+    else if (/\/content\/works\/\d+\/ledger$/.test(path)) {
+      const workId = Number(path.match(/works\/(\d+)/)[1])
+      if (method === 'PUT') ledger[workId] = { workId, ...body }
+      result.data = ledger[workId] || null
+    } else if (/\/content\/works\/\d+\/gen-jobs\/latest$/.test(path)) result.data = null
+    else if (path.endsWith('/versions')) result.data = []
     else if (path.endsWith('/ai/skills')) result.data = skills
     else if (path.includes('/content/ai/') && path.endsWith('/stream')) {
       const type = path.split('/').at(-2)
-      const delta = type === 'storyboard' ? '镜1｜景别：特写' : type === 'outline' ? OUTLINE_STREAM : '第一集 · 深夜频率' + String.fromCharCode(10) + '雨夜的咖啡馆，一次迟来的重逢。'
+      const wantsBlueprint = String(body?.style || '').includes('作品资料') || String(body?.prompt || '').includes('作品资料')
+      const delta = type === 'storyboard' ? '镜1｜景别：特写' : type === 'outline' ? (wantsBlueprint ? BLUEPRINT_STREAM : OUTLINE_STREAM) : '第一集 · 深夜频率' + String.fromCharCode(10) + '雨夜的咖啡馆，一次迟来的重逢。'
       // 与后端 sys_ai_write_record 同形：writeType / inputPrompt / outputContent。
       // AI 创作页的章节正文记录打 [AI创作] 标记，删除时会被后端级联清掉。
       records.push(type === 'outline'
@@ -99,5 +143,5 @@ export async function mockCreatorApi(context, apiPrefix = '/dev-api') {
     else result = { code: 404, message: '未配置测试接口：' + path }
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify(result) })
   })
-  return { user, works, chapters, calls, records }
+  return { user, works, chapters, ledger, storyboards, calls, records }
 }

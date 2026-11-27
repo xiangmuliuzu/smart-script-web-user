@@ -6,11 +6,12 @@ import { fenText } from './finance.js'
 // completed 全部轮次验收通过、closed 平台关闭、failed 活动轮超时终止
 const DEMAND_STATUS_LABELS = { open: '征集中', in_progress: '进行中', selected: '已选定', completed: '已完成', closed: '已关闭', failed: '已失败' }
 export const demandStatusLabel = s => DEMAND_STATUS_LABELS[s] || s || '-'
-export const demandStatusOptions = Object.entries(DEMAND_STATUS_LABELS).map(([value, label]) => ({ value, label }))
+// 我的任务筛选不含 open：征集中的单在任务大厅看，接了单才会进入「我的任务」
+export const demandStatusOptions = Object.entries(DEMAND_STATUS_LABELS).filter(([value]) => value !== 'open').map(([value, label]) => ({ value, label }))
 
 /* 验收轮次：后端激活某轮只写 started_at/due_at，status 仍是 pending，
    所以「进行中」必须由 startedAt 判定，不能只看 status。 */
-const STAGE_STATUS_LABELS = { ai_reviewing: 'AI 审核中', submitted: '待验收', approved: '已通过', rejected: '已驳回' }
+const STAGE_STATUS_LABELS = { ai_reviewing: 'AI 审核中', submitted: '待验收', approved: '任务验收通过', rejected: '已驳回' }
 export function stageStatusLabel(stage) {
   if (!stage) return '-'
   if (STAGE_STATUS_LABELS[stage.status]) return STAGE_STATUS_LABELS[stage.status]
@@ -19,7 +20,7 @@ export function stageStatusLabel(stage) {
 }
 export const stageTone = stage => {
   const label = stageStatusLabel(stage)
-  if (label === '已通过') return 'ok'
+  if (label === '任务验收通过') return 'ok'
   if (label === '已驳回' || label === '已逾期') return 'danger'
   if (label === '待验收' || label === 'AI 审核中') return 'warn'
   if (label === '进行中') return 'info'
@@ -62,7 +63,7 @@ export const extendTone = (status, applyType) => {
   return 'off'
 }
 
-/* 金额：后端出参一律为分（/list、/{id}、/stages、/stats 的 prizePoolFen），展示时除以 100。
+/* 金额：后端出参一律为分（/list、/{id}、/stages），展示时除以 100。
    格式化复用收益域同一个 fenText（tests/finance.test.js 已锁定 ¥64,000.00 这种两位小数），
    本文件不再自行决定补不补零，避免同一页面出现 ¥600 与 ¥600.00 两种位数。 */
 export const fenToYuan = fen => (Number(fen) || 0) / 100

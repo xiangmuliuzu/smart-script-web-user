@@ -7,6 +7,7 @@ test('known code and status use Chinese copy', () => {
   assert.equal(friendlyErrorMessage({ code: 40301, message: 'account disabled' }), '账号暂时无法使用，请联系客服或管理员')
   assert.equal(friendlyErrorMessage({ status: 404 }), '内容不存在或暂时不可用')
   assert.equal(friendlyErrorMessage({ status: 503 }), '服务暂时不可用，请稍后再试')
+  assert.equal(friendlyErrorMessage({ status: 200, code: 500, message: 'java.sql.SQLException' }), '服务暂时不可用，请稍后再试')
 })
 
 test('safe backend Chinese is preserved', () => {
