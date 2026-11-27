@@ -20,12 +20,12 @@
           <button class="btn" type="button" :disabled="busy || regenerating || !hasDraft" @click="confirm(true)">{{ busy ? '正在创建作品…' : '确认资料，进入工作台 →' }}</button>
         </div>
 
-        <p v-if="offlineReason" class="note warn" role="status">AI 服务本次未返回完整资料（{{ offlineReason }}），已按你的设定生成可编辑底。可逐项让 AI 重新整理，或直接进入工作台。</p>
         <p v-if="error" class="note bad" role="alert">{{ error }}</p>
 
-        <section v-if="!hasDraft" class="blue-empty-block">
+        <section v-if="loading" class="blue-empty-block" role="status">正在读取作品资料…</section>
+        <section v-else-if="!hasDraft" class="blue-empty-block">
           <h2>没有可确认的作品资料</h2>
-          <p>起稿资料已失效（可能是刷新后会话被清理）。请回到设定页重新生成。</p>
+          <button v-if="sessionId" class="btn quiet" type="button" @click="load">重新读取</button>
           <button class="btn" type="button" @click="backToSetup">返回作品设定</button>
         </section>
 
@@ -113,47 +113,46 @@
     </div>
 
     <BlueprintDetailModal
+      v-if="hasDraft"
       v-model="modalOpen"
       :kind="modalKind"
       :blueprint="blueprint"
+      :focus-key="modalKey"
+      :show-regen="blueprint.status === 'draft'"
       :busy="busySection !== ''"
+      @focus="({ kind, key }) => openModal(kind, key)"
       @regenerate="instruction => regenerateModal(instruction)"
     />
   </section>
 </template>
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { usePortal } from '../../../utils/portal.js'
 import { quotaTip } from '../../../utils/creator.js'
-import {
-  blueprintToLedger,
-  localReorganize,
-  mergeBlueprintSection,
-  regeneratePrompt,
-  minutesText
-} from '../../../utils/blueprint.js'
-import { stashDraft, takeDraft, writeBlueprint, writeChapterMeta } from '../../../composables/useBlueprint.js'
+import { normalizeBlueprint } from '../../../utils/blueprint.js'
+import { clearDraft } from '../../../composables/useBlueprint.js'
 import BlueprintDetailModal from '../../../components/blueprint/BlueprintDetailModal.vue'
 import CharacterAvatar from '../../../components/blueprint/CharacterAvatar.vue'
 import '../../../assets/styles/studio.css'
 
 const { api, user, openPanel, handleError } = usePortal()
 const router = useRouter()
+const route = useRoute()
 
-const draft = ref(null)
+const sessionId = computed(() => /^\d+$/.test(route.query.sessionId ?? '') ? String(route.query.sessionId) : '')
+const loading = ref(false)
 const blueprint = ref(null)
 const hasDraft = computed(() => Boolean(blueprint.value))
-const setup = computed(() => draft.value?.setup || {})
-const title = computed(() => setup.value.title?.trim() || '未命名作品')
-const offlineReason = computed(() => draft.value?.offline ? (draft.value.reason || '暂不可用') : '')
+const title = ref('未命名作品')
 const error = ref('')
 const busy = ref(false)
 const regenerating = ref('')
 const busySection = ref('')
 const modalOpen = ref(false)
 const modalKind = ref('story')
+const modalKey = ref('')
 const createdWorkId = ref(null)
 const quota = ref(null)
 
@@ -176,28 +175,19 @@ const itemSummary = computed(() => {
   return `${list.map(item => item.name).slice(0, 3).join('、')} 已进入创作台账${tracks ? `，共记录 ${tracks} 条追踪轨迹` : ''}，后续章节会持续维护它们的状态。`
 })
 
-function persistDraft(next) {
-  blueprint.value = next
-  draft.value = { ...draft.value, blueprint: next }
-  stashDraft(draft.value)
-}
-
 function backToSetup() {
-  // 返回设定时保留已填写内容，避免重新输入。
-  if (draft.value) stashDraft(draft.value)
-  router.replace('/works/create/ai')
+  router.replace({ path: '/works/create/ai', query: sessionId.value ? { sessionId: sessionId.value } : {} })
 }
 
-function openModal(kind) {
+function openModal(kind, key = '') {
   modalKind.value = kind
+  modalKey.value = key
   modalOpen.value = true
 }
 
-/** 重新整理：优先真实 AI；失败或无内容时用确定性本地整理兜底，按钮一定给结果。 */
-async function regenerate(section, instruction = '') {
+async function regenerate(section, instruction = '', key = '') {
   if (!hasDraft.value || regenerating.value || busySection.value) return
   if (blueprint.value.status === 'confirmed') { ElMessage.info('资料已确认，请到工作台修改'); return }
-  if (!api.value?.generateStream) { localFallback(section); return }
   if (quota.value === 0) {
     ElMessage.warning(quotaTip(0))
     openPanel?.('recharge')
@@ -207,31 +197,19 @@ async function regenerate(section, instruction = '') {
   regenerating.value = section === 'all' ? 'all' : 'section'
   error.value = ''
   try {
-    const prompt = regeneratePrompt(blueprint.value, section, instruction)
-    const result = await api.value.generateStream('write', {
-      prompt,
-      type: 'blueprint',
-      skillId: setup.value.skillId || undefined,
-      model: setup.value.model || undefined
-    }, () => {})
-    const content = result?.content || ''
-    const next = mergeBlueprintSection(blueprint.value, section, content)
-    persistDraft(next)
+    const result = await api.value.generateStream('blueprint/regenerate', {
+      sessionId: sessionId.value, section, key: key || undefined, instruction: instruction || undefined
+    })
+    if (!result?.blueprint) throw new Error('整理响应缺少作品资料')
+    blueprint.value = normalizeBlueprint(result.blueprint)
     ElMessage.success(instruction ? `AI 已按「${instruction}」重新整理${sectionLabel(section)}` : `AI 已重新整理${sectionLabel(section)}`)
   } catch (failure) {
-    // 网络/模型不可用：不清空原资料，改用本地确定性整理并说明原因。
-    localFallback(section, failure?.message)
+    ElMessage.warning(failure?.message || '整理失败，请稍后重试')
+    if (failure?.status || failure?.code) await handleError(failure)
   } finally {
     busySection.value = ''
     regenerating.value = ''
   }
-}
-
-function localFallback(section, reason = '') {
-  const { blueprint: next, changed } = localReorganize(blueprint.value, section)
-  persistDraft(next)
-  if (changed) ElMessage.success(`AI 暂不可用，已按现有资料重新整理${sectionLabel(section)}${reason ? '（' + reason + '）' : ''}`)
-  else ElMessage.info(`资料已经是整理状态${reason ? '（AI 暂不可用：' + reason + '）' : ''}`)
 }
 
 async function regenerateAll() {
@@ -243,44 +221,28 @@ async function regenerateAll() {
 }
 
 function regenerateModal(instruction) {
-  const section = modalSection.value
-  return regenerate(section, instruction)
+  return regenerate(modalSection.value, instruction, modalKey.value)
 }
-const modalSection = computed(() => ({ story: 'storyCore', world: 'world', characters: 'characters', items: 'items' })[modalKind.value] || 'storyCore')
+const modalSection = computed(() => ({ story: 'storyCore', world: 'world', character: 'characters', characters: 'characters', item: 'items', items: 'items' })[modalKind.value] || 'storyCore')
 const sectionLabel = section => ({ storyCore: '故事核心', world: '世界与规则', characters: '主要人物', items: '关键物品', outline: '作品大纲', all: '全部资料', relations: '人物关系' })[section] || '资料'
 
-/**
- * 落库动作：
- * - 确认：createWork → PUT ledger → 持久化 Blueprint → 建第 1 章空壳 → 工作台章节视图；
- * - 跳过：同上但不建空壳章 → 工作台大纲视图。
- * createWork 成功而后续失败时保留 workId，重试不会重复建作品。
- */
 async function confirm(withShell) {
   if (!hasDraft.value || busy.value) return
   busy.value = true
   error.value = ''
-  const next = { ...blueprint.value, status: 'confirmed' }
   try {
-    let workId = createdWorkId.value
-    if (!workId) {
-      const meta = setup.value
-      const summary = next.storyCore.logline || next.storyCore.summary || meta.idea || title.value
-      const created = await api.value.createWork({
-        title: title.value,
-        summary: String(summary || '').slice(0, 500)
-      })
-      workId = created?.workId
-      if (!workId) throw new Error('作品创建失败：响应缺少 workId')
-      createdWorkId.value = workId
+    const workId = createdWorkId.value || (await api.value.confirmBlueprint(sessionId.value))?.workId
+    if (!workId) throw new Error('作品创建失败，响应缺少作品编号')
+    createdWorkId.value = workId
+    blueprint.value = { ...blueprint.value, status: 'confirmed' }
+    if (withShell && !await firstChapterExists(workId)) {
+      try {
+        await api.value.saveChapter(workId, { chapterNo: 1, chapterTitle: '第 1 章', content: '', summary: '' })
+      } catch (failure) {
+        if (!await firstChapterExists(workId)) throw failure
+      }
     }
-    await api.value.saveWorkLedger(workId, blueprintToLedger(next))
-    writeBlueprint(workId, { ...next, status: 'confirmed' })
-    if (withShell) {
-      const firstTitle = `第 1 章`
-      await api.value.saveChapter(workId, { chapterNo: 1, chapterTitle: firstTitle, content: '', summary: '' })
-      writeChapterMeta(workId, 1, { chapterNo: 1, cast: [], items: [], edges: [], source: 'manual' })
-    }
-    blueprint.value = next
+    clearDraft()
     ElMessage.success(withShell ? '作品已创建，进入工作台创作第 1 章' : '作品已创建，可在大纲页新建章节')
     await router.replace({
       path: `/works/${workId}/studio`,
@@ -288,11 +250,39 @@ async function confirm(withShell) {
     })
   } catch (failure) {
     error.value = createdWorkId.value
-      ? `作品已创建（#${createdWorkId.value}），但资料保存失败：${failure.message || '请重试'}`
+      ? `作品已创建，第 1 章创建失败。${failure.message || '请重试'}`
       : (failure.message || '创建作品失败，请稍后重试')
     if (failure?.status) await handleError(failure)
   } finally {
     busy.value = false
+  }
+}
+
+async function firstChapterExists(workId) {
+  const detail = await api.value.getWork(workId)
+  return detail?.chapters?.some(chapter => Number(chapter.chapterNo) === 1) ?? false
+}
+
+async function load() {
+  const id = sessionId.value
+  blueprint.value = null
+  createdWorkId.value = null
+  error.value = ''
+  loading.value = Boolean(id)
+  if (!id) return
+  try {
+    const result = await api.value.getBlueprint(id)
+    if (id !== sessionId.value) return
+    if (!result?.blueprint) throw new Error('该会话没有可确认的作品资料')
+    title.value = result.title || '未命名作品'
+    blueprint.value = normalizeBlueprint({ ...result.blueprint, status: result.status })
+    createdWorkId.value = result.workId || null
+  } catch (failure) {
+    if (id !== sessionId.value) return
+    error.value = failure?.message || '读取作品资料失败'
+    if (failure?.status || failure?.code) await handleError(failure)
+  } finally {
+    if (id === sessionId.value) loading.value = false
   }
 }
 
@@ -303,13 +293,12 @@ async function loadQuota() {
 }
 
 onMounted(() => {
-  const stored = takeDraft()
-  if (!stored?.blueprint) return
-  draft.value = stored
-  blueprint.value = stored.blueprint
+  load()
   loadQuota()
   window.addEventListener('recharge-success', loadQuota)
 })
+watch(sessionId, load)
+onBeforeUnmount(() => window.removeEventListener('recharge-success', loadQuota))
 </script>
 <style scoped>
 .blue-empty-block { padding: 48px 24px; text-align: center; border: 1px dashed var(--rule-2); background: #fcfbf8; }

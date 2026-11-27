@@ -20,7 +20,7 @@ export const listWorkStoryboards = async workId =>
 export const createWorkStoryboard = (workId, form) =>
   data(`/api/v1/content/works/${encodeURIComponent(workId)}/storyboards`, {
     method: 'POST',
-    body: { title: form.title, content: form.content, source: form.source || 'manual' }
+    body: { chapterId: form.chapterId, chapterNo: form.chapterNo, title: form.title, content: form.content, source: form.source || 'manual' }
   })
 export const deleteWorkStoryboard = (workId, storyboardId) =>
   data(`/api/v1/content/works/${encodeURIComponent(workId)}/storyboards/${encodeURIComponent(storyboardId)}`, {
@@ -28,8 +28,8 @@ export const deleteWorkStoryboard = (workId, storyboardId) =>
   })
 export const listReviews = async id => asList(await data(workPath(id) + '/review-records'))
 export const listVersions = async id => asList(await data(`/api/v1/content/works/${encodeURIComponent(id)}/versions`))
-export const createWork = form => data('/api/v1/content/works', { method: 'POST', body: { title: form.title.trim(), description: form.summary, scriptUrl: form.scriptUrl, scriptName: form.scriptName, scriptSize: form.scriptSize } })
-export const updateWork = (id, form) => data(workPath(id), { method: 'PUT', body: { title: form.title.trim(), summary: form.summary, cover: form.cover, price: form.price, tradeType: form.tradeType } })
+export const createWork = form => data('/api/v1/content/works', { method: 'POST', body: { title: form.title.trim(), description: form.summary, scriptUrl: form.scriptUrl, scriptName: form.scriptName, scriptSize: form.scriptSize, duration: form.duration } })
+export const updateWork = (id, form) => data(workPath(id), { method: 'PUT', body: { title: form.title?.trim(), summary: form.summary, cover: form.cover, price: form.price, tradeType: form.tradeType, duration: form.duration } })
 export const sendWorkDeletionCode = id => data(`/api/v1/content/works/${encodeURIComponent(id)}/delete-code`, { method: 'POST' })
 export const deleteWork = (id, code) => data(`/api/v1/content/works/${encodeURIComponent(id)}`, { method: 'DELETE', body: { code } })
 export const submitWork = id => data(workPath(id) + '/submit', { method: 'POST' })
@@ -164,6 +164,16 @@ const ledgerPath = id => '/api/v1/content/works/' + encodeURIComponent(id) + '/l
 export const getWorkLedger = id => data(ledgerPath(id))
 export const saveWorkLedger = (id, ledger) => data(ledgerPath(id), { method: 'PUT', body: ledger })
 
+const contentWorkPath = id => '/api/v1/content/works/' + encodeURIComponent(id)
+const blueprintPath = id => '/api/v1/content/ai/blueprint/' + encodeURIComponent(id)
+export const getBlueprint = id => data(blueprintPath(id))
+export const getWorkBlueprint = id => data(contentWorkPath(id) + '/blueprint')
+export const confirmBlueprint = id => data(blueprintPath(id) + '/confirm', { method: 'POST' })
+const chapterMetaPath = id => contentWorkPath(id) + '/chapter-meta'
+export const getChapterMeta = id => data(chapterMetaPath(id))
+export const saveChapterMeta = (id, no, body) => data(chapterMetaPath(id) + '/' + encodeURIComponent(no), { method: 'PUT', body })
+export const generateChapterMeta = body => data('/api/v1/content/ai/chapter-meta', { method: 'POST', body, timeout: 600000 })
+
 // ──── 时间线（只追加：约定/伏笔/道具转移等事件，按集号检索） ────
 const timelinePath = id => '/api/v1/content/works/' + encodeURIComponent(id) + '/timeline'
 export const listWorkTimeline = (id, params = {}) => {
@@ -185,7 +195,7 @@ export const listAiModels = async () => asList(await data('/api/v1/content/ai/mo
 // data:{"done":true,...} 结束；event:error + data:{"code","message"} 失败。
 // 流成功结束才由服务端落记录、按实际 token 扣积分；失败不落库不扣积分。
 const STREAM_BASE = import.meta.env?.VITE_APP_BASE_API || '/dev-api'
-export async function generateStream(type, form, onDelta) {
+export async function generateStream(type, form, onDelta, onStage) {
   const token = getToken()
   const headers = { Accept: 'text/event-stream' }
   if (form !== undefined) headers['Content-Type'] = 'application/json'
@@ -193,7 +203,8 @@ export async function generateStream(type, form, onDelta) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 600000)
   try {
-    const response = await fetch(STREAM_BASE + '/api/v1/content/ai/' + type + '/stream', {
+    const path = type === 'blueprint/regenerate' ? type : `${type}/stream`
+    const response = await fetch(STREAM_BASE + '/api/v1/content/ai/' + path, {
       method: 'POST',
       headers,
       body: JSON.stringify(form),
@@ -211,7 +222,8 @@ export async function generateStream(type, form, onDelta) {
     let buffer = '', delta = '', done = null
     const consume = block => {
       const event = parseSseBlock(block)
-      if (event.delta) { delta += event.delta; onDelta(event.delta) }
+      if (event.stage) onStage?.(event.stage)
+      if (event.delta) { delta += event.delta; onDelta?.(event.delta) }
       if (event.done) done = event.done
     }
     try {
@@ -237,7 +249,7 @@ export async function generateStream(type, form, onDelta) {
       reader.releaseLock()
     }
     if (!done) throw new Error('生成中断，已保留收到的内容，请重试')
-    if (!delta.trim()) throw new Error('本次未返回生成内容，请重试')
+    if (!delta.trim() && !done.content && !done.blueprint && !done.draft) throw new Error('本次未返回生成内容，请重试')
     // 大纲分段/分批生成时，以 done 下发的规整全文为准（逐块 delta 可能在集号处缺少换行）；
     // 其余类型仍用 delta 拼接。
     if (type === 'outline') return { outline: (done.content || delta), ...done }
@@ -250,18 +262,22 @@ export async function generateStream(type, form, onDelta) {
 /** 解析单个 SSE 事件块，返回 {delta|done|error}；空块返回 {}。 */
 function parseSseBlock(block) {
   const dataLines = []
+  let type = ''
   for (const line of block.split(/\r?\n/)) {
+    if (line.startsWith('event:')) type = line.slice(6).trim()
     if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
   }
   if (!dataLines.length) return {}
   let payload
   try { payload = JSON.parse(dataLines.join('\n')) } catch { return {} }
-  if (payload.error || (typeof payload.code === 'number' && payload.message)) {
+  if (!payload || typeof payload !== 'object') return {}
+  if (type === 'error' || payload.error || (typeof payload.code === 'number' && payload.message)) {
     const error = new Error(friendlyErrorMessage({ message: payload.message || (typeof payload.error === 'string' ? payload.error : null), fallback: 'AI 生成失败，请稍后重试' }))
-    error.code = payload.code
+    error.code = payload.code ?? 503
     throw error
   }
   return {
+    stage: type === 'stage' && typeof payload.stage === 'string' ? payload.stage : undefined,
     delta: typeof payload.delta === 'string' ? payload.delta : undefined,
     done: payload.done === true ? payload : undefined,
   }

@@ -119,31 +119,30 @@
 </template>
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { usePortal } from '../../../utils/portal.js'
 import { quotaTip, dateText } from '../../../utils/creator.js'
-import { blueprintParse, blueprintPrompt, localReorganize, minutesText } from '../../../utils/blueprint.js'
-import { stashDraft } from '../../../composables/useBlueprint.js'
+import { stashDraft, takeDraft } from '../../../composables/useBlueprint.js'
 import PortalLayer from '../../../components/PortalLayer.vue'
 import LoadState from '../../../components/LoadState.vue'
 import '../../../assets/styles/studio.css'
 
 const { api, user, canCreate, goWorks, openPanel, handleError } = usePortal()
 const router = useRouter()
+const route = useRoute()
 
 const genres = ['都市悬疑', '都市情感', '玄幻冒险', '古装权谋', '科幻未来', '青春校园']
 const setup = reactive({ title: '', idea: '', genre: '都市悬疑', episodes: 12, minutes: 2, prompt: '', skillId: '', model: '' })
 const advanced = ref(false)
 const generating = ref(false)
 const error = ref('')
-const progressText = ref('')
 const quota = ref(null)
 const skills = ref([])
 const skillError = ref('')
 const modelChannels = ref([])
 const modelError = ref('')
-const scenario = ref('')
+const activeStage = ref('')
 const historyOpen = ref(false)
 const historyLoading = ref(false)
 const historyError = ref('')
@@ -151,23 +150,15 @@ const historyRecords = ref([])
 const historyLabels = { outline: '剧本大纲', write: '章节正文', polish: '润色', storyboard: '分镜', blueprint: '作品资料' }
 
 const STAGES = [
-  { key: 'story', label: '故事核心', re: /故事简介|一句话梗概|核心冲突/ },
-  { key: 'world', label: '世界规则', re: /世界观|世界规则/ },
-  { key: 'characters', label: '主要人物', re: /主要人物/ },
-  { key: 'items', label: '关键物品', re: /道具档案|关键物品/ },
-  { key: 'relations', label: '人物关系', re: /人物关系/ }
+  { key: 'story', label: '故事核心' },
+  { key: 'world', label: '世界规则' },
+  { key: 'characters', label: '主要人物' },
+  { key: 'items', label: '关键物品' },
+  { key: 'outline', label: '三幕大纲' }
 ]
 const stages = computed(() => {
-  const text = scenario.value
-  if (!text) return STAGES.map(stage => ({ ...stage, state: 'pending' }))
-  let lastHit = -1
-  const states = STAGES.map((stage, index) => {
-    const hit = stage.re.test(text)
-    if (hit) lastHit = Math.max(lastHit, index)
-    return { ...stage, state: hit ? 'done' : 'pending' }
-  })
-  if (lastHit + 1 < states.length) states[lastHit + 1].state = 'active'
-  return states
+  const current = STAGES.findIndex(stage => stage.key === activeStage.value)
+  return STAGES.map((stage, index) => ({ ...stage, state: index < current ? 'done' : index === current ? 'active' : 'pending' }))
 })
 
 const modelOptions = computed(() => (modelChannels.value || []).flatMap(channel =>
@@ -220,75 +211,42 @@ function validate() {
   return ''
 }
 
-// 离线兜底：AI 不可用/无可用模型时，用设定生成一份可编辑的资料底稿，保证流程不中断。
-function offlineBlueprint() {
-  const seed = [
-    '『故事简介』',
-    setup.idea.trim(),
-    '『主要人物』',
-    `主角（待补充/待补充）：《${setup.title.trim()}》的主角｜待补充｜待补充｜${setup.idea.trim().slice(0, 60)}｜待补充`,
-    `『人物关系』`,
-    '主角 ↔ 对手：待补充',
-    '『重要道具档案』',
-    '关键道具｜待定｜待定｜待定｜待补充',
-    '『写法基线』',
-    `${setup.genre || '不限题材'}；对白自然，少旁白；结尾保留能推动下一集的悬念。`,
-    `世界观：${setup.genre || '本作品'}的世界规则待补充。`,
-    `故事主线：${setup.idea.trim().slice(0, 80)}`,
-    '结尾悬念：待补充'
-  ].join('\n')
-  const parsed = blueprintParse(seed, setup)
-  const { blueprint } = localReorganize(parsed, 'all')
-  return { ...blueprint, storyCore: { ...blueprint.storyCore, summary: setup.idea.trim(), logline: setup.idea.trim().slice(0, 60) }, characters: [], items: [], relations: [] }
-}
-
 async function generate() {
   if (generating.value) return
   error.value = ''
   const invalid = validate()
   if (invalid) { error.value = invalid; return }
   if (!canCreate.value) { error.value = '请先开通创作者能力'; return }
-  if (quota.value === 0) error.value = quotaTip(0)
+  if (quota.value === 0) { error.value = quotaTip(0); return }
   generating.value = true
-  scenario.value = ''
-  progressText.value = '正在整理作品资料…'
+  activeStage.value = ''
   try {
-    const prompt = blueprintPrompt(setup)
-    const result = await api.value.generateStream('outline', {
-      inspiration: `${setup.title.trim()}｜${setup.idea.trim()}`,
+    const result = await api.value.generateStream('blueprint', {
+      title: setup.title.trim(),
+      inspiration: setup.idea.trim(),
       genre: setup.genre,
-      style: `${setup.genre || '不限题材'}，共 ${setup.episodes} 集，单集 ${minutesText(setup.minutes)}。${setup.prompt.trim() ? '作者要求：' + setup.prompt.trim() + '。' : ''}只输出作品资料五段设定与世界观/故事主线/结尾悬念，不要输出任何分集事件卡。`,
+      episodes: Number(setup.episodes),
+      minutes: Number(setup.minutes),
+      prompt: setup.prompt.trim(),
       skillId: setup.skillId || undefined,
       model: setup.model || undefined
-    }, delta => { scenario.value += delta })
-    const content = result?.outline || result?.content || scenario.value
-    if (!String(content || '').trim()) throw new Error('AI 没有返回可用内容')
-    let blueprint = blueprintParse(content, setup)
-    const { blueprint: organized } = localReorganize(blueprint, 'all')
-    blueprint = organized
-    // 结构化补全：至少补一句话梗概与故事主线，避免空卡阻断确认流程。
-    blueprint.storyCore.logline ||= blueprint.storyCore.summary.slice(0, 60)
-    blueprint.outline.mainline ||= blueprint.storyCore.logline
-    finish(blueprint, '作品资料已生成，请逐项确认')
+    }, undefined, stage => { activeStage.value = stage })
+    if (!result?.sessionId || !result.blueprint) throw new Error('生成响应缺少作品资料或会话编号')
+    const sessionId = String(result.sessionId)
+    stashDraft({ sessionId, setup: { ...setup } })
+    ElMessage.success('作品资料已生成，请逐项确认')
+    await router.push({ path: '/works/create/ai/blueprint', query: { sessionId } })
   } catch (failure) {
-    const fallback = offlineBlueprint()
-    stashDraft({ setup: { ...setup }, blueprint: fallback, offline: true, reason: failure?.message || '' })
-    generating.value = false
-    progressText.value = ''
-    ElMessage.warning('AI 服务暂不可用，已按你的设定生成可编辑的资料底稿，进入资料确认后可让 AI 重新整理。')
-    await router.push('/works/create/ai/blueprint')
+    error.value = failure?.message || '生成失败，请稍后重试'
+    if (failure?.status || failure?.code) await handleError(failure)
   } finally {
-    if (generating.value) generating.value = false
+    generating.value = false
   }
 }
 
-function finish(blueprint, message) {
-  stashDraft({ setup: { ...setup }, blueprint, offline: false })
-  ElMessage.success(message)
-  router.push('/works/create/ai/blueprint')
-}
-
 onMounted(() => {
+  const stored = takeDraft()
+  if (stored?.setup && stored.sessionId === route.query.sessionId) Object.assign(setup, stored.setup)
   loadQuota(); loadSkills(); loadModels(); loadHistory()
   window.addEventListener('recharge-success', loadQuota)
 })

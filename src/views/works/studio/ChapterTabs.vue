@@ -62,7 +62,7 @@
     />
     <div class="row-actions">
       <button class="btn light" type="button" :disabled="!canEdit || saving" @click="emit('save', 'storyboard')">{{ saving ? '保存中…' : '保存分镜' }}</button>
-      <span class="cost">保存后按章节标题同步到分镜目录，等待平台审核。</span>
+      <span class="cost">保存后同步到本章分镜目录，等待平台审核。</span>
     </div>
   </section>
 
@@ -76,7 +76,7 @@
           <h3>{{ row.character.name }}</h3>
           <div class="role">{{ row.entry.role || row.character.role || '本章出场' }}</div>
           <div class="mini">本章变化：{{ row.entry.change || '本章暂未记录变化。' }}</div>
-          <div class="card-foot"><button class="btn sm ghost" type="button" @click="emit('open-modal', { kind: 'character', key: row.key })">查看完整档案</button></div>
+          <div v-if="characterMap.has(row.key)" class="card-foot"><button class="btn sm ghost" type="button" @click="emit('open-modal', { kind: 'character', key: row.key })">查看完整档案</button></div>
         </div>
       </div>
     </div>
@@ -146,12 +146,13 @@ const shotArea = ref(null)
 
 const characterMap = computed(() => new Map(props.blueprint.characters.map(character => [character.key, character])))
 const itemMap = computed(() => new Map(props.blueprint.items.map(item => [item.key, item])))
-const castRows = computed(() => (props.meta.cast || []).map(entry => ({ ...entry, character: characterMap.value.get(entry.key) })).filter(row => row.character))
-const itemRows = computed(() => (props.meta.items || []).map(entry => ({ ...entry, item: itemMap.value.get(entry.key) })).filter(row => row.item))
+const castRows = computed(() => (props.meta.cast || []).map(entry => ({ key: entry.key, entry, character: characterMap.value.get(entry.key) || entry })).filter(row => row.character.name))
+const itemRows = computed(() => (props.meta.items || []).map(entry => ({ key: entry.key, entry, item: itemMap.value.get(entry.key) || entry })).filter(row => row.item.name))
 const relationCharacters = computed(() => {
   const keys = new Set((props.meta.edges || []).flatMap(edge => [edge.a, edge.b]))
-  const list = props.blueprint.characters.filter(character => keys.has(character.key))
-  return list.length ? list : (props.meta.cast || []).map(entry => characterMap.value.get(entry.key)).filter(Boolean)
+  const characters = castRows.value.map(row => row.character)
+  const list = characters.filter(character => keys.has(character.key))
+  return list.length ? list : characters
 })
 const summaryWords = computed(() => String(props.chapter.summary || '').replace(/\s/g, '').length)
 const textWords = computed(() => String(props.chapter.plainText || '').replace(/\s/g, '').length)

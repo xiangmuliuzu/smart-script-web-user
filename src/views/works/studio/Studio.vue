@@ -60,6 +60,10 @@
                 >{{ tabItem.label }}</button>
               </div>
               <div class="spacer"></div>
+              <button v-if="metaTab && currentChapter && editing" class="btn quiet sm" type="button"
+                :disabled="saving || creatingChapter || organizingMeta" @click="organizeChapterMeta">
+                {{ organizingMeta ? '正在整理…' : 'AI 整理本章资料' }}
+              </button>
               <button
                 v-if="aiAvailable"
                 class="ai-trigger"
@@ -74,6 +78,9 @@
             {{ reviewing ? '作品审核中，当前为只读状态；审核结束后可继续编辑。' : '当前账号暂无编辑权限，仅可查看作品资料。' }}
           </div>
           <div class="studio-body">
+            <div v-if="metaTab && metaError" class="note warn" role="status">
+              {{ metaError }} <button class="btn sm quiet" type="button" @click="refreshChapterMeta">重新读取</button>
+            </div>
             <WorkViews
               v-if="!isChapterView"
               :view="activeView"
@@ -141,7 +148,9 @@
       :blueprint="blueprint"
       :focus-key="modalKey"
       :busy="Boolean(regenerating)"
-      @regenerate="instruction => regenerateReactive(modalSection, instruction)"
+      :show-regen="Boolean(blueprintSessionId && editable)"
+      @focus="openModal"
+      @regenerate="instruction => regenerate(modalSection, instruction, modalKey)"
     />
 
     <WorkSettings v-if="settingsVisible && work" v-model="settingsVisible" :work="work" @saved="reloadWork" />
@@ -168,24 +177,14 @@ import { documentText } from '../../../utils/document.js'
 import {
   appendStoryboard,
   appendToDocument,
-  blueprintToLedger,
-  chapterDraftParse,
-  chapterDraftPrompt,
   chapterStats,
   emptyChapterMeta,
   ledgerToBlueprint,
-  localReorganize,
-  mergeBlueprintSection,
   normalizeChapterMeta,
-  normalizeBlueprint,
-  regeneratePrompt
+  normalizeBlueprint
 } from '../../../utils/blueprint.js'
 import {
-  readBlueprint,
-  readChapterMetas,
   readStudioDraft,
-  writeBlueprint,
-  writeChapterMeta,
   writeStudioDraft,
   clearStudioDraft
 } from '../../../composables/useBlueprint.js'
@@ -217,7 +216,6 @@ const VIEW_TABS = [
   { key: 'relations', label: '人物关系' }
 ]
 const SECTION_LABELS = { storyCore: '故事核心', world: '世界与规则', characters: '主要人物', items: '关键物品', outline: '作品大纲', relations: '人物关系', all: '全部资料' }
-const AISUMMARY_KEY = 'aiSummary'
 
 const loading = ref(true)
 const loadError = ref('')
@@ -227,7 +225,10 @@ const chapters = ref([])
 const storyboards = ref([])
 const ledger = reactive({ storySummary: '', characters: '', relations: '', foreshadow: '', timeline: '', items: '', props: '', styleGuide: '', outline: '', threads: '', stateBoard: '' })
 const blueprintSeed = ref(null)
+const blueprintSessionId = ref(null)
 const chapterMetas = ref({})
+const organizingMeta = ref(false)
+const metaError = ref('')
 const latestReview = ref(null)
 
 const activeView = ref('outline')
@@ -270,16 +271,17 @@ const rejectedReason = computed(() => latestReview.value?.reviewOpinion || '')
 const hasSubdir = computed(() => activeView.value === 'outline' || activeView.value === 'chapter')
 const isChapterView = computed(() => activeView.value === 'chapter')
 const viewTabs = computed(() => isChapterView.value ? VIEW_TABS : [])
+const metaTab = computed(() => isChapterView.value && ['cast', 'items', 'relations'].includes(tab.value))
 const blueprint = computed(() => normalizeBlueprint(blueprintSeed.value))
 const workMeta = computed(() => ({
   genre: work.value?.genreName || '未分类',
-  planEpisodes: Number(blueprint.value.planEpisodes) || 12,
-  minutesPerEpisode: Number(blueprint.value.minutesPerEpisode) || 2
+  planEpisodes: Math.max(Number(blueprint.value.planEpisodes) || 12, ...chapters.value.map(chapter => chapter.chapterNo)),
+  minutesPerEpisode: Number(work.value?.duration) > 0 ? Number(work.value.duration) / 60 : Number(blueprint.value.minutesPerEpisode) || 2
 }))
 const currentChapter = computed(() => chapters.value.find(chapter => Number(chapter.chapterNo) === Number(chapterNo.value)) || null)
 const currentMeta = computed(() => {
   const stored = chapterMetas.value[Number(chapterNo.value)] || emptyChapterMeta(chapterNo.value)
-  return { ...normalizeChapterMeta(stored, chapterNo.value), aiSummary: stored.aiSummary || '' }
+  return normalizeChapterMeta(stored, chapterNo.value)
 })
 const currentStoryboard = computed(() => storyboards.value.find(board => boardMatchesChapter(board, currentChapter.value)) || null)
 const activeTabForAi = computed(() => tab.value === 'text' || tab.value === 'storyboard')
@@ -339,9 +341,11 @@ async function load() {
     if (!work.value) throw new Error('作品不存在或已被删除')
     latestReview.value = detail?.latestReview || null
     applyChapters(detail?.chapters || [])
-    const [ledgerResult, storyboardResult] = await Promise.allSettled([
+    const [ledgerResult, storyboardResult, blueprintResult] = await Promise.allSettled([
       api.value.getWorkLedger ? api.value.getWorkLedger(workId) : Promise.resolve(null),
-      api.value.listWorkStoryboards ? api.value.listWorkStoryboards(workId) : Promise.resolve([])
+      api.value.listWorkStoryboards ? api.value.listWorkStoryboards(workId) : Promise.resolve([]),
+      api.value.getWorkBlueprint(workId),
+      refreshChapterMeta()
     ])
     Object.assign(ledger, {
       storySummary: ledgerResult.status === 'fulfilled' ? (ledgerResult.value?.storySummary || '') : '',
@@ -358,9 +362,10 @@ async function load() {
     })
     storyboards.value = normalizeStoryboards(storyboardResult.status === 'fulfilled' ? storyboardResult.value : [])
     mergeStoryboardsIntoChapters()
-    // 结构化资料：优先本地 Blueprint（含单项重新整理结果），缺失时由 ledger 宽松还原。
-    blueprintSeed.value = readBlueprint(workId) || ledgerToBlueprint({ ...ledger, updateTime: work.value.updateTime })
-    chapterMetas.value = readChapterMetas(workId)
+    const session = blueprintResult.status === 'fulfilled' ? blueprintResult.value : null
+    blueprintSessionId.value = session?.sessionId || null
+    blueprintSeed.value = session?.blueprint || detail.blueprint || ledgerToBlueprint({ ...ledger, updateTime: work.value.updateTime })
+    if (blueprintResult.status === 'rejected') ElMessage.warning('未能读取作品资料会话，可刷新工作台重试')
     applyRouteState()
     restoreDraft()
     loadWorks()
@@ -370,6 +375,19 @@ async function load() {
     if (failure?.status) await handleError(failure)
   } finally {
     loading.value = false
+  }
+}
+
+async function refreshChapterMeta() {
+  const workId = work.value?.workId
+  if (!workId) return
+  metaError.value = ''
+  try {
+    const result = await api.value.getChapterMeta(workId)
+    if (work.value?.workId === workId) chapterMetas.value = result || {}
+  } catch (failure) {
+    if (work.value?.workId === workId) metaError.value = failure?.message || '本章资料读取失败'
+    if (failure?.status) await handleError(failure)
   }
 }
 
@@ -545,6 +563,8 @@ async function save({ silent = false } = {}) {
     if (needStoryboard) {
       try {
         const board = await api.value.createWorkStoryboard(work.value.workId, {
+          chapterId: chapter.chapterId || undefined,
+          chapterNo: chapter.chapterNo,
           title: chapter.chapterTitle,
           content: chapter.storyboardContent,
           source: 'manual'
@@ -615,37 +635,32 @@ async function newChapter() {
   if (creatingChapter.value) return
   if (anyDirty.value && !await save({ silent: true })) return
   const nextNo = Math.max(0, ...chapters.value.map(chapter => Number(chapter.chapterNo) || 0)) + 1
-  const plan = Number(blueprint.value.planEpisodes) || 12
+  const plan = workMeta.value.planEpisodes
   if (nextNo > plan) {
     try {
-      await ElMessageBox.confirm(`已达到计划集数上限（${plan} 集）。是否调整计划集数后继续新建？`, '计划集数上限', { confirmButtonText: '调整并继续', cancelButtonText: '取消', type: 'warning' })
-      blueprintSeed.value = normalizeBlueprint({ ...blueprint.value, planEpisodes: Math.min(60, nextNo) })
-      writeBlueprint(work.value.workId, blueprintSeed.value)
+      await ElMessageBox.confirm(`已达到计划集数（${plan} 集）。是否继续新建第 ${nextNo} 章？`, '计划集数上限', { confirmButtonText: '继续新建', cancelButtonText: '取消', type: 'warning' })
     } catch { return }
   }
   creatingChapter.value = true
   generatingNo.value = nextNo
   generatingPreview.value = ''
+  const workId = work.value.workId
   let draft = null
   try {
-    if (api.value?.generateStream) {
-      const prompt = chapterDraftPrompt({ work: work.value, blueprint: blueprint.value, chapters: chapters.value, chapterNo: nextNo })
-      const result = await api.value.generateStream('write', {
-        prompt,
-        type: 'chapter-draft',
-        workId: work.value.workId
-      }, delta => { generatingPreview.value += delta })
-      draft = chapterDraftParse(result?.content || generatingPreview.value, { chapterNo: nextNo, blueprint: blueprint.value, chapters: chapters.value })
-    }
-  } catch {
-    draft = null
+    generatingPreview.value = 'AI 正在依据作品资料与前情生成本章概要…'
+    const result = await api.value.generateStream('chapter-draft', { workId, chapterNo: nextNo })
+    if (!result?.draft) throw new Error('生成响应缺少章节草稿')
+    draft = result.draft
+  } catch (failure) {
+    if (failure?.status || failure?.code) await handleError(failure)
+    ElMessage.warning(`AI 生成失败，将新建空白章节。${failure?.message || ''}`)
   }
   generatingPreview.value = ''
   // AI 失败/无内容：建空壳章兜底，保证作者仍能写作。
   const title = draft?.title?.trim() || `第 ${nextNo} 章`
   const summary = String(draft?.summary || '').slice(0, 500)
   try {
-    const created = await api.value.saveChapter(work.value.workId, {
+    const created = await api.value.saveChapter(workId, {
       chapterNo: nextNo,
       chapterTitle: title.slice(0, 100),
       content: '',
@@ -664,16 +679,16 @@ async function newChapter() {
       isFree: '0'
     })
     chapters.value.sort((a, b) => a.chapterNo - b.chapterNo)
-    const meta = normalizeChapterMeta({
-      chapterNo: nextNo,
-      cast: draft?.cast || [],
-      items: draft?.items || [],
-      edges: draft?.edges || [],
-      generatedAt: new Date().toISOString(),
-      source: draft ? 'ai' : 'manual'
-    }, nextNo)
-    chapterMetas.value = { ...chapterMetas.value, [nextNo]: { ...meta, [AISUMMARY_KEY]: draft?.aiSummary || '' } }
-    writeChapterMeta(work.value.workId, nextNo, chapterMetas.value[nextNo])
+    if (draft) {
+      try {
+        const meta = await api.value.saveChapterMeta(workId, nextNo, {
+          cast: draft.cast, items: draft.items, edges: draft.edges, aiSummary: draft.summary, source: 'ai'
+        })
+        chapterMetas.value = { ...chapterMetas.value, [nextNo]: meta }
+      } catch (failure) {
+        ElMessage.warning(`章节已创建，资料保存失败。可在本章资料页重新整理。${failure?.message || ''}`)
+      }
+    }
     await selectChapter(nextNo)
     ElMessage.success(draft ? `第 ${nextNo} 章概要已生成，可继续创作` : `已新建第 ${nextNo} 章，可手动填写概要`)
   } catch (failure) {
@@ -682,6 +697,27 @@ async function newChapter() {
   } finally {
     creatingChapter.value = false
     generatingNo.value = 0
+    loadQuota()
+  }
+}
+
+async function organizeChapterMeta() {
+  if (!editable.value || organizingMeta.value || !currentChapter.value) return
+  const workId = work.value.workId
+  const number = currentChapter.value.chapterNo
+  if (anyDirty.value && !await save({ silent: true })) return
+  organizingMeta.value = true
+  try {
+    const meta = await api.value.generateChapterMeta({ workId, chapterNo: number })
+    if (work.value?.workId === workId) chapterMetas.value = { ...chapterMetas.value, [number]: meta }
+    metaError.value = ''
+    ElMessage.success('本章资料已整理并保存')
+  } catch (failure) {
+    ElMessage.warning(failure?.message || '整理本章资料失败，请稍后重试')
+    if (failure?.status || failure?.code) await handleError(failure)
+  } finally {
+    organizingMeta.value = false
+    loadQuota()
   }
 }
 
@@ -694,67 +730,30 @@ function openModal(payload) {
 }
 const modalSection = computed(() => ({ story: 'storyCore', world: 'world', characters: 'characters', character: 'characters', items: 'items', item: 'items', outline: 'outline' })[modalKind.value] || 'storyCore')
 
-/**
- * 作品资料重新整理：写回 ledger（真实接口）并刷新本地 Blueprint；
- * AI 不可用时做确定性本地整理，并在 ledger 可写时一并回写，保证两视图不漂移。
- */
-async function regenerate(section, instruction = '') {
+async function regenerate(section, instruction = '', key = '') {
   if (!editable.value) { ElMessage.warning('作品审核中或没有编辑权限'); return }
   if (regenerating.value) return
-  if (!api.value?.generateStream) { await localRegenerate(section); return }
+  if (!blueprintSessionId.value) { ElMessage.info('此作品没有已确认的 AI 起稿会话'); return }
   if (quota.value === 0) { ElMessage.warning(quotaTip(0)); openPanel?.('recharge'); return }
   regenerating.value = section
-  let next = null
   try {
-    const prompt = regeneratePrompt(blueprint.value, section, instruction)
-    const result = await api.value.generateStream('write', { prompt, type: 'blueprint', workId: work.value.workId }, () => {})
-    next = mergeBlueprintSection(blueprint.value, section, result?.content || '')
-  } catch (failure) {
-    next = null
-    ElMessage.warning(`AI 暂不可用，已按现有资料重新整理：${failure.message || '请后重试'}`)
-  }
-  if (!next) {
-    const local = localReorganize(blueprint.value, section)
-    next = local.blueprint
-  }
-  await applyBlueprint(next, section, instruction)
-  regenerating.value = ''
-}
-
-async function regenerateReactive(section, instruction) {
-  await regenerate(section, instruction)
-}
-
-async function localRegenerate(section) {
-  if (!editable.value || regenerating.value) return
-  const { blueprint: next, changed } = localReorganize(blueprint.value, section)
-  await applyBlueprint(next, section, '')
-  ElMessage[changed ? 'success' : 'info'](changed ? `已重新整理${SECTION_LABELS[section] || '资料'}` : '资料已是最新整理状态')
-}
-
-async function applyBlueprint(next, section, instruction) {
-  blueprintSeed.value = normalizeBlueprint(next)
-  writeBlueprint(work.value.workId, blueprintSeed.value)
-  const payload = blueprintToLedger(blueprintSeed.value)
-  try {
-    await api.value.saveWorkLedger(work.value.workId, payload)
-    Object.assign(ledger, payload)
-    if (section === 'storyCore' && payload.storySummary && payload.storySummary !== (work.value.summary || '')) {
-      // 故事核心变化同步作品简介，保证书城/详情页一致；其余字段沿用现值。
-      await api.value.updateWork(work.value.workId, {
-        title: work.value.title,
-        summary: payload.storySummary,
-        cover: work.value.cover,
-        price: work.value.price,
-        tradeType: work.value.tradeType
-      })
-      work.value.summary = payload.storySummary
+    const result = await api.value.generateStream('blueprint/regenerate', {
+      sessionId: blueprintSessionId.value, section, key: key || undefined, instruction: instruction || undefined
+    })
+    if (!result?.blueprint) throw new Error('整理响应缺少作品资料')
+    blueprintSeed.value = result.blueprint
+    try {
+      Object.assign(ledger, await api.value.getWorkLedger(work.value.workId))
+    } catch {
+      ElMessage.warning('资料已保存，台账暂时无法读取，可刷新工作台重试')
     }
     ElMessage.success(`已更新${SECTION_LABELS[section] || '作品资料'}`)
   } catch (failure) {
-    // ledger 写入失败不回滚本地结构化资料，提示用户稍后重试。
-    ElMessage.warning(`资料已更新到本机，台账保存失败：${failure.message || '请稍后重试'}`)
-    if (instruction) ElMessage.info('调整意见已用于本次整理')
+    ElMessage.warning(failure?.message || '整理失败，请稍后重试')
+    if (failure?.status || failure?.code) await handleError(failure)
+  } finally {
+    regenerating.value = ''
+    loadQuota()
   }
 }
 

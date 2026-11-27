@@ -27,6 +27,7 @@
                   <dt>人物秘密</dt><dd>{{ character.secret || '待补充' }}</dd>
                   <dt>成长线</dt><dd>{{ character.growth || '待补充' }}</dd>
                 </dl>
+                <button v-if="showRegen && kind === 'characters'" class="btn sm ghost" type="button" :disabled="busy" @click="emit('focus', { kind: 'character', key: character.key })">单独整理</button>
               </div>
             </article>
             <p v-if="!shownCharacters.length" class="blue-empty">作品资料里还没有人物，可让 AI 重新整理主要人物。</p>
@@ -45,6 +46,7 @@
                   <dt>件数</dt><dd>{{ item.count || '待定' }}</dd>
                   <dt>持有人</dt><dd>{{ item.owner || '待定' }}</dd>
                 </dl>
+                <button v-if="showRegen && kind === 'items'" class="btn sm ghost" type="button" :disabled="busy" @click="emit('focus', { kind: 'item', key: item.key })">单独整理</button>
                 <div class="track">
                   <span v-for="(point, index) in item.track" :key="index">第 {{ point.chapterNo || '?' }} 章 {{ point.event }}</span>
                   <span v-if="!item.track.length" class="track-empty">尚未记录追踪轨迹</span>
@@ -79,7 +81,8 @@
               <h4>三幕结构</h4>
               <dl v-if="blueprint.outline.acts.length" class="dl">
                 <template v-for="act in blueprint.outline.acts" :key="act.name">
-                  <dt>{{ act.name }}{{ act.range ? ' · ' + act.range : '' }}</dt><dd>{{ act.summary }}</dd>
+                  <dt>{{ act.name }}{{ act.range ? ' · ' + act.range : '' }}</dt>
+                  <dd>{{ act.summary }}<ul v-if="act.beats?.length"><li v-for="(beat, index) in act.beats" :key="index">{{ beat }}</li></ul></dd>
                 </template>
               </dl>
               <p v-else class="blue-empty">三幕结构尚未整理，可让 AI 重新整理作品大纲。</p>
@@ -137,7 +140,7 @@ const props = defineProps({
   showRegen: { type: Boolean, default: true },
   busy: { type: Boolean, default: false }
 })
-const emit = defineEmits(['update:modelValue', 'regenerate'])
+const emit = defineEmits(['update:modelValue', 'regenerate', 'focus'])
 const instruction = ref('')
 
 const KIND_LABELS = {

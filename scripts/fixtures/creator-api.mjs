@@ -2,8 +2,7 @@
 import { documentText, isFormattedDocument } from '../../src/utils/document.js'
 import { wordCount } from '../../src/utils/creator.js'
 
-// AI 剧本流返回可解析的分集大纲（PC 端「按大纲生成各章」和 AI 创作页都据此拆章）。
-// 与 AiCreate.vue 的 AI_CREATE_MARK 一致：章节正文记录前缀，删除大纲时级联删除。
+// 旧版生成记录用此标记关联章节正文与分集大纲。
 const AI_CREATE_MARK = '[AI创作]'
 const OUTLINE_STREAM = '书名：深夜频率\n一句话简介：一位深夜电台主播在听众留言里听到了十年前的自己。\n第一集 · 深夜频率\n雨夜的咖啡馆，一次迟来的重逢。\n第二集 · 迟到的信\n一封没有寄出的信揭开旧事。'
 const BLUEPRINT_STREAM = [

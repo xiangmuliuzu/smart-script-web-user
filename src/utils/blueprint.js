@@ -152,8 +152,9 @@ export function normalizeBlueprint(raw) {
       acts: listField(outline.acts).map((act, index) => ({
         name: cleanText(act?.name) || `第${index + 1}幕`,
         range: cleanText(act?.range),
-        summary: cleanText(act?.summary)
-      })).filter(act => act.summary),
+        summary: cleanText(act?.summary),
+        beats: listField(act?.beats).map(cleanText).filter(Boolean)
+      })).filter(act => act.summary || act.beats.length),
       endingHanger: textField(outline.endingHanger)
     },
     characters,
@@ -893,11 +894,13 @@ export function normalizeChapterMeta(raw, chapterNo = 1) {
     chapterNo: Number(source.chapterNo) || Number(chapterNo) || 1,
     cast: (Array.isArray(source.cast) ? source.cast : []).map(entry => ({
       key: cleanText(entry?.key),
+      name: cleanText(entry?.name),
       role: cleanText(entry?.role),
       change: cleanText(entry?.change)
     })).filter(entry => entry.key),
     items: (Array.isArray(source.items) ? source.items : []).map(entry => ({
       key: cleanText(entry?.key),
+      name: cleanText(entry?.name),
       role: cleanText(entry?.role),
       change: cleanText(entry?.change)
     })).filter(entry => entry.key),
@@ -909,6 +912,7 @@ export function normalizeChapterMeta(raw, chapterNo = 1) {
       color: cleanText(edge?.color) || '#4a6c74'
     })).filter(edge => edge.a && edge.b && edge.a !== edge.b),
     generatedAt: cleanText(source.generatedAt),
+    aiSummary: cleanText(source.aiSummary),
     source: source.source === 'ai' ? 'ai' : 'manual'
   }
 }

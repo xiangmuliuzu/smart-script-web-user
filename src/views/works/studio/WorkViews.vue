@@ -89,7 +89,7 @@
       <dl v-if="blueprint.outline.acts.length" class="dl">
         <template v-for="act in blueprint.outline.acts" :key="act.name">
           <dt>{{ act.name }}{{ act.range ? ' · ' + act.range : '' }}</dt>
-          <dd>{{ act.summary }}</dd>
+          <dd>{{ act.summary }}<ul v-if="act.beats.length"><li v-for="(beat, index) in act.beats" :key="index">{{ beat }}</li></ul></dd>
         </template>
       </dl>
       <p v-else>三幕结构尚未整理，可让 AI 重新整理作品大纲。</p>
