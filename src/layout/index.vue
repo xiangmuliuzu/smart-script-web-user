@@ -4,7 +4,7 @@
     <template v-else-if="user && api">
       <header class="topbar">
         <button class="brand" @click="goWorks"><b>剧云策</b><span>创作者中心</span></button>
-        <nav class="nav" aria-label="主导航"><button :aria-current="onHome ? 'page' : undefined" @click="goHome">首页</button><button :aria-current="onWorks ? 'page' : undefined" @click="goWorks">工作台</button><button :aria-current="onCreate ? 'page' : undefined" @click="goCreate">创作</button><button :aria-current="onDemand ? 'page' : undefined" @click="goDemand">任务广场</button></nav>
+        <nav class="nav" aria-label="主导航"><button :aria-current="onHome ? 'page' : undefined" @click="goHome">首页</button><button :aria-current="onWorks ? 'page' : undefined" @click="goWorks">工作台</button><button :aria-current="onDemand ? 'page' : undefined" @click="goDemand">任务广场</button></nav>
         <div class="topbar-right">
           <button v-if="realNameStatus && realNameStatus !== 'APPROVED'" class="chip verify-chip" @click="openPanel('account', 'profile')">⚠ 实名认证{{ realNameStatus === 'PENDING' ? '审核中' : '未完成' }}</button>
           <div class="nav-group" role="group" aria-label="交易链路">
@@ -75,9 +75,8 @@ const displayName = computed(() => user.value?.nickname || user.value?.userName 
 const canCreate = computed(() => user.value?.authorCapability === true)
 const basePath = '/works'
 // 任务广场已提升为与工作台平级的顶级页签（/demand），不再走合作抽屉的 demand tab。
-const onWorks = computed(() => route.path === '/works' || /^\/works\/[1-9]\d*/.test(route.path))
-// 创作入口覆盖 /works/create*（AI 起稿、资料确认、导入与编辑器），激活态不再落到「工作台」。
-const onCreate = computed(() => route.path.startsWith('/works/create'))
+// 创作页与工作台路由都归属「工作台」高亮。
+const onWorks = computed(() => route.path === '/works' || route.path.startsWith('/works/'))
 const onDemand = computed(() => route.path === '/demand' || route.path.startsWith('/demand/'))
 const onHome = computed(() => route.path === '/')
 function openPanel(name, tab, keyword = '') { panelVisible.value = false; panel.value = name; panelTab.value = tab; panelOrderSearch.value = (tab === 'order') ? keyword : ''; panelKeyword.value = (tab === 'inquiry') ? keyword : ''; panelVisible.value = true }
@@ -112,7 +111,6 @@ async function openRightsLanding(kind, bizId) {
 }
 // 离开编辑器或 AI 起稿流程时替换当前历史记录，避免浏览器返回再次进入已经完成的 AI 步骤。
 function goWorks() { panelVisible.value = false; return router.replace(basePath) }
-function goCreate() { panelVisible.value = false; return router.push(basePath + '/create/ai') }
 function goHome() { panelVisible.value = false; return router.push('/') }
 function goWork(id) { panelVisible.value = false; return router.push(`${basePath}/${id}`) }
 function goDemand() { panelVisible.value = false; return router.push('/demand') }
@@ -144,7 +142,7 @@ async function accountCommand(command) {
   catch { ElMessage.warning('服务端退出未成功，已清理本地登录状态') }
   finally { user.value = null; panelVisible.value = false; await router.replace('/login'); leaving.value = false }
 }
-provide(portalKey, { api, user, canCreate, basePath, openPanel, openDeliveryByOrder, openRightsLanding, goWork, goWorks, goCreate, goHome, goDemand, goDemandDetail, handleError, refreshUnread })
+provide(portalKey, { api, user, canCreate, basePath, openPanel, openDeliveryByOrder, openRightsLanding, goWork, goWorks, goHome, goDemand, goDemandDetail, handleError, refreshUnread })
 async function refreshRealName() { try { realNameStatus.value = (await api.value.getRealName())?.status || '' } catch (failure) { if (isAuthFailure(failure)) await handleError(failure) } }
 onMounted(load)
 

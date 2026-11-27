@@ -63,6 +63,21 @@
 .v3-scope .steps li { display: flex; align-items: center; }
 .v3-scope .steps .active { color: var(--cinnabar); font-weight: 700; }
 .v3-scope .steps i { display: block; width: 26px; height: 1px; background: var(--rule-2); }
+/* 顶部步骤可点击切换：重置原生按钮外观，仅保留排版与状态色。 */
+.v3-scope .steps .step-btn,
+.v3-scope .blueprint-head .step-btn {
+  padding: 2px 0; border: 0; border-radius: 2px; background: none;
+  color: var(--ink-3); font: inherit; font-size: 12px; line-height: 1.6;
+  white-space: nowrap; cursor: pointer; transition: color .15s;
+}
+.v3-scope .steps .step-btn:hover:not(:disabled):not(.active),
+.v3-scope .blueprint-head .step-btn:hover:not(:disabled):not(.active) { color: var(--indigo); }
+.v3-scope .steps .step-btn.active,
+.v3-scope .blueprint-head .step-btn.active { font-weight: 700; cursor: default; }
+.v3-scope .steps .step-btn.active { color: var(--cinnabar); }
+.v3-scope .blueprint-head .step-btn.active { color: var(--ink); }
+.v3-scope .steps .step-btn:focus-visible,
+.v3-scope .blueprint-head .step-btn:focus-visible { outline: 2px solid var(--indigo); outline-offset: 3px; }
 .v3-scope .ai-body { display: grid; grid-template-columns: minmax(0, 1fr) 275px; gap: 24px; padding-top: 28px; }
 .v3-scope .sheet { max-width: 1050px; width: 100%; margin: auto; padding: 32px 48px 28px; background: #fcfbf8; border: 1px solid var(--rule-2); box-shadow: var(--v3-shadow); }
 .v3-scope .sheet-title { padding-bottom: 15px; border-bottom: 1px solid var(--rule); display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
@@ -424,6 +439,8 @@
   .v3-scope .paper { padding: 26px 22px; }
 }
 @media (max-width: 760px) {
+  .v3-scope .steps { flex-wrap: wrap; white-space: normal; row-gap: 4px; }
+  .v3-scope .blueprint-head { gap: 10px; }
   .v3-scope .ai-body { display: block; }
   .v3-scope .ai-side { margin-top: 16px; }
   .v3-scope .reg-row { grid-template-columns: 1fr; gap: 5px; }

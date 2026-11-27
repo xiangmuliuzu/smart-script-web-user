@@ -4,9 +4,9 @@
       <div class="blueprint">
         <header class="blueprint-head">
           <button class="back" type="button" @click="backToSetup">← 返回设定</button>
-          <span class="line" aria-hidden="true"></span><span>作品设定</span>
-          <span class="line" aria-hidden="true"></span><b>资料确认</b>
-          <span class="line" aria-hidden="true"></span><span>工作台</span>
+          <span class="line" aria-hidden="true"></span><button type="button" class="step-btn" :disabled="busy || Boolean(regenerating)" @click="backToSetup">作品设定</button>
+          <span class="line" aria-hidden="true"></span><button type="button" class="step-btn active" aria-current="step">资料确认</button>
+          <span class="line" aria-hidden="true"></span><button type="button" class="step-btn" :disabled="busy || Boolean(regenerating)" @click="goStudioStep">工作台</button>
           <span class="grow"></span>
           <button class="btn quiet" type="button" :disabled="busy || regenerating || !hasDraft" @click="confirm(false)">跳过查看，直接进入工作台</button>
         </header>
@@ -132,7 +132,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { usePortal } from '../../../utils/portal.js'
 import { quotaTip } from '../../../utils/creator.js'
 import { normalizeBlueprint } from '../../../utils/blueprint.js'
-import { clearDraft } from '../../../composables/useBlueprint.js'
+import { clearDraft, stashDraft, takeDraft } from '../../../composables/useBlueprint.js'
 import BlueprintDetailModal from '../../../components/blueprint/BlueprintDetailModal.vue'
 import CharacterAvatar from '../../../components/blueprint/CharacterAvatar.vue'
 import '../../../assets/styles/studio.css'
@@ -176,7 +176,19 @@ const itemSummary = computed(() => {
 })
 
 function backToSetup() {
+  // 刷新后内存表单已丢失：sessionStorage 里还能找到同会话且带表单的快照时，不覆盖它。
+  const stored = takeDraft()
+  const draftSetup = stored?.setup && String(stored.sessionId ?? '') === sessionId.value ? stored.setup : null
+  if (!draftSetup) stashDraft({ sessionId: sessionId.value, workId: createdWorkId.value || undefined })
   router.replace({ path: '/works/create/ai', query: sessionId.value ? { sessionId: sessionId.value } : {} })
+}
+
+/** 顶部「工作台」步骤：已创建直接进入；有草稿则确认创建；否则回工作台列表。 */
+function goStudioStep() {
+  if (busy.value || regenerating.value) return
+  if (createdWorkId.value) return router.push(`/works/${createdWorkId.value}/studio`)
+  if (hasDraft.value) return confirm(true)
+  router.push('/works')
 }
 
 function openModal(kind, key = '') {

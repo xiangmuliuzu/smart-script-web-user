@@ -9,11 +9,11 @@
             <p>先确定作品设定，再让 AI 生成可逐项确认的作品资料。</p>
           </div>
           <ol class="steps" aria-label="创作步骤">
-            <li class="active" aria-current="step">一 作品设定</li>
+            <li><button type="button" class="step-btn active" aria-current="step" @click="goStep('setup')">一 作品设定</button></li>
             <li aria-hidden="true"><i></i></li>
-            <li>二 资料确认</li>
+            <li><button type="button" class="step-btn" :disabled="generating" @click="goStep('blueprint')">二 资料确认</button></li>
             <li aria-hidden="true"><i></i></li>
-            <li>三 进入工作台</li>
+            <li><button type="button" class="step-btn" :disabled="generating" @click="goStep('studio')">三 进入工作台</button></li>
           </ol>
         </header>
 
@@ -136,6 +136,8 @@ const genres = ['都市悬疑', '都市情感', '玄幻冒险', '古装权谋', 
 const setup = reactive({ title: '', idea: '', genre: '都市悬疑', episodes: 12, minutes: 2, prompt: '', skillId: '', model: '' })
 const advanced = ref(false)
 const generating = ref(false)
+const currentSessionId = ref('')
+const confirmedWorkId = ref(null)
 const error = ref('')
 const quota = ref(null)
 const skills = ref([])
@@ -233,6 +235,8 @@ async function generate() {
     }, undefined, stage => { activeStage.value = stage })
     if (!result?.sessionId || !result.blueprint) throw new Error('生成响应缺少作品资料或会话编号')
     const sessionId = String(result.sessionId)
+    currentSessionId.value = sessionId
+    confirmedWorkId.value = null
     stashDraft({ sessionId, setup: { ...setup } })
     ElMessage.success('作品资料已生成，请逐项确认')
     await router.push({ path: '/works/create/ai/blueprint', query: { sessionId } })
@@ -244,9 +248,26 @@ async function generate() {
   }
 }
 
+/** 顶部步骤条：当前步骤不跳转；其余步骤先保留表单，再切到对应页面。 */
+function goStep(step) {
+  if (generating.value || step === 'setup') return
+  const payload = { setup: { ...setup } }
+  if (currentSessionId.value) payload.sessionId = currentSessionId.value
+  if (confirmedWorkId.value) payload.workId = confirmedWorkId.value
+  stashDraft(payload)
+  if (step === 'blueprint') {
+    return router.push({ path: '/works/create/ai/blueprint', query: currentSessionId.value ? { sessionId: currentSessionId.value } : {} })
+  }
+  return router.push(confirmedWorkId.value ? `/works/${confirmedWorkId.value}/studio` : '/works')
+}
+
 onMounted(() => {
   const stored = takeDraft()
-  if (stored?.setup && stored.sessionId === route.query.sessionId) Object.assign(setup, stored.setup)
+  const querySessionId = /^\d+$/.test(String(route.query.sessionId ?? '')) ? String(route.query.sessionId) : ''
+  const storedSessionId = stored?.sessionId == null ? '' : String(stored.sessionId)
+  currentSessionId.value = querySessionId || storedSessionId
+  if (stored?.setup && (!querySessionId || storedSessionId === querySessionId)) Object.assign(setup, stored.setup)
+  if (stored?.workId && (!querySessionId || storedSessionId === querySessionId)) confirmedWorkId.value = stored.workId
   loadQuota(); loadSkills(); loadModels(); loadHistory()
   window.addEventListener('recharge-success', loadQuota)
 })
