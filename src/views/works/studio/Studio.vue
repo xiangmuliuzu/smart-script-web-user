@@ -98,6 +98,7 @@
               :tab="tab"
               :chapter="currentChapter"
               :meta="currentMeta"
+              :show-ai-summary="showAiSummaryHint"
               :blueprint="blueprint"
               :can-edit="editing"
               :saving="saving"
@@ -186,7 +187,9 @@ import {
 import {
   readStudioDraft,
   writeStudioDraft,
-  clearStudioDraft
+  clearStudioDraft,
+  hasSeenAiSummaryHint,
+  markAiSummaryHintSeen
 } from '../../../composables/useBlueprint.js'
 import StudioSidebar from './StudioSidebar.vue'
 import StudioSubdir from './StudioSubdir.vue'
@@ -235,6 +238,9 @@ const activeView = ref('outline')
 const chapterNo = ref(1)
 const tab = ref('summary')
 const aiOpen = ref(false)
+// 「AI 已生成本章起稿概要」提示仅在首次进入本章概要页时展示，切走再回来后隐藏。
+const showAiSummaryHint = ref(false)
+let aiSummaryVisitKey = ''
 
 const dirty = reactive({ summary: false, text: false, storyboard: false })
 const saving = ref(false)
@@ -283,6 +289,29 @@ const currentMeta = computed(() => {
   const stored = chapterMetas.value[Number(chapterNo.value)] || emptyChapterMeta(chapterNo.value)
   return normalizeChapterMeta(stored, chapterNo.value)
 })
+
+watch(
+  [() => work.value?.workId, activeView, chapterNo, tab, () => currentMeta.value.aiSummary],
+  ([workId, view, no, currentTab, aiSummary]) => {
+    const onSummary = Boolean(workId) && view === 'chapter' && currentTab === 'summary'
+    if (!onSummary) {
+      aiSummaryVisitKey = ''
+      showAiSummaryHint.value = false
+      return
+    }
+    const visitKey = `${workId}:${no}`
+    if (visitKey !== aiSummaryVisitKey) {
+      aiSummaryVisitKey = visitKey
+      showAiSummaryHint.value = false
+    }
+    if (!aiSummary || showAiSummaryHint.value) return
+    if (!hasSeenAiSummaryHint(workId, no)) {
+      showAiSummaryHint.value = true
+      markAiSummaryHintSeen(workId, no)
+    }
+  },
+  { immediate: true }
+)
 const currentStoryboard = computed(() => storyboards.value.find(board => boardMatchesChapter(board, currentChapter.value)) || null)
 const activeTabForAi = computed(() => tab.value === 'text' || tab.value === 'storyboard')
 const aiMode = computed(() => tab.value === 'storyboard' ? 'storyboard' : 'text')

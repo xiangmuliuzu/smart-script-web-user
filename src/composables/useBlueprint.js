@@ -15,10 +15,13 @@ import { normalizeBlueprint, normalizeChapterMeta } from '../utils/blueprint.js'
 const PREFIX = 'PcUser-Blueprint'
 const META_PREFIX = 'PcUser-ChapterMeta'
 const DRAFT_PREFIX = 'PcUser-StudioDraft'
+const AI_SUMMARY_SEEN_PREFIX = 'PcUser-AiSummarySeen'
+const seenAiSummaryKeys = new Set()
 
 /** 实例标识：取 token 尾部做命名空间，未登录/测试环境退化为 anonymous。 */
 export function storageOwner() {
-  const token = String(getToken() || '')
+  let token = ''
+  try { token = String(getToken() || '') } catch { token = '' }
   if (!token) return 'anonymous'
   let hash = 0
   for (const char of token) hash = (hash * 31 + char.charCodeAt(0)) % 0x7fffffff
@@ -144,4 +147,28 @@ export function writeStudioDraft(workId, draft) {
 
 export function clearStudioDraft(workId) {
   return writeJson(`${DRAFT_PREFIX}:${storageOwner()}:${encodeURIComponent(workId || '')}`, null)
+}
+
+const aiSummaryScope = workId => `${AI_SUMMARY_SEEN_PREFIX}:${storageOwner()}:${encodeURIComponent(workId || '')}`
+
+/** 查询某章「AI 已生成本章起稿概要」提示是否已展示过。 */
+export function hasSeenAiSummaryHint(workId, chapterNo) {
+  const no = Number(chapterNo)
+  if (!workId || !Number.isFinite(no) || no < 1) return false
+  const scope = aiSummaryScope(workId)
+  if (seenAiSummaryKeys.has(`${scope}:${no}`)) return true
+  const list = readJson(scope)
+  return Array.isArray(list) && list.map(Number).includes(no)
+}
+
+/** 标记某章「AI 已生成本章起稿概要」提示已展示过，后续切换回来或重进页面不再显示。 */
+export function markAiSummaryHintSeen(workId, chapterNo) {
+  const no = Number(chapterNo)
+  if (!workId || !Number.isFinite(no) || no < 1) return false
+  const scope = aiSummaryScope(workId)
+  seenAiSummaryKeys.add(`${scope}:${no}`)
+  const existing = readJson(scope)
+  const list = Array.isArray(existing) ? existing.map(Number).filter(n => Number.isFinite(n) && n >= 1) : []
+  if (!list.includes(no)) list.push(no)
+  return writeJson(scope, list)
 }

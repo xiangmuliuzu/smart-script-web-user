@@ -2,7 +2,7 @@
   <section v-if="tab === 'summary'" class="paper fill" aria-label="本章内容概要">
     <h2>第 {{ chapter.chapterNo }} 章 · 内容概要</h2>
     <p class="muted">本章概要独立保存，生成正文与分镜时都会参考。</p>
-    <div v-if="meta.aiSummary" class="summary-box"><b>AI 已生成本章起稿概要</b><br />{{ meta.aiSummary }}</div>
+    <div v-if="showAiSummary && meta.aiSummary" class="summary-box"><b>AI 已生成本章起稿概要</b><br />{{ meta.aiSummary }}</div>
     <label class="field-label" for="studio-summary">章节概要</label>
     <textarea
       id="studio-summary"
@@ -137,6 +137,7 @@ const props = defineProps({
   tab: { type: String, default: 'summary' },
   chapter: { type: Object, required: true },
   meta: { type: Object, default: () => ({ cast: [], items: [], edges: [], aiSummary: '' }) },
+  showAiSummary: { type: Boolean, default: false },
   blueprint: { type: Object, required: true },
   canEdit: Boolean,
   saving: Boolean

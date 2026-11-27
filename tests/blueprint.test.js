@@ -30,6 +30,7 @@ import {
   studioStoryboardScript,
   studioWritePrompt
 } from '../src/utils/blueprint.js'
+import { hasSeenAiSummaryHint, markAiSummaryHintSeen } from '../src/composables/useBlueprint.js'
 
 const SETUP = { title: '深夜频率', idea: '一位深夜电台主播在听众留言里听到了十年前的自己。', genre: '都市悬疑', episodes: 12, minutes: 2 }
 
@@ -377,4 +378,16 @@ test('small pure helpers behave predictably', () => {
   assert.deepEqual(parseOutlineText('第一幕（1–3 集）：开端\n第二幕：发展').acts.map(act => act.range), ['1–3 集', ''])
   assert.equal(blueprintWorkMeta(BLUEPRINT(), { title: '深夜频率', genre: '都市悬疑' }).durationSeconds, 120)
   assert.equal(blueprintWorkMeta(emptyBlueprint(), { title: '新作品', episodes: 6, minutes: 1.5 }).durationSeconds, 90)
+})
+
+test('aiSummary hint seen state tracks per work and chapter', () => {
+  assert.equal(hasSeenAiSummaryHint(901, 1), false)
+  assert.equal(hasSeenAiSummaryHint(901, 2), false)
+  assert.equal(hasSeenAiSummaryHint(902, 1), false)
+  markAiSummaryHintSeen(901, 1)
+  assert.equal(hasSeenAiSummaryHint(901, 1), true)
+  assert.equal(hasSeenAiSummaryHint(901, 2), false)
+  assert.equal(hasSeenAiSummaryHint(902, 1), false)
+  assert.equal(hasSeenAiSummaryHint(0, 1), false)
+  assert.equal(hasSeenAiSummaryHint(901, 0), false)
 })
