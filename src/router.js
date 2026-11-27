@@ -1,9 +1,19 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getToken, safeRedirect } from './auth.js'
 import { portal } from './portal.js'
+// 旧编辑页已下线：/works/create 只做兼容重定向，作品编辑统一进入 v3 工作台。
+// 带正整数 workId 的旧链接按原意图落到大纲或分镜视图；否则回「我的作品」。
+function redirectLegacyCreate(to) {
+  const workId = Number(to.query.workId)
+  if (Number.isSafeInteger(workId) && workId > 0) {
+    if (to.query.mode === 'storyboard') return { path: `/works/${workId}/studio`, query: { view: 'chapter', tab: 'storyboard' } }
+    return { path: `/works/${workId}/studio`, query: { view: 'outline' } }
+  }
+  return { path: '/works', query: to.query.entry === 'import' ? { start: 'import' } : {} }
+}
 const workChildren = [
   { path: '', component: () => import('./views/works/index.vue'), meta: { title: '我的作品' } },
-  { path: 'create', component: () => import('./views/works/Create.vue'), meta: { title: '创作上传', editor: true } },
+  { path: 'create', redirect: redirectLegacyCreate, meta: { title: '创作上传', editor: true } },
   // v3 起稿（Screen 1：作品设定）与资料确认（Screen 2：AI Story Blueprint）。
   { path: 'create/ai', component: () => import('./views/works/ai/AiCreate.vue'), meta: { title: 'AI 起稿', editor: true, ai: true } },
   { path: 'create/ai/blueprint', component: () => import('./views/works/ai/BlueprintConfirm.vue'), meta: { title: '资料确认', editor: true, ai: true } },

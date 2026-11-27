@@ -62,10 +62,11 @@ try {
     await page.getByLabel('用户名 / 手机号 / 邮箱', { exact: true }).fill('test-only')
     await page.getByLabel('密码', { exact: true }).fill('test-only-password')
     await page.getByRole('button', { name: '登录', exact: true }).click()
-    await page.getByLabel('分集正文', { exact: true }).waitFor()
-    assert.equal(new URL(page.url()).pathname, '/user/works/create')
-    await page.reload(); await page.getByLabel('分集正文', { exact: true }).waitFor()
-    assert.equal(new URL(page.url()).pathname, '/user/works/create')
+    // 旧编辑页已下线：登录后回跳时由 /works/create 兼容重定向落到「我的作品」。
+    await page.waitForURL(origin + '/user/works')
+    await page.locator('.worklist').waitFor()
+    await page.reload(); await page.locator('.worklist').waitFor()
+    assert.equal(new URL(page.url()).pathname, '/user/works')
   })
   await check('enterprise login and refresh stay under /enterprise/ with separate tokens', async () => {
     await page.goto(origin + '/enterprise/')

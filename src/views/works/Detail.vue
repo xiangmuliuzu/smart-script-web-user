@@ -1,5 +1,5 @@
 <template>
-  <div class="detail-top"><button class="back" @click="goWorks">← 返回我的作品</button><div v-if="work" class="row"><button class="btn quiet" :disabled="!canCreate" @click="deleteVisible = true">删除作品</button><button class="btn settings-btn" :disabled="!editable" @click="settingsVisible = true"><el-icon><Setting /></el-icon>作品设置</button></div></div>
+  <div class="detail-top"><button class="back" @click="goWorks">← 返回我的作品</button><div v-if="work" class="row"><button class="btn studio-entry" @click="enterStudio">进入创作工作台</button><button class="btn quiet" :disabled="!canCreate" @click="deleteVisible = true">删除作品</button><button class="btn settings-btn" :disabled="!editable" @click="settingsVisible = true"><el-icon><Setting /></el-icon>作品设置</button></div></div>
   <LoadState :pending="pending" :error="error" :retry="load" />
   <div v-if="!pending && !error && work" class="work-detail-grid">
     <section class="work-detail-main">
@@ -17,7 +17,7 @@
           <p class="wh-intro">{{ work.summary || '暂无简介' }}</p>
         </div>
       </div>
-      <div class="row section-actions"><button class="btn" :disabled="!editable" @click="editChapter(null)">＋ 写新章节</button><button class="btn quiet" :disabled="!editable" @click="editStoryboard()">＋ 写新分镜</button><span class="cost">{{ work.status === 'reviewing' ? '审核中暂不可编辑，可查看审核进度' : reviewApproved ? (onShelf ? '作品已上架到书城；修改后需重新提交审核' : '审核已通过，请确认信息后手动上架到书城') : '章节随作品审核，通过后可开启试读；分镜提交后由平台单独审核' }}</span></div>
+      <div class="row section-actions"><button class="btn" :disabled="!editable || creating" @click="editChapter(null)">{{ creating ? '正在新建…' : '＋ 写新章节' }}</button><button class="btn quiet" :disabled="!editable || creating" @click="editStoryboard()">＋ 写新分镜</button><span class="cost">{{ work.status === 'reviewing' ? '审核中暂不可编辑，可查看审核进度' : reviewApproved ? (onShelf ? '作品已上架到书城；修改后需重新提交审核' : '审核已通过，请确认信息后手动上架到书城') : '章节随作品审核，通过后可开启试读；分镜提交后由平台单独审核' }}</span></div>
       <div class="creator-catalogs">
         <details class="creator-catalog" open>
           <summary><span><strong>章节目录</strong><em>{{ chapters.length }} 章</em></span><small>章节审核与试读设置</small></summary>
@@ -92,6 +92,8 @@ const versionLoading = ref(false)
 const versionError = ref('')
 const versions = ref([])
 const shelfing = ref(false)
+// 新建空白章进行中：防连点/防抖重复建章，避免意外触发 AI 扣费。
+const creating = ref(false)
 const editable = computed(() => canEdit(user.value, work.value))
 const reviewApproved = computed(() => work.value?.status === 'published')
 const copyrightLabel = computed(() => ({
@@ -160,13 +162,45 @@ async function loadStoryboards() {
     storyboardLoading.value = false
   }
 }
-function editChapter(chapter) {
-  if (!editable.value) return
-  return router.push({ path: '/works/create', query: { workId: work.value.workId, chapterId: chapter?.chapterId ?? 'new' } })
+function studioPath(query) { return `/works/${work.value.workId}/studio?${new URLSearchParams(query)}` }
+// 修订/审核中也能查看作品资料与大纲：入口不受编辑权限限制。
+function enterStudio() {
+  if (!work.value) return
+  return router.push(studioPath({ view: 'outline' }))
 }
-function editStoryboard() {
-  if (!editable.value) return
-  return router.push({ path: '/works/create', query: { workId: work.value.workId, mode: 'storyboard' } })
+function nextChapterNo() {
+  return Math.max(0, ...chapters.value.map(chapter => Number(chapter.chapterNo) || 0)) + 1
+}
+// 先建好空白章再进工作台：显式建章不会触发 AI 生成，也不会因防抖/连点重复创建。
+async function editChapter(chapter) {
+  if (!editable.value || creating.value) return
+  if (chapter?.chapterNo) return router.push(studioPath({ view: 'chapter', chapter: String(chapter.chapterNo), tab: 'text' }))
+  const nextNo = nextChapterNo()
+  creating.value = true
+  try {
+    const created = await api.value.saveChapter(work.value.workId, { chapterNo: nextNo, chapterTitle: `第 ${nextNo} 章`, content: '', summary: '' })
+    if (!created?.chapterId) throw new Error('新建章节响应缺少编号')
+    return await router.push(studioPath({ view: 'chapter', chapter: String(nextNo), tab: 'text' }))
+  } catch (failure) {
+    await handleError(failure)
+  } finally {
+    creating.value = false
+  }
+}
+async function editStoryboard() {
+  if (!editable.value || creating.value) return
+  const last = Math.max(0, ...chapters.value.map(chapter => Number(chapter.chapterNo) || 0))
+  if (last > 0) return router.push(studioPath({ view: 'chapter', chapter: String(last), tab: 'storyboard' }))
+  creating.value = true
+  try {
+    const created = await api.value.saveChapter(work.value.workId, { chapterNo: 1, chapterTitle: '第 1 章', content: '', summary: '' })
+    if (!created?.chapterId) throw new Error('新建章节响应缺少编号')
+    return await router.push(studioPath({ view: 'chapter', chapter: '1', tab: 'storyboard' }))
+  } catch (failure) {
+    await handleError(failure)
+  } finally {
+    creating.value = false
+  }
 }
 async function remove(chapter) {
   if (!editable.value || deleting.value !== null) return

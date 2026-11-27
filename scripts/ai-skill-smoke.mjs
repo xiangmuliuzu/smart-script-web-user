@@ -1,4 +1,5 @@
-// 阶段4：PC 用户端「AI 剧本 / AI 分镜 + 导演(skill)选择」浏览器冒烟
+// 阶段4：工作台「AI 创作抽屉」章节文本 / 章节分镜 + 导演(skill)选择回归。
+// 旧编辑页已下线，AI 剧本/续写/润色入口随之移除，这里只验证仍然存在的生成流。
 import assert from 'node:assert/strict'
 import * as playwright from 'playwright'
 import { createServer } from 'vite'
@@ -16,42 +17,32 @@ try {
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
-  await page.goto('http://127.0.0.1:' + server.httpServer.address().port + '/user/works/create')
+  await page.goto('http://127.0.0.1:' + server.httpServer.address().port + '/user/works/3/studio?view=chapter&chapter=1&tab=text')
 
-  // 1) 「AI 大纲」已改名「AI 剧本」，且各创作 tab 带「导演(skill)」下拉
-  await page.getByRole('tab', { name: 'AI 剧本', exact: true }).click()
-  await page.getByLabel('导演(skill)', { exact: true }).waitFor()
-  const skillOptions = await page.getByLabel('导演(skill)', { exact: true }).locator('option').allTextContents()
-  assert.deepEqual(skillOptions, ['默认导演', '悬疑烧脑导演', '甜宠爆款导演'])
-  assert.equal(mock.calls.some(call => call.path.endsWith('/ai/skills')), true, 'skills 接口已被调用')
-
-  // 2) AI 剧本 + 导演选择：生成请求携带 skill_id
-  await page.getByLabel('导演(skill)', { exact: true }).selectOption('1')
-  await page.getByLabel('你的要求', { exact: true }).fill('雨夜便利店，悬疑故事')
-  await page.getByRole('button', { name: '生成剧本大纲', exact: true }).click()
+  // 1) AI 抽屉：章节文本模式，生成正文草稿走 write 流并带上作品编号
+  await page.getByRole('button', { name: /打开 AI 创作/ }).click()
+  const drawer = page.getByLabel('AI 创作', { exact: true })
+  await drawer.getByRole('heading', { name: 'AI 创作 · 章节文本', exact: true }).waitFor()
+  await drawer.getByLabel('写作要求', { exact: true }).fill('雨夜便利店，悬疑故事')
+  await drawer.getByRole('button', { name: /生成正文草稿/ }).click()
   await page.locator('.ai-result').filter({ hasText: '第一集 · 深夜频率' }).waitFor()
-  const outlineCall = mock.calls.filter(call => call.path.endsWith('/content/ai/outline/stream'))
-  assert.equal(outlineCall.length, 1, 'outline 流被调用一次')
-  assert.equal(outlineCall[0].body.skillId, 1, '剧本生成请求携带导演 skill_id')
+  const writeCall = mock.calls.filter(call => call.path.endsWith('/content/ai/write/stream'))
+  assert.equal(writeCall.length, 1, 'write 流被调用一次')
+  assert.equal(writeCall[0].body.workId, 3, '生成正文请求携带作品号')
+  assert.match(writeCall[0].body.prompt, /雨夜便利店，悬疑故事/)
+  assert.match(writeCall[0].body.prompt, /第三次告白/, '生成提示带入当前作品资料')
 
-  // 3) AI 分镜 tab：剧本文本 + 分镜风格 + 导演下拉 + 一键带入
-  await page.getByRole('tab', { name: 'AI 分镜', exact: true }).click()
-  await page.getByLabel('剧本文本', { exact: true }).waitFor()
-  await page.getByLabel('分镜风格', { exact: true }).waitFor()
-  assert.equal(await page.getByLabel('导演(skill)', { exact: true }).inputValue(), '1', '导演选择延续到分镜 tab')
-  await page.getByRole('button', { name: /一键带入/ }).click()
-  assert.match(await page.getByLabel('剧本文本', { exact: true }).inputValue(), /第一集 · 深夜频率/)
-
-  // 4) 生成分镜：流式输出 + skill_id 携带
-  await page.getByRole('button', { name: '生成分镜', exact: true }).click()
+  // 2) 切到章节分镜 tab：抽屉切到分镜模式，生成请求携带 chapterTitle
+  await page.getByRole('tab', { name: '章节分镜' }).click()
+  await drawer.getByRole('heading', { name: 'AI 创作 · 章节分镜', exact: true }).waitFor()
+  await drawer.getByRole('button', { name: /生成章节分镜/ }).click()
   await page.locator('.ai-result').filter({ hasText: '镜1｜景别' }).waitFor()
   const storyboardCall = mock.calls.filter(call => call.path.endsWith('/content/ai/storyboard/stream'))
   assert.equal(storyboardCall.length, 1, 'storyboard 流被调用一次')
-  assert.equal(storyboardCall[0].body.skillId, 1, '分镜生成请求携带导演 skill_id')
-  assert.equal(storyboardCall[0].body.style, '电影感', '分镜风格默认电影感')
-  assert.match((await page.getByLabel('剧本文本', { exact: true }).inputValue()), /深夜频率/)
+  assert.equal(storyboardCall[0].body.chapterTitle, '雨夜的乘客')
+  assert.equal(storyboardCall[0].body.workId, 3)
   assert.deepEqual(errors, [])
-  console.log('PASS AI 剧本改名 + 导演(skill)选择 + AI 分镜一条龙（PC 用户端）')
+  console.log('PASS 工作台 AI 抽屉：章节正文 / 章节分镜生成流（PC 用户端）')
 } finally {
   await browser.close()
   await server.close()

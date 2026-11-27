@@ -821,6 +821,26 @@ async function toggleShelf() {
   finally { shelfing.value = false }
 }
 
+// 复用组件时路由参数变化（/works/1/studio → /works/2/studio）必须重载数据：
+// 只 watch query 不会触发，旧作品的章节与资料会残留在新作品下。
+async function reloadForWork() {
+  chapters.value = []
+  storyboards.value = []
+  chapterMetas.value = {}
+  blueprintSeed.value = null
+  blueprintSessionId.value = null
+  latestReview.value = null
+  work.value = null
+  works.value = []
+  dirty.summary = false
+  dirty.text = false
+  dirty.storyboard = false
+  saveFailed.value = false
+  lastSavedAt.value = ''
+  lastPushedKey = ''
+  await load()
+}
+
 async function switchWork(workId) {
   if (!workId || Number(workId) === Number(work.value?.workId) || switching.value) return
   if (anyDirty.value) {
@@ -881,6 +901,14 @@ onBeforeRouteLeave(async () => {
   } catch (action) {
     return action === 'cancel'
   }
+})
+
+watch(() => route.params.id, async (next, previous) => {
+  if (!next || next === previous) return
+  // 直接改地址或浏览器前后退：先把旧作品的修改落盘，再切到新作品。
+  if (anyDirty.value) await save({ silent: true })
+  if (String(route.params.id) !== String(next)) return
+  await reloadForWork()
 })
 
 // 切章/切视图前自动保存已经在动作里处理；这里兜底「浏览器后退」。

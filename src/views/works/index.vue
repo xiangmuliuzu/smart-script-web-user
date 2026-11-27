@@ -12,7 +12,7 @@
       <LoadState :pending="pending" :error="error" :retry="load" />
       <div v-if="!pending && !error" class="worklist">
         <button class="workitem new-work" :disabled="!canCreate" @click="startCreate = true"><span class="work-cover"><span class="plus" aria-hidden="true">＋</span></span><span class="work-copy"><span class="work-title"><h3>创作与上传</h3><span class="work-kind">新建作品</span></span><span class="work-synopsis">AI 起稿会先确认作品资料，再进入工作台逐章创作；也可以导入已完成的剧本，或从空白作品开始。</span><span class="work-foot"><span class="work-meta">AI 起稿 / 导入剧本 / 自己编辑</span><span class="btn sm">开始创作</span></span></span></button>
-        <button v-for="work in filtered" :key="work.workId" class="workitem" :data-reviewing="work.status === 'reviewing'" @click="openStudio(work.workId)">
+        <button v-for="work in filtered" :key="work.workId" class="workitem" :data-reviewing="work.status === 'reviewing'" @click="goWork(work.workId)">
           <span class="work-cover" :class="{ 'script-cover': !hasCover(work) }"><img v-if="hasCover(work)" :src="avatarUrl(work.cover)" alt="" @error="failedCovers[work.workId] = work.cover" /><template v-else><span class="script-slip">{{ work.title }}</span><span class="bg-glyph" aria-hidden="true">{{ work.title?.slice(0, 1) }}</span></template><span class="stamp" :data-s="work.status === 'published' && work.shelfStatus === 'on_shelf' ? 'passed' : stateOf(work.status).stamp">{{ work.status === 'published' && work.shelfStatus === 'on_shelf' ? '已上架' : stateOf(work.status).label }}</span></span>
           <span class="work-copy"><span class="work-title"><h3>{{ work.title }}</h3><span class="work-kind">{{ workType(work.workType) }} · {{ work.genreName || '未分类' }}</span></span><span class="work-synopsis">{{ work.summary || '故事还在酝酿中，继续写下你的下一章。' }}</span><span class="work-foot"><span class="work-meta">{{ work.episodeCount != null ? work.episodeCount + ' 章 · ' : '' }}{{ words(work.wordCount) }} · 更新于 {{ dateText(work.updateTime || work.createTime).slice(5) }}</span><span class="btn sm" :class="{ quiet: !['revision', 'rejected'].includes(work.status) }">{{ stateOf(work.status).action }}</span></span></span>
         </button>
@@ -30,12 +30,12 @@
       </div>
       <details class="aside-block activity-list"><summary><h3>最近动态</h3></summary><ul class="aside-log"><li v-for="work in recent" :key="work.workId"><time>{{ dateText(work.updateTime || work.createTime) }}</time>{{ work.title }} · {{ stateOf(work.status).label }}</li></ul><p v-if="!pending && !recent.length" class="cost">暂无最近动态</p></details>
     </aside>
-    <StartCreateDialog v-model="startCreate" @select="startMode" />
+    <StartCreateDialog ref="startDialog" v-model="startCreate" />
   </div>
 </template>
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { usePortal } from '../../utils/portal.js'
 import { avatarUrl } from '../../utils/avatarUrl.js'
 import { stateOf, words, dateText, money, sortWorksDesc } from '../../utils/creator.js'
@@ -43,7 +43,8 @@ import { loadTodoOrders, orderStatusLabel, orderSteps, orderStepIndex } from '..
 import LoadState from '../../components/LoadState.vue'
 import RightsPanel from '../panels/Rights.vue'
 import StartCreateDialog from './StartCreateDialog.vue'
-const { api, canCreate, basePath, openPanel, handleError } = usePortal()
+const { api, canCreate, goWork, openPanel, handleError } = usePortal()
+const route = useRoute()
 const router = useRouter()
 const section = ref('works')
 const works = ref([])
@@ -52,10 +53,17 @@ const pending = ref(true)
 const error = ref('')
 const filterOpen = ref(false)
 const startCreate = ref(false)
-// v3 入口三选一：AI 起稿走「设定 → 资料确认 → 工作台」；导入与自己编辑进入原三栏编辑器。
-function startMode(mode) { return router.push(mode === 'ai' ? basePath + '/create/ai' : basePath + '/create?entry=import') }
-// 作品卡片直接进入 v3 创作者工作台；作品档案（详情/审核记录/分镜目录）从工作台菜单进入。
-function openStudio(id) { return router.push(`${basePath}/${id}/studio?view=outline`) }
+const startDialog = ref(null)
+// 旧编辑页 /works/create?entry=import 重定向后会带 ?start=import：自动打开导入表单并清掉 query。
+function consumeStart() {
+  const requested = String(route.query.start || '')
+  if (!requested) return
+  startCreate.value = true
+  startDialog.value?.startAt(requested)
+  const query = { ...route.query }
+  delete query.start
+  router.replace({ path: route.path, query }).catch(() => {})
+}
 const keyword = ref('')
 const status = ref('')
 const workType = value => ({ short_drama: '短剧', novel: '小说', script: '剧本' })[value] || '短剧'
@@ -81,7 +89,8 @@ async function loadTodo() {
   catch (failure) { orderError.value = failure.message || '订单加载失败'; await handleError(failure) }
   finally { orderPending.value = false }
 }
-onMounted(() => { load(); loadTodo() })
+watch(() => route.query.start, consumeStart)
+onMounted(() => { load(); loadTodo(); consumeStart() })
 defineExpose({ loadTodo })
 </script>
 <style scoped>

@@ -24,13 +24,11 @@ npm run gate
 
 浏览器验证：先启动开发服务，再运行 `npm run test:browser`。测试脚本在浏览器拦截 API 响应，应用仍执行正常登录与接口流程。Playwright 已作为本项目开发依赖，安装依赖后执行 `npx playwright install chromium` 准备浏览器。截图与校验结果在 `docs/screenshots`，验证范围和联调边界见 `docs/superpowers/reports/2026-10-14-user-prototype-v2-validation.md`。
 
-「创作与上传」入口先弹出方式选择：**AI 创作** 或 **自己编辑**。自己编辑进入下面的三栏工作区；AI 创作进入独立的 `/works/create/ai`，三步完成——填写书名与灵感并生成剧本大纲、修改确认大纲、按大纲逐章生成正文。确认大纲时会创建一部草稿作品，每章生成后立即保存为该作品的分集；完成后「插入到文章并进入编辑」跳回三栏工作区并定位到第一章。生成中可停止，已生成的章节保留；未勾选的分集不会生成，可在章节列表里重新生成或删除。AI 相关调用复用 `/api/v1/content/ai/outline/stream` 与 `/write/stream`，每次生成按积分扣减。
+「创作与上传」入口先弹出方式选择：**AI 起稿**、**导入剧本** 或 **自己编辑**。AI 起稿进入独立的 `/works/create/ai`，三步完成——填写书名与灵感并生成作品资料、修改确认资料、按资料逐章生成正文，确认后进入工作台。导入剧本与自己编辑在弹窗内填写书名（导入还需选择 `.docx / .txt / .md` 文件），提交后创建作品并建好第 1 章，直接进入工作台第 1 章正文。AI 相关调用复用 `/api/v1/content/ai/*/stream`，每次生成按积分扣减。
+作品编辑统一在工作台 `/works/:id/studio`：左侧作品资料与章节导航，正文按「内容概要 / 章节文本 / 章节分镜 / 人物信息 / 物品信息 / 人物关系」分页，右侧为按需展开的 AI 创作抽屉。旧编辑页 `/works/create` 已下线，只保留兼容重定向：带 `workId` 的旧链接跳到对应工作台视图，其余回到「我的作品」；`?entry=import` 会打开「创作与上传」的导入表单。作品详情页的「编辑」「＋ 写新章节」「＋ 写新分镜」「进入创作工作台」均跳转到工作台对应视图，新建空白章不会触发 AI 生成。`npm run test:editor-entry` 覆盖这些入口。
+TXT/Markdown/DOCX 草稿使用原生浏览器文本读取与解压，不执行文档代码。导入时书名从文件名预填（可修改），读取到的正文写入第 1 章，原文件同时上传留存。Markdown 按 TXT 上传以兼容服务端白名单。封面与头像支持 JPG/PNG，限制 5 MB。
+格式正文使用 Quill 编辑，恢复前通过 DOMPurify 与编辑器格式白名单过滤。配套后端在章节长文本中保存带版本标记的文档，content 对旧阅读接口仍返回纯正文，formattedContent 用于恢复格式。升级本前端时应同时使用配套后端代码。
 
-创作上传采用三栏工作区：左侧管理资料和分集、中间编辑正文、右侧 AI 助手。默认分集名为「第 1 集、第 2 集…」，删除按钮在各分集卡片右下角，确认后删除，删除其他分集时保留当前正文。字体、字号、文字与段落格式及剧本工具使用单行可左右滚动的工具栏；窄屏目录与 AI 使用抽屉。草稿按用户保存在本机，保存草稿后同步到作品并进入详情；提交审核前确认锁定规则。人物便签仅在本机存档，可导出。
-
-TXT/Markdown/DOCX 草稿使用原生浏览器文本读取与解压，不执行文档代码。书名从文件名载入；正文导入当前分集，替换前确认，分类由用户选择。Markdown 按 TXT 上传以兼容服务端白名单。封面与头像支持 JPG/PNG，限制 5 MB。
-
-格式正文使用 Quill 编辑，恢复前通过 DOMPurify 与编辑器格式白名单过滤。配套后端在章节长文本中保存带版本标记的文档，content 对旧阅读接口仍返回纯正文，formattedContent 用于恢复格式。升级本前端时应同时使用配套后端代码。`npm run test:creation` 检查布局、工具栏、格式恢复、AI 插入、断线重试及审核提交。
 
 顶部和个人资料共用头像地址解析：平台 `/profile/upload/`、`/profile/avatar/` 资源通过当前 API 前缀加载，保存资料后同步顶部头像；图片缺失或加载失败时显示昵称首字。`npm run test:avatar` 验证图片加载、保存同步、刷新恢复与失败回退。
 
@@ -54,7 +52,7 @@ TXT/Markdown/DOCX 草稿使用原生浏览器文本读取与解压，不执行�
 
 ## 部署
 
-npm run build 输出 dist，固定挂载到 `/user/`，对应服务器 http://192.168.100.3:1100/user/。Vite 资源前缀和 Vue Router history 使用同一基础路径；例如 `/user/login`、`/user/works/create`。将 dist 内容部署到用户端目录，`/user/*` 的 SPA 路由必须回退到该目录的 index.html。
+npm run build 输出 dist，固定挂载到 `/user/`，对应服务器 http://192.168.100.3:1100/user/。Vite 资源前缀和 Vue Router history 使用同一基础路径；例如 `/user/login`、`/user/works/3/studio`。将 dist 内容部署到用户端目录，`/user/*` 的 SPA 路由必须回退到该目录的 index.html。
 
 生产默认 VITE_APP_BASE_API=/prod-api；网关需将站点根路径 /prod-api/* 去除前缀后转发至整体后端。接口地址不加 `/user/`，例如 `/prod-api/api/v1/auth/login`。不要把 `/user/login` SPA 地址代理到后端。
 
